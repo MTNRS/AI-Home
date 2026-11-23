@@ -32,8 +32,10 @@ un estado honesto en [PROGRESS.md](PROGRESS.md).
 
 ## Fase 4 — Inferencia y conversación
 
-- Integrar un modelo abierto con licencia y procedencia verificadas.
-- API de conversación e interfaz básica conectada al cliente de escritorio.
+- Integrar un runtime/modelo abierto con licencia y procedencia verificadas;
+  el proxy actual solo conecta a un proveedor compatible configurado.
+- Completar la API de conversación e interfaz básica conectada al cliente de
+  escritorio, con límites y controles de uso.
 - No anunciar modelos, rendimiento ni capacidades que no se hayan medido.
 
 ## Fase 5 — Privacidad y memoria

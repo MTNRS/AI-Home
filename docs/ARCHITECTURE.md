@@ -52,8 +52,10 @@ de confianza que lo justifiquen.
   reintentos y verificación de resultados.
 - **Créditos:** libro mayor transaccional, reservas, liquidaciones y reembolsos.
   Los saldos se derivan de asientos confirmados, no de mensajes de una cola.
-- **Inferencia y modelos:** selección de modelos y ejecución. El origen,
-  versión, licencia y configuración de cada modelo deben quedar registrados.
+- **Inferencia y modelos:** actualmente hay un proxy autenticado a un proveedor
+  OpenAI-compatible configurado por quien opera la instancia. AI@Home aún no
+  ejecuta ni distribuye modelos propios; su origen, versión y licencia deberán
+  registrarse al integrar un runtime.
 - **Conocimiento:** conectores autorizados, procedencia, indexación y
   recuperación. Los índices globales no incluyen datos privados.
 - **Privacidad y memoria:** datos personales separados por usuario; su acceso
@@ -62,9 +64,9 @@ de confianza que lo justifiquen.
   propuesta generada automáticamente no puede cambiar permisos, privacidad,
   contabilidad o autenticación sin revisión y autorización explícitas.
 
-Estos límites guían la implementación. Identidad, trabajos y créditos tienen
-componentes iniciales; inferencia, conocimiento, memoria y evolución siguen
-siendo áreas de diseño, no capacidades disponibles.
+Estos límites guían la implementación. Identidad, trabajos, créditos y el proxy
+de inferencia tienen componentes iniciales; un runtime propio, conocimiento,
+memoria y evolución siguen siendo áreas de diseño, no capacidades disponibles.
 
 ## Fronteras de datos y confianza
 

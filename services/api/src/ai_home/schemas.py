@@ -10,6 +10,7 @@ from pydantic import (
     Field,
     SecretStr,
     StrictInt,
+    StrictStr,
     field_validator,
     model_validator,
 )
@@ -45,6 +46,42 @@ class SessionResponse(BaseModel):
     access_token: str
     token_type: Annotated[str, Field(pattern="^bearer$")] = "bearer"
     expires_at_epoch: int
+
+
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["system", "user", "assistant"]
+    content: StrictStr = Field(min_length=1, max_length=8192)
+
+
+class ChatCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    messages: list[ChatMessage] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_conversation(self) -> "ChatCompletionRequest":
+        if not any(message.role == "user" for message in self.messages):
+            raise ValueError("A chat request must contain a user message.")
+        if sum(len(message.content) for message in self.messages) > 32_000:
+            raise ValueError("The total chat content must not exceed 32,000 characters.")
+        return self
+
+
+class ChatCompletionMessageResponse(BaseModel):
+    role: Literal["assistant"]
+    content: str
+
+
+class ChatCompletionChoiceResponse(BaseModel):
+    index: int
+    message: ChatCompletionMessageResponse
+    finish_reason: Literal["stop"]
+
+
+class ChatCompletionResponse(BaseModel):
+    choices: list[ChatCompletionChoiceResponse]
 
 
 class GPUDevice(BaseModel):

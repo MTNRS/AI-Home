@@ -9,6 +9,7 @@ from ai_home.desktop import (
     login_to_server,
     normalize_base_url,
     save_settings,
+    server_chat_completion,
 )
 
 
@@ -82,6 +83,28 @@ def test_chat_completion_rejects_malformed_provider_response():
             [{"role": "user", "content": "Hello"}],
             transport=transport,
         )
+
+
+def test_server_chat_completion_sends_account_token_and_conversation():
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        assert request.headers["Authorization"] == "Bearer account-session-token"
+        assert json.loads(request.read()) == {
+            "messages": [{"role": "user", "content": "Hola"}]
+        }
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "Hola también."}}]},
+        )
+
+    answer = server_chat_completion(
+        "https://community.example",
+        "account-session-token",
+        [{"role": "user", "content": "Hola"}],
+        transport=httpx.MockTransport(handle),
+    )
+
+    assert answer == "Hola también."
 
 
 def test_settings_round_trip_stores_only_non_secret_preferences(

@@ -36,11 +36,13 @@
 - Primera aplicación de escritorio Tk con cuenta, chat hacia proveedores
   OpenAI-compatible y aportación de nodos claramente opcional; tokens de nodo
   en el almacén seguro del sistema operativo.
+- Proxy de chat opcional y autenticado en API para un proveedor
+  OpenAI-compatible configurado por la instancia; clave solo del lado servidor.
 - Inventario local verificado: 16 hilos lógicos, 31 GiB de RAM y una NVIDIA
   GeForce RTX 4070 SUPER con 12 GiB de VRAM; la detección usa `nvidia-smi`.
 - CI aprobada en Python 3.11/3.12 con PostgreSQL 17: migraciones, API de
   identidad, reclamación concurrente de trabajos, ledger y cliente de escritorio.
-- Suite local más reciente: `python -m pytest -q` — 42 pruebas aprobadas y 4
+- Suite local más reciente: `python -m pytest -q` — 52 pruebas aprobadas y 4
   pruebas PostgreSQL omitidas por no haber servidor disponible localmente.
 - Migración Alembic inicial verificada en SQLite, comparada con el metadata
   ORM y probada en downgrade; Uvicorn inició y `/health` respondió HTTP 200.
@@ -48,16 +50,16 @@
 
 ## Aún no implementado
 
-- PostgreSQL no está disponible localmente; las pruebas de integración se
-  ejecutan en GitHub Actions.
+- Ejecutar en GitHub Actions el nuevo proxy de chat autenticado junto con la
+  matriz PostgreSQL; PostgreSQL no está disponible localmente.
 - Endurecimiento de producción de autenticación: límite de intentos,
   verificación de correo y recuperación de cuenta.
 - Detección de hardware en otros equipos y sistemas operativos; CUDA es
   opcional y no se presume.
 - Verificación manual de la interfaz gráfica y publicación de instaladores
   Windows/Linux.
-- API propia de inferencia/chat; el escritorio actual envía mensajes al
-  proveedor compatible configurado por la persona usuaria.
+- Modelos propios, selección/descarga/licencias de pesos y servicio de
+  inferencia AI@Home; hoy solo hay un proxy hacia el proveedor configurado.
 - Límites locales de CPU/RAM, controles de pausa/reanudación y sandbox
   reforzado para el nodo.
 - Integración del libro mayor con trabajos verificados y autorización.

@@ -57,6 +57,12 @@ afirma que el producto tenga ya controles desplegados.
 - Consulta de perfil limitada al sujeto de la sesión; no hay endpoint de
   lectura de perfiles ajenos.
 - La configuración rechaza SQLite cuando `AI_HOME_ENVIRONMENT=production`.
+- El proxy de chat exige una sesión autenticada, usa únicamente el proveedor
+  configurado por quien opera el servidor y no persiste el contenido en la
+  base de datos; la clave del proveedor nunca se devuelve al cliente.
+- Los clientes rechazan HTTP para servidores remotos. El proveedor configurado
+  por el servidor puede usar HTTP solo si quien opera la instancia confía en la
+  red interna y en ese proveedor.
 
 Estos controles son una base de desarrollo, no una API lista para Internet.
 

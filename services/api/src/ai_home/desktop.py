@@ -14,6 +14,7 @@ from typing import TypeVar
 import httpx
 import keyring
 
+from ai_home.inference import chat_completion, extract_chat_content
 from ai_home.node_worker import NodeAgent, register_node_with_server
 from ai_home.schemas import NodeCredentialResponse, SessionResponse
 from ai_home.urls import normalize_base_url
@@ -67,41 +68,26 @@ def register_account(
         response.raise_for_status()
 
 
-def chat_completion(
-    endpoint_url: str,
-    model: str,
+def server_chat_completion(
+    server_url: str,
+    user_token: str,
     messages: list[dict[str, str]],
     *,
-    api_key: str = "",
     timeout_seconds: float = 180,
     transport: httpx.BaseTransport | None = None,
 ) -> str:
-    if not model.strip():
-        raise ValueError("Introduce el nombre del modelo.")
-    if not messages or not any(message["role"] == "user" for message in messages):
-        raise ValueError("Escribe un mensaje antes de iniciar la conversación.")
-
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     with httpx.Client(
-        base_url=normalize_base_url(endpoint_url),
-        headers=headers,
+        base_url=normalize_base_url(server_url),
+        headers={"Authorization": f"Bearer {user_token}"},
         timeout=timeout_seconds,
         transport=transport,
     ) as client:
         response = client.post(
-            "chat/completions",
-            json={"model": model.strip(), "messages": messages},
+            "/api/v1/chat/completions",
+            json={"messages": messages},
         )
         response.raise_for_status()
-        body = response.json()
-
-    try:
-        content = body["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as error:
-        raise ValueError("El proveedor de chat devolvió una respuesta no válida.") from error
-    if not isinstance(content, str):
-        raise ValueError("El proveedor de chat devolvió contenido que no es texto.")
-    return content
+        return extract_chat_content(response.json())
 
 
 def settings_path() -> Path:
@@ -257,14 +243,21 @@ def main() -> None:
             ttk.Label(
                 parent,
                 text=(
-                    "Los mensajes se envían al proveedor indicado. El valor inicial "
-                    "usa Ollama local; AI@Home todavía no aloja modelos de chat."
+                    "En modo directo, los mensajes se envían al proveedor indicado "
+                    "(Ollama local por defecto). El modo AI@Home usa el proveedor "
+                    "configurado por la instancia seleccionada."
                 ),
                 wraplength=800,
             ).grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=8)
+            self.use_server_ai_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(
+                parent,
+                text="Usar el proveedor configurado en el servidor AI@Home",
+                variable=self.use_server_ai_var,
+            ).grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=3)
             self.chat_view = tk.Text(parent, wrap="word", state="disabled", height=18)
             self.chat_view.grid(
-                row=4,
+                row=5,
                 column=0,
                 columnspan=2,
                 sticky="nsew",
@@ -273,14 +266,14 @@ def main() -> None:
             )
             self.prompt = tk.Text(parent, height=4, wrap="word")
             self.prompt.grid(
-                row=5,
+                row=6,
                 column=0,
                 sticky="ew",
                 padx=6,
                 pady=6,
             )
             ttk.Button(parent, text="Enviar", command=self._send_message).grid(
-                row=5,
+                row=6,
                 column=1,
                 sticky="n",
                 padx=6,
@@ -290,9 +283,9 @@ def main() -> None:
                 parent,
                 text="Limpiar conversación",
                 command=self._clear_chat,
-            ).grid(row=6, column=0, sticky="w", padx=6, pady=6)
+            ).grid(row=7, column=0, sticky="w", padx=6, pady=6)
             parent.columnconfigure(0, weight=1)
-            parent.rowconfigure(4, weight=1)
+            parent.rowconfigure(5, weight=1)
 
         def _build_node_tab(self, ttk, parent) -> None:
             ttk.Label(
@@ -449,6 +442,8 @@ def main() -> None:
                         "/api/v1/auth/logout",
                         headers={"Authorization": f"Bearer {token}"},
                     )
+                    if response.status_code == 401:
+                        return
                     response.raise_for_status()
 
             def on_success(_result) -> None:
@@ -467,13 +462,38 @@ def main() -> None:
             prompt = self.prompt.get("1.0", "end").strip()
             if not prompt:
                 return
+            messages = [
+                *self.messages,
+                {"role": "user", "content": prompt},
+            ]
             try:
-                provider_url = normalize_base_url(self.provider_var.get())
-                model = self.model_var.get().strip()
-                api_key = self.api_key_var.get()
-                self.settings["chat_endpoint"] = provider_url
-                self.settings["chat_model"] = model
-                save_settings(self.settings)
+                use_server = self.use_server_ai_var.get()
+                if use_server:
+                    if self.session_token is None or self.session_server_url is None:
+                        raise ValueError(
+                            "Inicia sesión antes de usar el proveedor del servidor."
+                        )
+                    server_url = self.session_server_url
+                    user_token = self.session_token
+                    model = "AI@Home"
+                    operation = lambda: server_chat_completion(
+                        server_url,
+                        user_token,
+                        messages,
+                    )
+                else:
+                    provider_url = normalize_base_url(self.provider_var.get())
+                    model = self.model_var.get().strip()
+                    api_key = self.api_key_var.get()
+                    self.settings["chat_endpoint"] = provider_url
+                    self.settings["chat_model"] = model
+                    save_settings(self.settings)
+                    operation = lambda: chat_completion(
+                        provider_url,
+                        model,
+                        messages,
+                        api_key=api_key,
+                    )
             except ValueError as error:
                 messagebox.showerror("AI@Home", str(error), parent=self)
                 return
@@ -494,12 +514,7 @@ def main() -> None:
                 self.status_var.set(f"Respuesta de {model}")
 
             self._background(
-                lambda: chat_completion(
-                    provider_url,
-                    model,
-                    messages,
-                    api_key=api_key,
-                ),
+                operation,
                 on_success,
                 lambda: setattr(self, "chat_request_active", False),
             )

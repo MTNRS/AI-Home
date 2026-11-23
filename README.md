@@ -93,14 +93,23 @@ python -m pip install -e .
 python -m ai_home.desktop
 ```
 
-La pestaña **Usar IA** conecta a un proveedor compatible con la API OpenAI; por
-defecto usa `http://localhost:11434/v1` (por ejemplo, Ollama instalado y
-ejecutándose localmente). Los mensajes se envían directamente al endpoint
-configurado y no se guardan en el historial local. La pestaña **Colaborar** es
-independiente y requiere iniciar sesión y aceptar expresamente antes de
-registrar/iniciar un nodo. Las credenciales de nodo se guardan con el almacén
-seguro del sistema operativo; preferencias no secretas se guardan en el
-directorio de configuración del usuario.
+La pestaña **Usar IA** conecta por defecto directamente a un proveedor
+compatible con la API OpenAI en `http://localhost:11434/v1` (por ejemplo,
+Ollama instalado y ejecutándose localmente). También permite usar el proveedor
+configurado por la instancia AI@Home: inicia sesión y selecciona **Usar el
+proveedor configurado en el servidor AI@Home**. Para habilitar ese modo, la
+persona que opera el servidor debe configurar `AI_HOME_CHAT_PROVIDER_URL` y
+`AI_HOME_CHAT_PROVIDER_MODEL`; la clave opcional se configura en
+`AI_HOME_CHAT_PROVIDER_API_KEY` y no se envía al cliente.
+
+Los mensajes no se guardan en el historial local ni en la base de datos de
+AI@Home; en ambos modos se envían al proveedor elegido/configurado. Usa solo
+un proveedor en el que confíes y no envíes secretos ni datos personales sin
+autorización. La pestaña **Colaborar** es independiente y requiere iniciar
+sesión y aceptar expresamente antes de registrar/iniciar un nodo. Las
+credenciales de nodo se guardan con el almacén seguro del sistema operativo;
+preferencias no secretas se guardan en el directorio de configuración del
+usuario.
 
 ### Pruebas
 

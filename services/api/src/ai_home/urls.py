@@ -23,3 +23,19 @@ def normalize_base_url(value: str) -> str:
     return urlunsplit(
         (parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "")
     )
+
+
+def normalize_provider_url(value: str) -> str:
+    parsed = urlsplit(value.strip())
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("Introduce una URL de proveedor HTTP(S) válida.")
+    return urlunsplit(
+        (parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "")
+    )

@@ -3,6 +3,7 @@
 from collections.abc import Generator
 import logging
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import delete, select, text, update
@@ -23,6 +24,7 @@ from ai_home.auth import (
 )
 from ai_home.config import Settings
 from ai_home.database import build_engine
+from ai_home.inference import chat_completion
 from ai_home.jobs import (
     ClaimedJob,
     IdempotencyConflict as JobIdempotencyConflict,
@@ -45,6 +47,8 @@ from ai_home.models import AuthSession, ComputeJob, ComputeNode, User
 from ai_home.schemas import (
     DeleteAccountRequest,
     ClaimedJobResponse,
+    ChatCompletionRequest,
+    ChatCompletionResponse,
     CreateMathSumJobRequest,
     JobResponse,
     LoginRequest,
@@ -226,6 +230,48 @@ def create_app(
                 headers={"WWW-Authenticate": "Bearer"},
             ) from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.post(
+        "/api/v1/chat/completions",
+        response_model=ChatCompletionResponse,
+    )
+    def create_chat_completion(
+        payload: ChatCompletionRequest,
+        request: Request,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+    ) -> ChatCompletionResponse:
+        settings: Settings = request.app.state.settings
+        if settings.chat_provider_url is None or settings.chat_provider_model is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Chat inference is not configured for this server.",
+            )
+        try:
+            answer = chat_completion(
+                settings.chat_provider_url,
+                settings.chat_provider_model,
+                [message.model_dump() for message in payload.messages],
+                api_key=settings.chat_provider_api_key.get_secret_value(),
+                timeout_seconds=settings.chat_provider_timeout_seconds,
+            )
+        except (httpx.HTTPError, ValueError):
+            _LOGGER.exception(
+                "Configured chat provider request failed for user %s.",
+                current_user.user_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Configured chat provider failed to complete the request.",
+            ) from None
+        return ChatCompletionResponse(
+            choices=[
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": answer},
+                    "finish_reason": "stop",
+                }
+            ]
+        )
 
     @app.get("/api/v1/users/me", response_model=UserResponse)
     def get_me(
