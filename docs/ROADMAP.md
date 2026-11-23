@@ -24,14 +24,16 @@ un estado honesto en [PROGRESS.md](PROGRESS.md).
 
 ## Fase 3 — Nodo voluntario
 
+- Aplicación de escritorio para elegir servidor y separar el uso de IA de la
+  aportación de cómputo, que debe ser siempre opcional.
 - Detección de hardware con consentimiento y límites locales.
-- Ejecución aislada de trabajos públicos no sensibles.
+- Ejecución aislada y de larga duración de trabajos públicos no sensibles.
 - Validación de resultados y actualizaciones verificables del cliente.
 
 ## Fase 4 — Inferencia y conversación
 
 - Integrar un modelo abierto con licencia y procedencia verificadas.
-- API de conversación e interfaz básica.
+- API de conversación e interfaz básica conectada al cliente de escritorio.
 - No anunciar modelos, rendimiento ni capacidades que no se hayan medido.
 
 ## Fase 5 — Privacidad y memoria

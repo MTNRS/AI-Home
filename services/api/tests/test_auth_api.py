@@ -38,7 +38,7 @@ def login(client: TestClient, email: str = "alice@example.com") -> str:
         json={"email": email, "password": "a-strong-password-123"},
     )
     assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["cache-control"] == "private, no-store"
     return response.json()["access_token"]
 
 
@@ -116,6 +116,57 @@ def test_password_and_bearer_token_are_only_stored_as_hashes(client: TestClient)
     assert "a-strong-password-123" not in user.password_hash
     assert auth_session is not None
     assert auth_session.token_hash != token
+
+
+def test_account_export_excludes_credentials(client: TestClient):
+    register(client)
+    token = login(client)
+    response = client.get(
+        "/api/v1/users/me/export",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "alice@example.com"
+    assert "password_hash" not in response.json()
+
+
+def test_account_deletion_requires_password_and_revokes_all_sessions(
+    client: TestClient,
+):
+    register(client)
+    first_token = login(client)
+    second_token = login(client)
+    headers = {"Authorization": f"Bearer {first_token}"}
+
+    rejected = client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        headers=headers,
+        json={"password": "a-different-password-999"},
+    )
+    deleted = client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        headers=headers,
+        json={"password": "a-strong-password-123"},
+    )
+    first_session_after_delete = client.get("/api/v1/users/me", headers=headers)
+    second_session_after_delete = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {second_token}"},
+    )
+
+    assert rejected.status_code == 403
+    assert deleted.status_code == 204
+    assert first_session_after_delete.status_code == 401
+    assert second_session_after_delete.status_code == 401
+
+
+def test_database_readiness_endpoint_checks_database(client: TestClient):
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready", "database": "ok"}
 
 
 def test_registration_rejects_short_password(client: TestClient):

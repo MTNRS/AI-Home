@@ -29,8 +29,11 @@ def test_initial_migration_creates_identity_and_credit_tables(tmp_path, monkeypa
         "credit_accounts",
         "credit_transactions",
         "credit_postings",
+        "compute_nodes",
+        "compute_jobs",
         "alembic_version",
     } <= table_names
+    command.check(config)
 
     command.downgrade(config, "base")
     engine = create_engine(database_url)
@@ -44,4 +47,6 @@ def test_initial_migration_creates_identity_and_credit_tables(tmp_path, monkeypa
         "credit_accounts",
         "credit_transactions",
         "credit_postings",
+        "compute_nodes",
+        "compute_jobs",
     } & table_names

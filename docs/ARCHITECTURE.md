@@ -14,7 +14,7 @@ colaborativo, rastreo web o autoevolución.
 ## Topología inicial
 
 ```text
-Aplicación web / cliente de nodo
+Aplicación de escritorio (pendiente) / cliente de nodo (experimental)
               |
        API FastAPI
               |
@@ -62,7 +62,9 @@ de confianza que lo justifiquen.
   propuesta generada automáticamente no puede cambiar permisos, privacidad,
   contabilidad o autenticación sin revisión y autorización explícitas.
 
-Estos son límites de diseño. Todavía no corresponden a módulos implementados.
+Estos límites guían la implementación. Identidad, trabajos y créditos tienen
+componentes iniciales; inferencia, conocimiento, memoria y evolución siguen
+siendo áreas de diseño, no capacidades disponibles.
 
 ## Fronteras de datos y confianza
 
@@ -100,7 +102,9 @@ El flujo previsto es:
    aceptado; resultados repetidos no generan doble crédito.
 7. El usuario puede consultar el estado y la auditoría permitida del trabajo.
 
-La ejecución en nodos voluntarios no debe permitir acceso arbitrario al host.
+El único handler disponible actualmente es `math.sum.v1`; otros tipos de
+trabajo no se presentan como funcionales. La ejecución en nodos voluntarios no
+debe permitir acceso arbitrario al host.
 El diseño de aislamiento del proceso, verificación del binario y actualización
 del cliente es un requisito previo al despliegue de trabajo no confiable.
 

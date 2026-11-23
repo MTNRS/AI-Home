@@ -23,17 +23,38 @@
   desarrollo para PostgreSQL y CI Python 3.11/3.12.
 - Pruebas de API para registro, normalización, autenticación, sesión, cierre y
   respuestas sin secretos.
-- Suite local: `python -m pytest -q` — 17 pruebas aprobadas.
+- Exportación básica y eliminación de cuenta con confirmación de contraseña;
+  la eliminación invalida sesiones y elimina nodos/trabajos del usuario.
+- Endpoint `/health/ready` comprueba conectividad a la base de datos.
+- Protocolo inicial de nodos con credencial aleatoria hasheada, informe de
+  hardware por GPU y leases persistentes para el ejecutor determinista
+  `math.sum.v1`.
+- Los trabajos distribuidos requieren consentimiento explícito registrado; el
+  scheduler valida el resultado, reintenta leases vencidos y limita intentos.
+- Cliente de nodo Python ejecuta solo handlers tipados y permite una iteración
+  de polling, sin ejecutar código arbitrario.
+- Inventario local verificado: 16 hilos lógicos, 31 GiB de RAM y una NVIDIA
+  GeForce RTX 4070 SUPER con 12 GiB de VRAM; la detección usa `nvidia-smi`.
+- CI preparada con PostgreSQL 17 y pruebas de migraciones, API de identidad,
+  reclamación concurrente de trabajos y concurrencia del ledger.
+- Suite local más reciente: `python -m pytest -q` — 36 pruebas aprobadas y 4
+  pruebas PostgreSQL omitidas por no haber servidor disponible localmente.
 - Migración Alembic inicial verificada en SQLite, comparada con el metadata
   ORM y probada en downgrade; Uvicorn inició y `/health` respondió HTTP 200.
-- GitHub Actions: instalación y suite aprobadas en Python 3.11 y 3.12.
+- Compilación local de módulos Python y `git diff --check` aprobados.
 
 ## Aún no implementado
 
-- Verificación e integración de API y migraciones contra PostgreSQL real.
+- Confirmar en GitHub Actions que pasen la migración, API y pruebas concurrentes
+  con PostgreSQL real; no se pudieron ejecutar localmente.
 - Endurecimiento de producción de autenticación: límite de intentos,
   verificación de correo y recuperación de cuenta.
-- Scheduler, nodo de cómputo o sandbox.
+- Detección de hardware en otros equipos y sistemas operativos; CUDA es
+  opcional y no se presume.
+- Aplicación de escritorio con cuenta, elección de servidor, uso de IA y
+  aportación de cómputo opcional.
+- Ejecutores de embeddings e inferencia, cliente de nodo de larga duración y
+  sandbox reforzado.
 - Integración del libro mayor con trabajos verificados y autorización.
 - Integración de modelos, chat o memoria.
 - Rastreo web, RAG, entrenamiento o motor de evolución.
@@ -43,8 +64,8 @@
   incidentes antes de exposición pública.
 
 Docker no está instalado o no está disponible en PATH en el entorno de
-desarrollo actual, por lo que no se pudo validar el arranque del contenedor
-PostgreSQL.
+desarrollo actual, por lo que las pruebas PostgreSQL quedan pendientes de la
+ejecución de GitHub Actions.
 
 ## Próximos criterios de salida
 

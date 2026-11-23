@@ -5,9 +5,9 @@ objetivo de permitir investigación colaborativa y computación voluntaria sin
 comprometer la privacidad de sus participantes.
 
 El proyecto está en desarrollo temprano. Ya incluye una API inicial de
-identidad y sesiones, migraciones de base de datos y un núcleo interno de libro
-mayor. Todavía no ofrece un nodo de cómputo ni un flujo de créditos conectado
-a trabajos validados.
+identidad y sesiones, un protocolo experimental de nodos voluntarios y un
+núcleo interno de libro mayor. Aún no incluye inferencia/chat de IA ni una
+aplicación de escritorio; los trabajos de nodos no están conectados a créditos.
 
 ## Principios
 
@@ -32,6 +32,7 @@ a trabajos validados.
 - [Registro de decisiones](docs/DECISIONS.md)
 - [Política de datos](docs/DATA_POLICY.md)
 - [Modelo de seguridad](docs/SECURITY.md)
+- [Protocolo inicial de nodos](docs/NODE_PROTOCOL.md)
 - [Gobernanza](docs/GOVERNANCE.md)
 - [Licencia](LICENSE)
 
@@ -64,24 +65,36 @@ En producción se rechaza SQLite.
   hash SHA-256 del token y la contraseña se almacena con Argon2id.
 - `GET /api/v1/users/me` devuelve exclusivamente la cuenta asociada al token.
 - `POST /api/v1/auth/logout` revoca la sesión.
+- `GET /api/v1/users/me/export` exporta los campos básicos de la cuenta.
+- `DELETE /api/v1/users/me` elimina la cuenta y sus sesiones/nodos/trabajos
+  después de confirmar la contraseña.
+
+Los nodos pueden registrarse con `POST /api/v1/nodes`, y los trabajos
+deterministas `math.sum.v1` con `POST /api/v1/jobs` y consentimiento explícito
+para compartir sus datos con nodos. El protocolo y sus limitaciones están en
+[NODE_PROTOCOL.md](docs/NODE_PROTOCOL.md). Este primer ejecutor no acredita
+créditos y no ejecuta código de usuario.
 
 Todavía no hay recuperación de contraseña, verificación de correo, límite de
-intentos, administración de cuentas ni interfaz web. No expongas esta API a
-Internet: las protecciones operativas de producción aún no están completas.
+intentos, administración de cuentas ni interfaz web/de escritorio. El
+protocolo de nodos solo permite `math.sum.v1` y no acredita créditos. No
+expongas esta API a Internet: las protecciones operativas de producción aún no
+están completas.
 
 ### Pruebas
 
+```powershell
 python -m pytest
 ```
 
-Las pruebas de dominio/API usan SQLite en memoria; CI cubre Python 3.11 y 3.12.
-Esto todavía no sustituye pruebas de concurrencia ni integración específica
-con PostgreSQL.
+Las pruebas locales de dominio/API usan SQLite en memoria. GitHub Actions está
+configurada para probar Python 3.11 y 3.12 e integración/concurrencia con
+PostgreSQL 17; la ejecución de esos trabajos debe confirmarse en CI.
 
 ## Estado y límites
 
-Consulta [PROGRESS.md](docs/PROGRESS.md). Los datos personales no se distribuyen
-a nodos voluntarios; el scheduler y los nodos todavía no están implementados.
-El repositorio de GitHub sigue siendo privado. Apache-2.0 se aplica al código
-de este repositorio; modelos, pesos y datasets tienen licencias propias que
-deben comprobarse individualmente.
+Consulta [PROGRESS.md](docs/PROGRESS.md). Solo los datos de trabajos creados
+con consentimiento explícito pueden enviarse a nodos; no deben incluir datos
+personales, secretos ni valores confidenciales. El repositorio de GitHub sigue
+siendo privado. Apache-2.0 se aplica al código de este repositorio; modelos,
+pesos y datasets tienen licencias propias que deben comprobarse individualmente.

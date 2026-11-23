@@ -55,15 +55,20 @@ def create_user(session: Session, *, email: str, password: str) -> User:
 
 def authenticate_user(session: Session, *, email: str, password: str) -> User:
     user = session.scalar(select(User).where(User.email == normalize_email(email)))
-    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
-    try:
-        password_matches = _PASSWORD_HASHER.verify(password_hash, password)
-    except (InvalidHashError, VerificationError, VerifyMismatchError):
-        password_matches = False
-
-    if user is None or not password_matches:
+    valid_password = verify_password(
+        user.password_hash if user is not None else _DUMMY_PASSWORD_HASH,
+        password,
+    )
+    if user is None or not valid_password:
         raise InvalidCredentials
     return user
+
+
+def verify_password(password_hash: str, password: str) -> bool:
+    try:
+        return _PASSWORD_HASHER.verify(password_hash, password)
+    except (InvalidHashError, VerificationError, VerifyMismatchError):
+        return False
 
 
 def issue_session(
