@@ -20,6 +20,8 @@ Las decisiones aquí registradas son iniciales y pueden revisarse con evidencia.
   permisos ni saldo.
 - **Motivo:** créditos y transiciones necesitan restricciones y transacciones
   duraderas.
+- **Alcance actual:** el primer núcleo probado usa SQLAlchemy y SQLite en
+  memoria; PostgreSQL, migraciones y despliegue no están validados todavía.
 
 ## D-003 — Nodos voluntarios como entornos no confiables
 

@@ -108,6 +108,8 @@ del cliente es un requisito previo al despliegue de trabajo no confiable.
 
 - Mantener asientos append-only en PostgreSQL con claves foráneas y
   restricciones de unicidad.
+- Exponer operaciones de escritura solo desde servicios autorizados; los
+  modelos ORM no sustituyen controles de acceso a la base de datos.
 - Hacer reserva, liquidación y reembolso en transacciones.
 - Asociar cada operación a una clave idempotente y a su trabajo o solicitud.
 - Derivar balances de asientos confirmados o mantener proyecciones

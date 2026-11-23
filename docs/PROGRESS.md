@@ -4,7 +4,7 @@
 
 ## Fase actual
 
-**Fase 0 — Base y contratos.**
+**Base (fase 0) completada; preparación del backend y contabilidad.**
 
 ## Completado
 
@@ -12,16 +12,23 @@
 - Principios, límites arquitectónicos y hoja de ruta documentados.
 - Definido el enfoque inicial de monolito modular, PostgreSQL autoritativo y
   nodos voluntarios no confiables.
+- Implementado un núcleo de libro mayor con asientos balanceados, saldos no
+  negativos por cuenta, operaciones idempotentes y reserva/liquidación/
+  reembolso componibles.
+- Añadidas pruebas del núcleo con SQLite en memoria; no se ha validado aún
+  contra PostgreSQL.
+- Validación local: `python -m pytest` — 6 pruebas aprobadas.
 
 ## Aún no implementado
 
 - API o backend ejecutable.
 - Registro, autenticación o autorización.
 - Scheduler, nodo de cómputo o sandbox.
-- Libro mayor o créditos.
+- Integración del libro mayor con trabajos verificados y autorización.
 - Integración de modelos, chat o memoria.
 - Rastreo web, RAG, entrenamiento o motor de evolución.
-- Pruebas automatizadas o despliegue.
+- API/integration tests, migraciones y despliegue (por ahora solo hay pruebas
+  unitarias del dominio de créditos).
 
 ## Próximos criterios de salida
 
@@ -29,7 +36,7 @@ Antes de activar trabajos o créditos:
 
 1. API y esquema de base de datos reproducibles.
 2. Autorización probada en cada recurso de usuario.
-3. Libro mayor idempotente con operaciones transaccionales.
+3. Migraciones para el libro mayor y validación transaccional contra PostgreSQL.
 4. Pruebas de concurrencia, duplicación y recuperación ante fallos.
 5. Política de tareas que impida distribuir datos privados.
 6. Cliente con permisos explícitos y límites locales.

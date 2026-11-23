@@ -5,8 +5,9 @@ objetivo de permitir investigación colaborativa y computación voluntaria sin
 comprometer la privacidad de sus participantes.
 
 El proyecto está en su fase inicial. Este repositorio contiene las decisiones
-de arquitectura y las políticas de base; todavía no ofrece una API, un nodo de
-cómputo ni un sistema de créditos funcionales.
+de arquitectura, las políticas de base y un primer núcleo interno de libro
+mayor de créditos. Todavía no ofrece una API, un nodo de cómputo ni un flujo de
+créditos conectado a trabajos validados.
 
 ## Principios
 
@@ -46,11 +47,22 @@ personal, conversaciones ni otros datos privados a nodos voluntarios.
 
 ## Desarrollo
 
-La documentación actual es una base de diseño, no una implementación
-ejecutable. Consulta [PROGRESS.md](docs/PROGRESS.md) para conocer qué existe y
-qué no. Las decisiones que afecten a privacidad, confianza, créditos o
-publicación de modelos deben quedar registradas antes de desplegar esas
-funciones.
+Consulta [PROGRESS.md](docs/PROGRESS.md) para conocer qué existe y qué no. El
+libro mayor es una biblioteca de dominio, no una API pública: la autenticación,
+la autorización y la validación del trabajo deben existir antes de conectarlo
+a clientes o conceder créditos reales.
+
+## Desarrollo local
+
+Requiere Python 3.11 o posterior:
+
+```powershell
+python -m pip install -e ".[dev]"
+python -m pytest
+```
+
+La suite usa SQLite en memoria para probar las invariantes del dominio. Esto
+no sustituye la validación específica contra PostgreSQL antes de desplegar.
 
 ## Estado del proyecto
 
