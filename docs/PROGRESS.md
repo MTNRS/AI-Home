@@ -38,8 +38,8 @@
   en el almacén seguro del sistema operativo.
 - Inventario local verificado: 16 hilos lógicos, 31 GiB de RAM y una NVIDIA
   GeForce RTX 4070 SUPER con 12 GiB de VRAM; la detección usa `nvidia-smi`.
-- CI configurada con PostgreSQL 17 y pruebas de migraciones, API de identidad,
-  reclamación concurrente de trabajos y concurrencia del ledger.
+- CI aprobada en Python 3.11/3.12 con PostgreSQL 17: migraciones, API de
+  identidad, reclamación concurrente de trabajos, ledger y cliente de escritorio.
 - Suite local más reciente: `python -m pytest -q` — 42 pruebas aprobadas y 4
   pruebas PostgreSQL omitidas por no haber servidor disponible localmente.
 - Migración Alembic inicial verificada en SQLite, comparada con el metadata
@@ -48,8 +48,8 @@
 
 ## Aún no implementado
 
-- Confirmar en GitHub Actions que los cambios más recientes de escritorio
-  pasen Python 3.11/3.12 y PostgreSQL; PostgreSQL no está disponible localmente.
+- PostgreSQL no está disponible localmente; las pruebas de integración se
+  ejecutan en GitHub Actions.
 - Endurecimiento de producción de autenticación: límite de intentos,
   verificación de correo y recuperación de cuenta.
 - Detección de hardware en otros equipos y sistemas operativos; CUDA es
