@@ -4,7 +4,7 @@
 
 ## Fase actual
 
-**Fase 2 — API e identidad inicial; seguridad de producción pendiente.**
+**Fase 3 — Nodo voluntario y escritorio experimental; producción pendiente.**
 
 ## Completado
 
@@ -33,11 +33,14 @@
   scheduler valida el resultado, reintenta leases vencidos y limita intentos.
 - Cliente de nodo Python ejecuta solo handlers tipados y permite una iteración
   de polling, sin ejecutar código arbitrario.
+- Primera aplicación de escritorio Tk con cuenta, chat hacia proveedores
+  OpenAI-compatible y aportación de nodos claramente opcional; tokens de nodo
+  en el almacén seguro del sistema operativo.
 - Inventario local verificado: 16 hilos lógicos, 31 GiB de RAM y una NVIDIA
   GeForce RTX 4070 SUPER con 12 GiB de VRAM; la detección usa `nvidia-smi`.
-- CI preparada con PostgreSQL 17 y pruebas de migraciones, API de identidad,
+- CI configurada con PostgreSQL 17 y pruebas de migraciones, API de identidad,
   reclamación concurrente de trabajos y concurrencia del ledger.
-- Suite local más reciente: `python -m pytest -q` — 36 pruebas aprobadas y 4
+- Suite local más reciente: `python -m pytest -q` — 42 pruebas aprobadas y 4
   pruebas PostgreSQL omitidas por no haber servidor disponible localmente.
 - Migración Alembic inicial verificada en SQLite, comparada con el metadata
   ORM y probada en downgrade; Uvicorn inició y `/health` respondió HTTP 200.
@@ -45,27 +48,27 @@
 
 ## Aún no implementado
 
-- Confirmar en GitHub Actions que pasen la migración, API y pruebas concurrentes
-  con PostgreSQL real; no se pudieron ejecutar localmente.
+- Confirmar en GitHub Actions que los cambios más recientes de escritorio
+  pasen Python 3.11/3.12 y PostgreSQL; PostgreSQL no está disponible localmente.
 - Endurecimiento de producción de autenticación: límite de intentos,
   verificación de correo y recuperación de cuenta.
 - Detección de hardware en otros equipos y sistemas operativos; CUDA es
   opcional y no se presume.
-- Aplicación de escritorio con cuenta, elección de servidor, uso de IA y
-  aportación de cómputo opcional.
-- Ejecutores de embeddings e inferencia, cliente de nodo de larga duración y
-  sandbox reforzado.
+- Verificación manual de la interfaz gráfica y publicación de instaladores
+  Windows/Linux.
+- API propia de inferencia/chat; el escritorio actual envía mensajes al
+  proveedor compatible configurado por la persona usuaria.
+- Límites locales de CPU/RAM, controles de pausa/reanudación y sandbox
+  reforzado para el nodo.
 - Integración del libro mayor con trabajos verificados y autorización.
 - Integración de modelos, chat o memoria.
 - Rastreo web, RAG, entrenamiento o motor de evolución.
-- Pruebas de concurrencia del ledger y de integración PostgreSQL.
-- Interfaz web, cliente de escritorio e instalación de producción.
+- Interfaz web, instaladores de escritorio y operación de producción.
 - TLS, rate limiting, CSRF si se añaden cookies, alertas y respuesta a
   incidentes antes de exposición pública.
 
 Docker no está instalado o no está disponible en PATH en el entorno de
-desarrollo actual, por lo que las pruebas PostgreSQL quedan pendientes de la
-ejecución de GitHub Actions.
+desarrollo actual; la verificación PostgreSQL se delega a GitHub Actions.
 
 ## Próximos criterios de salida
 

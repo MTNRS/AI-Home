@@ -21,6 +21,7 @@ from ai_home.schemas import (
     MathSumJobPayload,
     NodeCredentialResponse,
 )
+from ai_home.urls import normalize_base_url
 
 
 class HardwareDetectionError(RuntimeError):
@@ -127,9 +128,10 @@ def register_node_with_server(
     timeout_seconds: float = 30,
     transport: httpx.BaseTransport | None = None,
 ) -> NodeCredentialResponse:
+    server_url = normalize_base_url(server_url)
     hardware = detect_hardware()
     with httpx.Client(
-        base_url=server_url.rstrip("/"),
+        base_url=server_url,
         headers={"Authorization": f"Bearer {user_token}"},
         timeout=timeout_seconds,
         transport=transport,
@@ -156,8 +158,9 @@ class NodeAgent:
         timeout_seconds: float = 30,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        server_url = normalize_base_url(server_url)
         self._client = httpx.Client(
-            base_url=server_url.rstrip("/"),
+            base_url=server_url,
             headers={"Authorization": f"Bearer {node_token}"},
             timeout=timeout_seconds,
             transport=transport,

@@ -6,8 +6,9 @@ comprometer la privacidad de sus participantes.
 
 El proyecto está en desarrollo temprano. Ya incluye una API inicial de
 identidad y sesiones, un protocolo experimental de nodos voluntarios y un
-núcleo interno de libro mayor. Aún no incluye inferencia/chat de IA ni una
-aplicación de escritorio; los trabajos de nodos no están conectados a créditos.
+núcleo interno de libro mayor, además de un primer cliente de escritorio. AI@Home
+aún no aloja sus propios modelos de inferencia/chat y los trabajos de nodos no
+están conectados a créditos.
 
 ## Principios
 
@@ -76,10 +77,30 @@ para compartir sus datos con nodos. El protocolo y sus limitaciones están en
 créditos y no ejecuta código de usuario.
 
 Todavía no hay recuperación de contraseña, verificación de correo, límite de
-intentos, administración de cuentas ni interfaz web/de escritorio. El
-protocolo de nodos solo permite `math.sum.v1` y no acredita créditos. No
-expongas esta API a Internet: las protecciones operativas de producción aún no
-están completas.
+intentos, administración de cuentas ni interfaz web. El
+protocolo de nodos solo permite `math.sum.v1` y no acredita créditos. El
+cliente de escritorio es experimental y no se distribuye todavía como
+instalador. No expongas esta API a Internet: las protecciones operativas de
+producción aún no están completas.
+
+### Cliente de escritorio experimental
+
+Con Python 3.11+ y Tk instalado (incluido normalmente en Windows), instala el
+proyecto y ejecuta:
+
+```powershell
+python -m pip install -e .
+python -m ai_home.desktop
+```
+
+La pestaña **Usar IA** conecta a un proveedor compatible con la API OpenAI; por
+defecto usa `http://localhost:11434/v1` (por ejemplo, Ollama instalado y
+ejecutándose localmente). Los mensajes se envían directamente al endpoint
+configurado y no se guardan en el historial local. La pestaña **Colaborar** es
+independiente y requiere iniciar sesión y aceptar expresamente antes de
+registrar/iniciar un nodo. Las credenciales de nodo se guardan con el almacén
+seguro del sistema operativo; preferencias no secretas se guardan en el
+directorio de configuración del usuario.
 
 ### Pruebas
 

@@ -378,7 +378,7 @@ def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient):
         )
 
     agent = NodeAgent(
-        server_url="http://ai-home.test",
+        server_url="http://localhost",
         node_token=node["node_token"],
         transport=httpx.MockTransport(forward),
     )
@@ -427,7 +427,7 @@ def test_node_onboarding_reports_detected_hardware(
         )
 
     registration = register_node_with_server(
-        server_url="http://ai-home.test",
+        server_url="http://localhost",
         user_token=token,
         name="desktop-node",
         transport=httpx.MockTransport(forward),
@@ -494,3 +494,15 @@ def test_hardware_report_rejects_duplicate_gpu_indices():
 
     with pytest.raises(ValueError, match="indices must be unique"):
         HardwareReport.model_validate(duplicate)
+
+
+def test_node_clients_require_https_for_remote_servers():
+    with pytest.raises(ValueError, match="Usa HTTPS"):
+        NodeAgent(server_url="http://community.example", node_token="node-secret")
+
+    with pytest.raises(ValueError, match="Usa HTTPS"):
+        register_node_with_server(
+            server_url="http://community.example",
+            user_token="user-secret",
+            name="desktop-node",
+        )

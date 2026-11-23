@@ -13,6 +13,7 @@ dependencies = [
     "email-validator>=2.2,<3.0",
     "fastapi>=0.115,<1.0",
     "httpx>=0.27,<1.0",
+    "keyring>=25.0,<26.0",
     "psycopg[binary]>=3.2,<4.0",
     "psutil>=6.0,<8.0",
     "pydantic-settings>=2.6,<3.0",
@@ -24,6 +25,9 @@ dependencies = [
 dev = [
     "pytest>=8.0,<9.0",
 ]
+
+[project.scripts]
+ai-home-desktop = "ai_home.desktop:main"
 
 [tool.alembic]
 script_location = "services/api/migrations"
