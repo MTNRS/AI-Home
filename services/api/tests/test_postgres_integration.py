@@ -93,6 +93,7 @@ def test_postgres_scheduler_concurrent_claim_is_single_assignment(postgres_engin
                 password_hash="test-only",
             )
         )
+        session.flush()
         nodes = [
             ComputeNode(
                 node_id=node_id,

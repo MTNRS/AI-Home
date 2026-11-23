@@ -361,7 +361,13 @@ def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient):
         response = client.request(
             request.method,
             request.url.path,
-            headers={"Authorization": request.headers["Authorization"]},
+            headers={
+                "Authorization": request.headers["Authorization"],
+                "Content-Type": request.headers.get(
+                    "Content-Type",
+                    "application/json",
+                ),
+            },
             content=request.content,
         )
         return httpx.Response(
@@ -404,7 +410,13 @@ def test_node_onboarding_reports_detected_hardware(
         response = client.request(
             request.method,
             request.url.path,
-            headers={"Authorization": request.headers["Authorization"]},
+            headers={
+                "Authorization": request.headers["Authorization"],
+                "Content-Type": request.headers.get(
+                    "Content-Type",
+                    "application/json",
+                ),
+            },
             content=request.content,
         )
         return httpx.Response(
