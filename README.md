@@ -131,6 +131,12 @@ elegido; el proveedor externo procesa el contenido según sus propias
 condiciones. AI@Home todavía no tiene un modelo propio entrenado ni preselecciona
 un modelo externo compatible como si lo fuera.
 
+No hace falta una cuenta para abrir una sesión de invitado y conversar con un
+proveedor configurado o usar la memoria personal local. En **Cuenta**, elige
+**Continuar como invitado**. Las funciones de la comunidad, como usar el
+proveedor del servidor, colaborar con nodos o enviar candidaturas de
+entrenamiento, siguen requiriendo iniciar sesión.
+
 La memoria personal se guarda localmente como notas Markdown compatibles con
 Obsidian, en la carpeta de configuración de AI@Home del usuario. **Memoria
 local** permite añadir recuerdos y enlazarlos con otros; los nodos y enlaces se

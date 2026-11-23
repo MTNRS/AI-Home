@@ -4,6 +4,9 @@ import httpx
 import pytest
 
 from ai_home.desktop import (
+    _SPHERE_EMOTION_COLORS,
+    _blend_sphere_color,
+    _sphere_emotion_for_text,
     _sphere_pointer_angles,
     chat_completion,
     delete_provider_api_key,
@@ -35,6 +38,31 @@ def test_sphere_orientation_tracks_pointer_with_a_wide_smooth_range():
     assert level == 0
     assert _sphere_pointer_angles(10_000, -10_000, 60) == (0.75, 0.5)
     assert _sphere_pointer_angles(-10_000, 10_000, 60) == (-0.75, -0.5)
+
+
+@pytest.mark.parametrize(
+    ("text", "emotion"),
+    [
+        ("¡Me alegra que hayas venido!", "alegria"),
+        ("Lo siento mucho por lo ocurrido.", "tristeza"),
+        ("Entiendo que estés frustrado.", "enfado"),
+        ("Es normal sentir miedo ante eso.", "miedo"),
+        ("Respira con calma; todo está tranquilo.", "calma"),
+    ],
+)
+def test_sphere_detects_emotional_cues_in_agent_responses(text, emotion):
+    assert _sphere_emotion_for_text(text) == emotion
+    assert _SPHERE_EMOTION_COLORS[emotion].startswith("#")
+
+
+def test_sphere_stays_neutral_without_emotional_cues():
+    assert _sphere_emotion_for_text("La respuesta es 42.") is None
+
+
+def test_sphere_blush_tint_is_soft_and_clamped():
+    assert _blend_sphere_color("#ffffff", "#000000", 0.28) == "#b8b8b8"
+    assert _blend_sphere_color("#ffffff", "#000000", -1) == "#ffffff"
+    assert _blend_sphere_color("#ffffff", "#000000", 2) == "#000000"
 
 
 def test_base_url_requires_https_outside_local_machine():
@@ -157,7 +185,7 @@ def test_settings_round_trip_stores_only_non_secret_preferences(
     settings = {
         "server_url": "https://community.example",
         "email": "alice@example.com",
-        "chat_endpoint": "http://localhost:11434/v1",
+        "chat_endpoint": "http://localhost:9000/v1",
         "chat_model": "test-model",
     }
 
@@ -165,6 +193,38 @@ def test_settings_round_trip_stores_only_non_secret_preferences(
 
     assert load_settings() == settings
     assert "password" not in load_settings()
+
+
+def test_load_settings_removes_legacy_ollama_configuration(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("ai_home.desktop.sys.platform", "linux")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    settings_path = tmp_path / "ai-home" / "desktop.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "server_url": "https://community.example",
+                "chat_provider": "openai-compatible",
+                "chat_endpoint": "http://localhost:11434/v1",
+                "chat_model": "llama3.2",
+                "chat_model_openai-compatible": "llama3.2",
+                "email": "alice@example.com",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    settings = load_settings()
+
+    assert settings == {
+        "server_url": "https://community.example",
+        "chat_provider": "openai-compatible",
+        "email": "alice@example.com",
+    }
+    assert json.loads(settings_path.read_text(encoding="utf-8")) == settings
 
 
 def test_provider_keys_use_keyring_and_are_partitioned_by_provider_and_endpoint(

@@ -8,10 +8,12 @@ import json
 import math
 import os
 import queue
+import re
 import threading
 from pathlib import Path
 import sys
 from typing import TypeGuard, TypeVar
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
@@ -55,6 +57,21 @@ _OS_KEYRING_MODULES = {
 }
 T = TypeVar("T")
 
+_SPHERE_EMOTION_COLORS = {
+    "alegria": "#f0b5a8",
+    "tristeza": "#a9c8e8",
+    "enfado": "#e9a29e",
+    "miedo": "#c5b2df",
+    "calma": "#a8cfb4",
+}
+_SPHERE_EMOTION_CUES = {
+    "alegria": ("feliz", "alegr", "encantad", "ilusion", "genial", "maravillos"),
+    "tristeza": ("triste", "lo siento", "lamento", "pena", "dolor"),
+    "enfado": ("enfad", "molest", "frustr", "rabia", "furia"),
+    "miedo": ("miedo", "temor", "asust", "preocup", "nervios"),
+    "calma": ("tranquil", "calma", "seren", "relaj"),
+}
+
 
 def _sphere_pointer_angles(
     pointer_dx: float,
@@ -65,6 +82,28 @@ def _sphere_pointer_angles(
     yaw = max(-0.75, min(0.75, math.atan2(pointer_dx, depth)))
     pitch = max(-0.5, min(0.5, -math.atan2(pointer_dy, depth)))
     return yaw, pitch
+
+
+def _sphere_emotion_for_text(text: str) -> str | None:
+    normalized = text.casefold()
+    matches = (
+        (normalized.find(cue), emotion)
+        for emotion, cues in _SPHERE_EMOTION_CUES.items()
+        for cue in cues
+        if normalized.find(cue) >= 0
+    )
+    first_match = min(matches, default=None)
+    return first_match[1] if first_match is not None else None
+
+
+def _blend_sphere_color(base: str, tint: str, amount: float) -> str:
+    amount = max(0.0, min(1.0, amount))
+    channels = (
+        round(int(base[index : index + 2], 16) * (1 - amount))
+        + round(int(tint[index : index + 2], 16) * amount)
+        for index in (1, 3, 5)
+    )
+    return "#" + "".join(f"{channel:02x}" for channel in channels)
 
 
 def _is_provider_id(value: str) -> TypeGuard[ProviderId]:
@@ -337,6 +376,19 @@ def settings_path() -> Path:
     return root / "ai-home" / "desktop.json"
 
 
+def _is_legacy_ollama_endpoint(value: str) -> bool:
+    try:
+        parsed = urlsplit(value.strip())
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.hostname is not None
+        and parsed.hostname.casefold() in {"localhost", "127.0.0.1", "::1"}
+        and port == 11434
+    )
+
+
 def load_settings() -> dict[str, str]:
     path = settings_path()
     try:
@@ -350,6 +402,11 @@ def load_settings() -> dict[str, str]:
         for key, value in data.items()
     ):
         raise RuntimeError(f"Desktop settings at {path} have an invalid format.")
+    if _is_legacy_ollama_endpoint(data.get("chat_endpoint", "")):
+        data.pop("chat_endpoint", None)
+        data.pop("chat_model", None)
+        data.pop("chat_model_openai-compatible", None)
+        save_settings(data)
     return data
 
 
@@ -383,6 +440,7 @@ def main() -> None:
             self.events: queue.Queue[tuple[str, object]] = queue.Queue()
             self.session_token: str | None = None
             self.session_server_url: str | None = None
+            self.guest_session_active = False
             self.messages: list[dict[str, str]] = []
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
@@ -394,6 +452,7 @@ def main() -> None:
             self.node_thread: threading.Thread | None = None
             self.sphere_yaw = 0.0
             self.sphere_pitch = 0.0
+            self.sphere_emotion: str | None = None
             self.status_var = tk.StringVar(value="Listo para empezar")
             self._build_ui(ttk)
             self.protocol("WM_DELETE_WINDOW", self._close)
@@ -513,6 +572,45 @@ def main() -> None:
                     outline=color,
                     tags=("face", "head"),
                 )
+
+            emotion_color = _SPHERE_EMOTION_COLORS.get(self.sphere_emotion)
+            if emotion_color is not None:
+                blush_color = _blend_sphere_color("#f5f2ef", emotion_color, 0.28)
+                for cheek_x in (-0.48, 0.48):
+                    cheek_y = 0.30
+                    cheek_z = math.sqrt(1 - cheek_x**2 - cheek_y**2)
+                    rotated_x = (
+                        cheek_x * math.cos(self.sphere_yaw)
+                        + cheek_z * math.sin(self.sphere_yaw)
+                    )
+                    rotated_z = (
+                        -cheek_x * math.sin(self.sphere_yaw)
+                        + cheek_z * math.cos(self.sphere_yaw)
+                    )
+                    projected_y = (
+                        cheek_y * math.cos(self.sphere_pitch)
+                        - rotated_z * math.sin(self.sphere_pitch)
+                    )
+                    cheek_depth = (
+                        cheek_y * math.sin(self.sphere_pitch)
+                        + rotated_z * math.cos(self.sphere_pitch)
+                    )
+                    if cheek_depth <= 0.04:
+                        continue
+                    perspective = min(1.0, cheek_depth / cheek_z)
+                    cheek_center_x = center_x + rotated_x * orb_radius
+                    cheek_center_y = center_y + projected_y * orb_radius
+                    cheek_width = orb_radius * 0.22 * perspective
+                    cheek_height = orb_radius * 0.13 * perspective
+                    canvas.create_oval(
+                        cheek_center_x - cheek_width,
+                        cheek_center_y - cheek_height,
+                        cheek_center_x + cheek_width,
+                        cheek_center_y + cheek_height,
+                        fill=blush_color,
+                        outline=blush_color,
+                        tags=("face", "blush"),
+                    )
 
             for eye_x, eye_scale in (
                 (-0.34, 0.26),
@@ -907,9 +1005,20 @@ def main() -> None:
         def _build_account_tab(self, ttk, parent) -> None:
             ttk.Label(
                 parent,
-                text="Inicia sesión solo para funciones de la comunidad.",
+                text=(
+                    "Puedes usar AI@Home como invitado. Inicia sesión solo "
+                    "para las funciones de la comunidad."
+                ),
                 wraplength=760,
             ).pack(anchor="w", pady=(0, 10))
+            self.account_status_var = tk.StringVar(
+                value="Sin cuenta iniciada. Puedes continuar como invitado."
+            )
+            ttk.Label(
+                parent,
+                textvariable=self.account_status_var,
+                wraplength=760,
+            ).pack(anchor="w", pady=(0, 8))
             account = ttk.LabelFrame(parent, text="Cuenta AI@Home", padding=12)
             account.pack(fill="x", pady=(0, 12))
             self.server_var = tk.StringVar(
@@ -937,10 +1046,15 @@ def main() -> None:
             ).grid(
                 row=1, column=2, padx=6, pady=3
             )
-            ttk.Button(account, text="Salir de la cuenta", command=self._logout).grid(
+            ttk.Button(account, text="Cerrar sesión", command=self._logout).grid(
                 row=2, column=2, padx=6, pady=3
             )
             account.columnconfigure(1, weight=1)
+            ttk.Button(
+                account,
+                text="Continuar como invitado",
+                command=self._start_guest_session,
+            ).grid(row=3, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 3))
 
             contributions = ttk.LabelFrame(
                 parent,
@@ -1293,7 +1407,13 @@ def main() -> None:
             if not _is_provider_id(provider):
                 raise ValueError("Selecciona un proveedor compatible.")
             if provider == "openai-compatible":
-                endpoint = normalize_base_url(self.endpoint_var.get())
+                configured_endpoint = self.endpoint_var.get().strip()
+                if not configured_endpoint:
+                    raise ValueError(
+                        "Configura un proveedor en «Conectar IA» antes de enviar "
+                        "mensajes. AI@Home aún no tiene un modelo propio."
+                    )
+                endpoint = normalize_base_url(configured_endpoint)
                 if contains_common_secret(endpoint):
                     raise ValueError(
                         "La URL del endpoint no debe incluir credenciales."
@@ -1444,7 +1564,9 @@ def main() -> None:
                 self.settings = updated_settings
                 self.session_token = session.access_token
                 self.session_server_url = server_url
+                self.guest_session_active = False
                 self.password_var.set("")
+                self.account_status_var.set(f"Sesión iniciada como {email}.")
                 self.status_var.set(f"Sesión iniciada: {email}")
 
             self._background(
@@ -1478,9 +1600,32 @@ def main() -> None:
                 on_success,
             )
 
+        def _start_guest_session(self) -> None:
+            if self.session_token is not None:
+                messagebox.showinfo(
+                    "AI@Home",
+                    "Ya has iniciado sesión con tu cuenta. Cierra esa sesión "
+                    "antes de continuar como invitado.",
+                    parent=self,
+                )
+                return
+            self.guest_session_active = True
+            self.account_status_var.set(
+                "Sesión de invitado activa: chat y recuerdos locales, sin cuenta. "
+                "Las funciones de la comunidad requieren iniciar sesión."
+            )
+            self.status_var.set("Sesión de invitado iniciada.")
+
         def _logout(self) -> None:
             if self.session_token is None:
-                self.status_var.set("No hay una sesión activa.")
+                if self.guest_session_active:
+                    self.guest_session_active = False
+                    self.account_status_var.set(
+                        "Sin sesión activa. Puedes continuar como invitado."
+                    )
+                    self.status_var.set("Sesión de invitado cerrada.")
+                else:
+                    self.status_var.set("No hay una sesión activa.")
                 return
             token = self.session_token
             server_url = self.session_server_url
@@ -1501,6 +1646,9 @@ def main() -> None:
             def on_success(_result) -> None:
                 self.session_token = None
                 self.session_server_url = None
+                self.account_status_var.set(
+                    "Sesión cerrada. Puedes continuar como invitado."
+                )
                 self.status_var.set("Sesión cerrada.")
 
             self._background(
@@ -1602,6 +1750,8 @@ def main() -> None:
 
             def on_success(answer: str) -> None:
                 self.chat_request_active = False
+                self.sphere_emotion = _sphere_emotion_for_text(answer)
+                self._layout_home()
                 self.messages.append({"role": "assistant", "content": answer})
                 self.active_memory_ids.update(
                     note.id for note in selected_memories
