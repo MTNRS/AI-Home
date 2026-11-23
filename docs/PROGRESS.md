@@ -26,6 +26,7 @@
 - Suite local: `python -m pytest -q` — 17 pruebas aprobadas.
 - Migración Alembic inicial verificada en SQLite, comparada con el metadata
   ORM y probada en downgrade; Uvicorn inició y `/health` respondió HTTP 200.
+- GitHub Actions: instalación y suite aprobadas en Python 3.11 y 3.12.
 
 ## Aún no implementado
 
