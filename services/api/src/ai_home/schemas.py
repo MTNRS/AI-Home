@@ -1,7 +1,9 @@
 """Validated API request and response models."""
 
 from datetime import datetime
+import re
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -9,11 +11,16 @@ from pydantic import (
     EmailStr,
     Field,
     SecretStr,
+    StrictBool,
     StrictInt,
     StrictStr,
     field_validator,
     model_validator,
 )
+
+from ai_home.providers import PROVIDER_DEFAULTS
+from ai_home.privacy import contains_common_secret
+from ai_home.urls import normalize_base_url
 
 
 class RegisterRequest(BaseModel):
@@ -37,6 +44,8 @@ class DeleteAccountRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     user_id: str
     email: EmailStr
     created_at: datetime
@@ -67,6 +76,168 @@ class ChatCompletionRequest(BaseModel):
         if sum(len(message.content) for message in self.messages) > 32_000:
             raise ValueError("The total chat content must not exceed 32,000 characters.")
         return self
+
+
+class TrainingConversationMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: StrictStr = Field(min_length=1, max_length=8192)
+
+
+class TrainingContributionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_id: UUID
+    provider: Literal[
+        "openai",
+        "anthropic",
+        "gemini",
+        "openai-compatible",
+    ]
+    source_endpoint: StrictStr = Field(min_length=8, max_length=500)
+    model: StrictStr = Field(min_length=1, max_length=160)
+    messages: list[TrainingConversationMessage] = Field(min_length=2, max_length=50)
+    consent: StrictBool
+    consent_version: Literal["training_consent_v1"]
+    consent_scope: Literal["conversation_for_aihome_training_candidates"]
+    provider_terms_allow_reuse: StrictBool
+    content_reviewed_for_sensitive_data: StrictBool
+
+    @field_validator("model")
+    @classmethod
+    def model_must_not_be_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("A provider model is required.")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_training_contribution(self) -> "TrainingContributionRequest":
+        if not self.consent:
+            raise ValueError("Explicit training consent is required.")
+        if not self.provider_terms_allow_reuse:
+            raise ValueError("Provider terms must allow reuse for training.")
+        if not self.content_reviewed_for_sensitive_data:
+            raise ValueError("The conversation must be reviewed before submission.")
+        if not any(message.role == "user" for message in self.messages):
+            raise ValueError("A conversation must contain a user message.")
+        if not any(message.role == "assistant" for message in self.messages):
+            raise ValueError("A conversation must contain an assistant message.")
+        if sum(len(message.content) for message in self.messages) > 32_000:
+            raise ValueError("The conversation is too large to submit.")
+        normalized_endpoint = normalize_base_url(self.source_endpoint)
+        if contains_common_secret(normalized_endpoint):
+            raise ValueError("The provider endpoint must not contain credentials.")
+        if (
+            self.provider != "openai-compatible"
+            and normalized_endpoint != PROVIDER_DEFAULTS[self.provider][0]
+        ):
+            raise ValueError("The provider endpoint does not match its provenance.")
+        self.source_endpoint = normalized_endpoint
+        return self
+
+
+class TrainingContributionResponse(BaseModel):
+    contribution_id: str
+    conversation_id: UUID
+    provider: str
+    source_endpoint: str
+    model: str
+    consent_version: str
+    consent_scope: str
+    consent_at_epoch: int
+    status: Literal["pending_review", "eligible", "frozen", "rejected"]
+
+
+class TrainingContributionExportResponse(TrainingContributionResponse):
+    messages: list[TrainingConversationMessage]
+
+
+class TrainingReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    approve: StrictBool
+    provider_terms_verified: StrictBool = False
+    sensitive_data_reviewed: StrictBool = False
+    reuse_rights_verified: StrictBool = False
+
+    @model_validator(mode="after")
+    def require_review_checklist_for_approval(self) -> "TrainingReviewRequest":
+        if self.approve and not all(
+            (
+                self.provider_terms_verified,
+                self.sensitive_data_reviewed,
+                self.reuse_rights_verified,
+            )
+        ):
+            raise ValueError(
+                "Provider terms, sensitive data and reuse rights must be reviewed."
+            )
+        return self
+
+
+class TrainingReviewResponse(BaseModel):
+    contribution_id: str
+    status: Literal["eligible", "rejected"]
+    reviewer_id: str
+    reviewed_at_epoch: int
+    review_checklist: dict[str, bool]
+
+
+class TrainingContributionReviewResponse(
+    TrainingContributionExportResponse
+):
+    owner_user_id: str
+
+
+class FreezeTrainingDatasetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version: StrictStr = Field(min_length=1, max_length=80)
+    contribution_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+    @field_validator("dataset_version")
+    @classmethod
+    def dataset_version_must_be_safe(cls, value: str) -> str:
+        normalized = value.strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", normalized):
+            raise ValueError(
+                "Dataset version may contain only letters, numbers, '.', '_' and '-'."
+            )
+        return normalized
+
+    @model_validator(mode="after")
+    def require_unique_contributions(self) -> "FreezeTrainingDatasetRequest":
+        if len(self.contribution_ids) != len(set(self.contribution_ids)):
+            raise ValueError("Dataset contribution identifiers must be unique.")
+        return self
+
+
+class TrainingDatasetResponse(BaseModel):
+    dataset_id: str
+    dataset_version: str
+    manifest_sha256: str
+    item_count: int
+    created_at: datetime
+
+
+class FrozenTrainingRecord(BaseModel):
+    contribution_id: str
+    provider: str
+    source_endpoint: str
+    model: str
+    consent_version: str
+    consent_scope: str
+    consent_at_epoch: int
+    reviewer_id: str
+    reviewed_at_epoch: int
+    review_checklist: dict[str, bool]
+    messages: list[TrainingConversationMessage]
+
+
+class TrainingDatasetExportResponse(TrainingDatasetResponse):
+    records: list[FrozenTrainingRecord]
 
 
 class ChatCompletionMessageResponse(BaseModel):

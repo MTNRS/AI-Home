@@ -5,7 +5,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
@@ -53,6 +53,29 @@ def create_user(session: Session, *, email: str, password: str) -> User:
     return user
 
 
+def create_supabase_user(
+    session: Session,
+    *,
+    user_id: str,
+    email: str,
+) -> User:
+    normalized_id = str(UUID(user_id))
+    normalized_email = normalize_email(email)
+    user = session.get(User, normalized_id)
+    if user is None:
+        user = User(
+            user_id=normalized_id,
+            email=normalized_email,
+            password_hash=None,
+        )
+        session.add(user)
+        session.flush()
+    elif user.email != normalized_email:
+        user.email = normalized_email
+        session.flush()
+    return user
+
+
 def authenticate_user(session: Session, *, email: str, password: str) -> User:
     user = session.scalar(select(User).where(User.email == normalize_email(email)))
     valid_password = verify_password(
@@ -89,6 +112,24 @@ def issue_session(
     )
     session.flush()
     return IssuedSession(access_token, expires_at_epoch)
+
+
+def issue_supabase_session(
+    session: Session,
+    *,
+    user: User,
+    access_token: str,
+    expires_at_epoch: int,
+) -> None:
+    session.add(
+        AuthSession(
+            session_id=str(uuid4()),
+            user_id=user.user_id,
+            token_hash=_token_hash(access_token),
+            expires_at_epoch=expires_at_epoch,
+        )
+    )
+    session.flush()
 
 
 def resolve_session(session: Session, access_token: str) -> AuthenticatedUser:

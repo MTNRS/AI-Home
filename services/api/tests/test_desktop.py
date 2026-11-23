@@ -4,13 +4,37 @@ import httpx
 import pytest
 
 from ai_home.desktop import (
+    _sphere_pointer_angles,
     chat_completion,
+    delete_provider_api_key,
+    get_training_candidate,
+    get_provider_api_key,
     load_settings,
     login_to_server,
+    list_training_candidates,
     normalize_base_url,
+    save_provider_api_key,
     save_settings,
     server_chat_completion,
+    submit_training_candidate,
+    withdraw_training_candidate,
 )
+
+
+def test_sphere_orientation_tracks_pointer_with_a_wide_smooth_range():
+    assert _sphere_pointer_angles(0, 0, 60) == (0, 0)
+
+    left, level = _sphere_pointer_angles(-80, 0, 60)
+    right, _ = _sphere_pointer_angles(80, 0, 60)
+    _, above = _sphere_pointer_angles(0, -80, 60)
+    _, below = _sphere_pointer_angles(0, 80, 60)
+
+    assert left < 0 < right
+    assert above > 0 > below
+    assert 0.35 < right < 0.6
+    assert level == 0
+    assert _sphere_pointer_angles(10_000, -10_000, 60) == (0.75, 0.5)
+    assert _sphere_pointer_angles(-10_000, 10_000, 60) == (-0.75, -0.5)
 
 
 def test_base_url_requires_https_outside_local_machine():
@@ -49,6 +73,23 @@ def test_desktop_login_uses_api_and_validates_session_response():
     )
 
     assert session.access_token == "a-secure-session-token"
+
+
+def test_desktop_login_displays_the_api_authentication_error():
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            403,
+            json={"detail": "Confirma tu correo electrónico antes de iniciar sesión."},
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="Confirma tu correo electrónico"):
+        login_to_server(
+            "http://localhost:8000",
+            "alice@example.com",
+            "example-password",
+            transport=transport,
+        )
 
 
 def test_chat_completion_sends_chat_and_optional_api_key():
@@ -124,3 +165,229 @@ def test_settings_round_trip_stores_only_non_secret_preferences(
 
     assert load_settings() == settings
     assert "password" not in load_settings()
+
+
+def test_provider_keys_use_keyring_and_are_partitioned_by_provider_and_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    stored: dict[tuple[str, str], str] = {}
+    monkeypatch.setattr("ai_home.desktop._require_os_keyring", lambda: None)
+
+    def set_password(service: str, account: str, password: str) -> None:
+        stored[(service, account)] = password
+
+    def get_password(service: str, account: str) -> str | None:
+        return stored.get((service, account))
+
+    def delete_password(service: str, account: str) -> None:
+        del stored[(service, account)]
+
+    monkeypatch.setattr("ai_home.desktop.keyring.set_password", set_password)
+    monkeypatch.setattr("ai_home.desktop.keyring.get_password", get_password)
+    monkeypatch.setattr("ai_home.desktop.keyring.delete_password", delete_password)
+
+    save_provider_api_key(
+        "openai-compatible",
+        "https://provider.example/v1",
+        "provider-secret",
+    )
+    save_provider_api_key(
+        "openai-compatible",
+        "https://other.example/v1",
+        "other-secret",
+    )
+
+    assert get_provider_api_key(
+        "openai-compatible",
+        "https://provider.example/v1",
+    ) == "provider-secret"
+    assert get_provider_api_key(
+        "openai-compatible",
+        "https://other.example/v1",
+    ) == "other-secret"
+    assert all("provider.example" not in account for _, account in stored)
+    assert delete_provider_api_key(
+        "openai-compatible",
+        "https://provider.example/v1",
+    )
+    assert get_provider_api_key(
+        "openai-compatible",
+        "https://provider.example/v1",
+    ) == ""
+    assert len(stored) == 1
+
+
+def test_provider_keyring_failure_does_not_fall_back_to_plaintext(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("ai_home.desktop.settings_path", lambda: tmp_path / "settings.json")
+
+    def unavailable(*_args, **_kwargs):
+        raise keyring.errors.NoKeyringError("secure store unavailable")
+
+    import keyring
+
+    monkeypatch.setattr("ai_home.desktop.keyring.set_password", unavailable)
+    monkeypatch.setattr("ai_home.desktop.keyring.get_password", unavailable)
+    monkeypatch.setattr("ai_home.desktop._require_os_keyring", lambda: None)
+
+    with pytest.raises(RuntimeError, match="almacén seguro"):
+        save_provider_api_key("openai", "", "provider-secret")
+    with pytest.raises(RuntimeError, match="almacén seguro"):
+        get_provider_api_key("openai", "")
+
+    assert not (tmp_path / "settings.json").exists()
+
+
+def test_provider_keys_refuse_non_os_keyring_backend(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class InsecureBackend:
+        pass
+
+    calls = []
+    monkeypatch.setattr(
+        "ai_home.desktop.keyring.get_keyring",
+        lambda: InsecureBackend(),
+    )
+    monkeypatch.setattr(
+        "ai_home.desktop.keyring.set_password",
+        lambda *_args: calls.append("stored"),
+    )
+
+    with pytest.raises(RuntimeError, match="almacén seguro"):
+        save_provider_api_key("openai", "", "provider-secret")
+
+    assert calls == []
+
+
+def test_training_candidate_client_sends_opt_in_data_without_api_key():
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/training/conversations"
+        assert request.headers["Authorization"] == "Bearer account-token"
+        body = json.loads(request.read())
+        assert body == {
+            "conversation_id": "d24b0b20-5ebc-48af-a3c8-000000000001",
+            "provider": "openai",
+            "source_endpoint": "https://api.openai.com/v1",
+            "model": "gpt-test",
+            "messages": [
+                {"role": "user", "content": "A public question."},
+                {"role": "assistant", "content": "A public answer."},
+            ],
+            "consent": True,
+            "consent_version": "training_consent_v1",
+            "consent_scope": "conversation_for_aihome_training_candidates",
+            "provider_terms_allow_reuse": True,
+            "content_reviewed_for_sensitive_data": True,
+        }
+        assert "api_key" not in body
+        return httpx.Response(
+            201,
+            json={
+                "contribution_id": "4d5871c5-4766-4813-b8b5-000000000001",
+                "conversation_id": body["conversation_id"],
+                "provider": "openai",
+                "source_endpoint": "https://api.openai.com/v1",
+                "model": "gpt-test",
+                "consent_version": "training_consent_v1",
+                "consent_scope": "conversation_for_aihome_training_candidates",
+                "consent_at_epoch": 1_700_000_000,
+                "status": "pending_review",
+            },
+        )
+
+    result = submit_training_candidate(
+        "https://community.example",
+        "account-token",
+        "d24b0b20-5ebc-48af-a3c8-000000000001",
+        "openai",
+        "https://api.openai.com/v1",
+        "gpt-test",
+        [
+            {"role": "user", "content": "A public question."},
+            {"role": "assistant", "content": "A public answer."},
+        ],
+        reviewed_for_submission=True,
+        transport=httpx.MockTransport(handle),
+    )
+
+    assert result.status == "pending_review"
+
+
+def test_training_candidate_management_client_lists_and_withdraws():
+    contribution_id = "4d5871c5-4766-4813-b8b5-000000000001"
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer account-token"
+        if request.method == "GET":
+            if request.url.path == "/api/v1/training/conversations":
+                return httpx.Response(
+                    200,
+                    json=[
+                        {
+                            "contribution_id": contribution_id,
+                            "conversation_id": (
+                                "d24b0b20-5ebc-48af-a3c8-000000000001"
+                            ),
+                            "provider": "openai",
+                            "source_endpoint": "https://api.openai.com/v1",
+                            "model": "gpt-test",
+                            "consent_version": "training_consent_v1",
+                            "consent_scope": (
+                                "conversation_for_aihome_training_candidates"
+                            ),
+                            "consent_at_epoch": 1_700_000_000,
+                            "status": "pending_review",
+                        }
+                    ],
+                )
+            assert request.url.path == (
+                f"/api/v1/training/conversations/{contribution_id}"
+            )
+            return httpx.Response(
+                200,
+                json={
+                    "contribution_id": contribution_id,
+                    "conversation_id": "d24b0b20-5ebc-48af-a3c8-000000000001",
+                    "provider": "openai",
+                    "source_endpoint": "https://api.openai.com/v1",
+                    "model": "gpt-test",
+                    "consent_version": "training_consent_v1",
+                    "consent_scope": "conversation_for_aihome_training_candidates",
+                    "consent_at_epoch": 1_700_000_000,
+                    "status": "pending_review",
+                    "messages": [
+                        {"role": "user", "content": "Question"},
+                        {"role": "assistant", "content": "Answer"},
+                    ],
+                },
+            )
+        assert request.method == "DELETE"
+        assert request.url.path == (
+            f"/api/v1/training/conversations/{contribution_id}"
+        )
+        return httpx.Response(204)
+
+    transport = httpx.MockTransport(handle)
+    contributions = list_training_candidates(
+        "https://community.example",
+        "account-token",
+        transport=transport,
+    )
+    contribution = get_training_candidate(
+        "https://community.example",
+        "account-token",
+        contribution_id,
+        transport=transport,
+    )
+    withdraw_training_candidate(
+        "https://community.example",
+        "account-token",
+        contribution_id,
+        transport=transport,
+    )
+
+    assert contributions[0].model == "gpt-test"
+    assert contribution.messages[0].content == "Question"

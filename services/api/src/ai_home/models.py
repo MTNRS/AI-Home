@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -25,7 +26,7 @@ class User(Base):
 
     user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     email: Mapped[str] = mapped_column(String(320), nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -114,6 +115,68 @@ class ComputeJob(Base):
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     result: Mapped[dict | None] = mapped_column(JSON)
     failure_code: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class TrainingContribution(Base):
+    __tablename__ = "training_contributions"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "conversation_id",
+            name="uq_training_contributions_owner_conversation",
+        ),
+        CheckConstraint(
+            "status IN ('pending_review', 'eligible', 'frozen', 'rejected')",
+            name="ck_training_contributions_status",
+        ),
+    )
+
+    contribution_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    conversation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_endpoint: Mapped[str] = mapped_column(String(500), nullable=False)
+    model: Mapped[str] = mapped_column(String(160), nullable=False)
+    messages: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False)
+    consent_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    consent_scope: Mapped[str] = mapped_column(String(80), nullable=False)
+    consent_at_epoch: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="pending_review",
+        server_default="pending_review",
+    )
+    reviewer_id: Mapped[str | None] = mapped_column(String(80))
+    reviewed_at_epoch: Mapped[int | None] = mapped_column(BigInteger)
+    review_checklist: Mapped[dict[str, bool] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class TrainingDataset(Base):
+    __tablename__ = "training_datasets"
+    __table_args__ = (
+        UniqueConstraint("dataset_version", name="uq_training_datasets_version"),
+    )
+
+    dataset_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    dataset_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    item_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    records: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

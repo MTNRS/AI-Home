@@ -4,7 +4,8 @@
 
 ## Fase actual
 
-**Fase 3 — Nodo voluntario y escritorio experimental; producción pendiente.**
+**Fases 3, 5 y 8 — Nodo voluntario, cliente BYOK y captura consentida
+experimental; producción pendiente.**
 
 ## Completado
 
@@ -18,7 +19,13 @@
 - Licencia Apache-2.0 añadida al código del repositorio.
 - Backend inicial con configuración por entorno, API FastAPI, registro,
   login/logout con sesiones opacas revocables y endpoint de perfil propio.
-- Contraseñas con Argon2id; los tokens se almacenan como hashes.
+- Integración opcional con Supabase Auth: registro/login mediante Auth REST,
+  verificación de JWT con JWKS del proyecto, revocación local de sesiones y
+  proyección local del UUID/correo sin guardar contraseñas. La clave secreta se
+  limita a eliminación administrativa de cuentas.
+- Migración `0005` permite perfiles con credenciales gestionadas externamente;
+  el modo local de desarrollo conserva Argon2id y los tokens se almacenan como
+  hashes.
 - Migración Alembic inicial para identidad, sesiones y ledger, más Compose de
   desarrollo para PostgreSQL y CI Python 3.11/3.12.
 - Pruebas de API para registro, normalización, autenticación, sesión, cierre y
@@ -33,45 +40,88 @@
   scheduler valida el resultado, reintenta leases vencidos y limita intentos.
 - Cliente de nodo Python ejecuta solo handlers tipados y permite una iteración
   de polling, sin ejecutar código arbitrario.
-- Primera aplicación de escritorio Tk con cuenta, chat hacia proveedores
-  OpenAI-compatible y aportación de nodos claramente opcional; tokens de nodo
-  en el almacén seguro del sistema operativo.
+- Primera aplicación de escritorio Tk con cuenta, chat y aportación de nodos
+  claramente opcional; tokens de nodo en el almacén seguro del sistema
+  operativo.
+- Adaptadores directos de escritorio para OpenAI, Anthropic, Google Gemini y
+  endpoints OpenAI-compatibles. Claves guardadas en keyring por proveedor y
+  endpoint; no se incluyen en preferencias ni se envían a AI@Home. Endpoints
+  oficiales fijos y endpoint compatible remoto sujeto a HTTPS.
+- UI BYOK advierte del procesamiento por terceros y permite guardar/eliminar
+  claves con manejo explícito de errores del almacén seguro, sin fallback a
+  texto plano.
+- Migración `0003` y API autenticada para candidaturas de conversaciones:
+  consentimiento/versionado/procedencia, opt-in doble apagado por defecto,
+  filtro de secretos comunes, aislamiento por cuenta, consulta propia,
+  retirada física antes de congelación y eliminación al borrar la cuenta.
+- Migración `0004` y API de revisión protegida por secreto administrativo:
+  aprobación exige checklist de términos/datos sensibles/derechos; rechazos
+  eliminan el contenido. Candidaturas elegibles se pueden congelar en datasets
+  versionados de hasta 100 muestras con snapshot y SHA-256 reproducible.
+  Retiradas se sincronizan con el lock de fila; el snapshot congelado persiste
+  al borrar la cuenta y no es reversible.
+- La interfaz permite enviar una conversación solo tras opt-in y revisión
+  expresa; permite consultar o retirar candidaturas propias. La revisión de
+  contenidos se opera solo mediante API administrativa; no hay UI de revisión.
+  Los datasets congelados no se consumen aún en entrenamiento.
 - Proxy de chat opcional y autenticado en API para un proveedor
   OpenAI-compatible configurado por la instancia; clave solo del lado servidor.
 - Inventario local verificado: 16 hilos lógicos, 31 GiB de RAM y una NVIDIA
   GeForce RTX 4070 SUPER con 12 GiB de VRAM; la detección usa `nvidia-smi`.
-- CI aprobada en Python 3.11/3.12 con PostgreSQL 17: migraciones, API de
-  identidad, reclamación concurrente de trabajos, ledger, cliente de escritorio
-  y proxy de chat autenticado.
-- Suite local más reciente: `python -m pytest -q` — 52 pruebas aprobadas y 4
+- CI aprobada previamente en Python 3.11/3.12 con PostgreSQL 17 para la línea
+  base; los cambios BYOK/candidaturas aún requieren ejecución en CI/PostgreSQL.
+- Suite local más reciente: `python -m pytest -q` — 103 pruebas aprobadas y 4
   pruebas PostgreSQL omitidas por no haber servidor disponible localmente.
-- Migración Alembic inicial verificada en SQLite, comparada con el metadata
-  ORM y probada en downgrade; Uvicorn inició y `/health` respondió HTTP 200.
-- Compilación local de módulos Python y `git diff --check` aprobados.
+- PyTorch no está instalado en el entorno de desarrollo y todavía no hay un
+  corpus autorizado preparado para preentrenamiento. La RTX 4070 SUPER de 12
+  GiB permite investigar un modelo pequeño, no asumir que se puede entrenar
+  aquí un LLM competitivo desde cero.
+- Las pruebas incluyen adaptadores de proveedores con transportes simulados,
+  keyring aislado, consentimiento, bloqueo de secretos comunes, aislamiento y
+  retirada. No se hicieron llamadas de proveedor con credenciales reales ni
+  revisión visual manual del escritorio.
+- `python -m compileall` y `git diff --check` aprobados tras los cambios.
 
 ## Aún no implementado
 
 - PostgreSQL no está disponible localmente; su integración y concurrencia se
   validan mediante GitHub Actions.
-- Endurecimiento de producción de autenticación: límite de intentos,
-  verificación de correo y recuperación de cuenta.
+- Aún no están configurados el URL/clave de Supabase en un entorno de
+  despliegue ni la contraseña de su PostgreSQL administrado. No se debe pegar
+  la clave secreta en el chat; se configura únicamente como variable privada
+  del backend.
+- La API FastAPI no está desplegada. Supabase proporciona Auth y PostgreSQL,
+  pero no aloja por sí solo este servidor Python; aún hace falta un servicio de
+  hosting compatible para que los clientes externos usen la API comunitaria.
+- Endurecimiento de producción de autenticación: límite de intentos y
+  recuperación de cuenta. La verificación de correo se administra en Supabase.
 - Detección de hardware en otros equipos y sistemas operativos; CUDA es
   opcional y no se presume.
 - Verificación manual de la interfaz gráfica y publicación de instaladores
   Windows/Linux.
-- Modelos propios, selección/descarga/licencias de pesos y servicio de
-  inferencia AI@Home; hoy solo hay un proxy hacia el proveedor configurado.
+- Modelo propio, entrenamiento fundacional desde inicialización aleatoria,
+  evaluación y serving AI@Home; hoy solo hay un proxy hacia el proveedor
+  configurado.
 - Límites locales de CPU/RAM, controles de pausa/reanudación y sandbox
   reforzado para el nodo.
 - Integración del libro mayor con trabajos verificados y autorización.
 - Integración de modelos, chat o memoria.
-- Rastreo web, RAG, entrenamiento o motor de evolución.
+- Rastreo web, RAG, uso de candidaturas en entrenamiento o motor de evolución.
 - Interfaz web, instaladores de escritorio y operación de producción.
 - TLS, rate limiting, CSRF si se añaden cookies, alertas y respuesta a
   incidentes antes de exposición pública.
 
 Docker no está instalado o no está disponible en PATH en el entorno de
 desarrollo actual; la verificación PostgreSQL se delega a GitHub Actions.
+
+Las candidaturas se guardan en la base de datos configurada y esta versión no
+cifra su contenido a nivel de campo. El filtro de secretos no es exhaustivo ni
+es una detección de PII; no aportar contenido sensible. No hay un proceso que
+entrene automáticamente. Las rutas administrativas de revisión y congelación
+están protegidas por `AI_HOME_TRAINING_REVIEW_TOKEN`; el endpoint de revisión
+expone contenido candidato a quien posea ese secreto. La API bloquea la
+retirada de muestras ya congeladas y conserva snapshots aunque se borre la
+cuenta de origen.
 
 ## Próximos criterios de salida
 

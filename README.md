@@ -53,6 +53,27 @@ La API local queda disponible en `http://127.0.0.1:8000`; la documentación
 interactiva está en `/docs`. El endpoint `/health` es una comprobación de
 proceso y no indica que PostgreSQL u otros servicios estén listos.
 
+### Supabase Auth
+
+El backend Python usa Supabase Auth para registro, inicio/cierre de sesión y
+verificación de tokens. `@supabase/server` es para servidores JavaScript y no
+se instala en este backend; la integración Python usa HTTPX y verifica los JWT
+con las claves públicas JWKS del proyecto. Configura `SUPABASE_URL` y
+`SUPABASE_PUBLISHABLE_KEY` en el entorno del backend. Configura también
+`SUPABASE_SECRET_KEY` solo en el backend para que la eliminación de cuenta
+pueda borrar la identidad de Supabase; nunca la incluyas en el escritorio,
+repositorio o mensajes. `SUPABASE_JWKS_URL` se deriva de la URL si se omite.
+En desarrollo, si no configuras Supabase, el backend conserva el proveedor
+local Argon2 para pruebas; producción exige Supabase y su clave secreta.
+
+Los perfiles mínimos de AI@Home conservan el UUID de Supabase para relacionar
+nodos y aportes. Para que esos datos sobrevivan al reinicio y estén compartidos,
+configura `AI_HOME_DATABASE_URL` con la conexión PostgreSQL administrada de
+Supabase y aplica las migraciones. Supabase aloja Auth y PostgreSQL, pero no
+ejecuta este backend FastAPI: para que otras personas se conecten también hay
+que desplegar la API en un servicio compatible y configurar su URL en el
+cliente. El proyecto aún no está desplegado.
+
 La configuración `AI_HOME_DATABASE_URL` admite PostgreSQL en el entorno
 anterior y SQLite para pruebas/localización rápida. La aplicación no crea ni
 modifica tablas automáticamente al arrancar: aplicar migraciones explícitas.
@@ -76,8 +97,9 @@ para compartir sus datos con nodos. El protocolo y sus limitaciones están en
 [NODE_PROTOCOL.md](docs/NODE_PROTOCOL.md). Este primer ejecutor no acredita
 créditos y no ejecuta código de usuario.
 
-Todavía no hay recuperación de contraseña, verificación de correo, límite de
-intentos, administración de cuentas ni interfaz web. El
+Todavía no hay recuperación de contraseña, límite de intentos, administración
+de cuentas ni interfaz web. La verificación de correo se configura en Supabase.
+El
 protocolo de nodos solo permite `math.sum.v1` y no acredita créditos. El
 cliente de escritorio es experimental y no se distribuye todavía como
 instalador. No expongas esta API a Internet: las protecciones operativas de
@@ -93,23 +115,79 @@ python -m pip install -e .
 python -m ai_home.desktop
 ```
 
-La pestaña **Usar IA** conecta por defecto directamente a un proveedor
-compatible con la API OpenAI en `http://localhost:11434/v1` (por ejemplo,
-Ollama instalado y ejecutándose localmente). También permite usar el proveedor
-configurado por la instancia AI@Home: inicia sesión y selecciona **Usar el
-proveedor configurado en el servidor AI@Home**. Para habilitar ese modo, la
-persona que opera el servidor debe configurar `AI_HOME_CHAT_PROVIDER_URL` y
-`AI_HOME_CHAT_PROVIDER_MODEL`; la clave opcional se configura en
-`AI_HOME_CHAT_PROVIDER_API_KEY` y no se envía al cliente.
+La pantalla **Chat** mantiene centrada arriba una esfera sombreada que se
+orienta suavemente hacia el puntero y se queda quieta cuando este no se mueve.
+Muestra las respuestas de la IA a la izquierda y tus mensajes a la derecha,
+sin fondos de color en los mensajes. La barra superior da acceso a **Conectar
+IA**, **Cuenta** y **Colaborar** sin mezclar esas opciones con el chat. En
+**Conectar IA** puedes
+elegir OpenAI, Anthropic, Google Gemini o configurar manualmente un endpoint
+OpenAI-compatible. Las claves BYOK se guardan únicamente en el almacén seguro
+del sistema operativo, se pueden eliminar desde la aplicación y nunca se
+guardan en las preferencias, se envían al servidor AI@Home ni se usan para
+entrenamiento. Si el almacén seguro no está disponible, no hay fallback a
+texto plano. Las solicitudes directas salen del escritorio al proveedor
+elegido; el proveedor externo procesa el contenido según sus propias
+condiciones. AI@Home todavía no tiene un modelo propio entrenado ni preselecciona
+un modelo externo compatible como si lo fuera.
 
-Los mensajes no se guardan en el historial local ni en la base de datos de
-AI@Home; en ambos modos se envían al proveedor elegido/configurado. Usa solo
-un proveedor en el que confíes y no envíes secretos ni datos personales sin
-autorización. La pestaña **Colaborar** es independiente y requiere iniciar
-sesión y aceptar expresamente antes de registrar/iniciar un nodo. Las
-credenciales de nodo se guardan con el almacén seguro del sistema operativo;
-preferencias no secretas se guardan en el directorio de configuración del
-usuario.
+La memoria personal se guarda localmente como notas Markdown compatibles con
+Obsidian, en la carpeta de configuración de AI@Home del usuario. **Memoria
+local** permite añadir recuerdos y enlazarlos con otros; los nodos y enlaces se
+visualizan en el fondo del chat. En cada pregunta se buscan coincidencias en el
+equipo y solo las notas relevantes se añaden al contexto enviado al proveedor
+seleccionado. Esto aporta contexto a la inferencia, no entrena los pesos del
+modelo. Los archivos de memoria no se sincronizan con el servidor.
+
+También se puede seleccionar el proveedor configurado por una instancia
+AI@Home autenticada. Para ello, la persona operadora configura
+`AI_HOME_CHAT_PROVIDER_URL` y `AI_HOME_CHAT_PROVIDER_MODEL`; la clave opcional
+`AI_HOME_CHAT_PROVIDER_API_KEY` permanece en el servidor. El proxy envía los
+mensajes al proveedor de esa instancia y no los añade a historial persistente.
+
+La aplicación no guarda normalmente el historial en disco ni en el servidor.
+Por separado, una persona puede activar dos confirmaciones para enviar una
+conversación completa al servidor AI@Home como **candidata** a entrenamiento.
+La interfaz advierte que el servidor almacenará los mensajes en su base de
+datos configurada para revisión, que su operador podrá acceder y que no se
+garantiza retirar su influencia de pesos publicados. La selección está apagada
+por defecto; se requieren cuenta, revisión del contenido y confirmación de que
+los términos del proveedor permiten reutilizarlo. Cada envío se crea como
+`pending_review` y necesita revisión humana para ser elegible; no se entrena
+automáticamente. Las candidaturas propias se pueden consultar o retirar
+mediante la aplicación o la API:
+
+- `POST /api/v1/training/conversations`: crear una candidatura con
+  consentimiento/versionado y procedencia proveedor/modelo.
+- `GET /api/v1/training/conversations`: consultar metadatos de candidaturas
+  propias paginadas con `limit` y `offset`.
+- `GET /api/v1/training/conversations/{contribution_id}`: leer el contenido de
+  una candidatura propia.
+- `DELETE /api/v1/training/conversations/{contribution_id}`: borrar una
+  candidatura antes de congelarse en un dataset.
+- `GET /api/v1/admin/training/conversations?status=pending_review|eligible`:
+  revisión de candidaturas (credencial administrativa requerida).
+- `POST /api/v1/admin/training/conversations/{contribution_id}/review`: decisión
+  humana; para aprobar exige confirmar términos, revisión de datos sensibles y
+  derechos de reutilización.
+- `POST /api/v1/admin/training/datasets`: congelar hasta 100 candidaturas
+  elegibles en una versión inmutable con hash SHA-256 del manifiesto.
+- `GET /api/v1/admin/training/datasets` y
+  `GET /api/v1/admin/training/datasets/{dataset_id}`: consultar manifiestos y
+  registros congelados (credencial administrativa requerida).
+
+La API bloquea patrones comunes de credenciales en mensajes y endpoints, pero
+no garantiza detectar datos personales ni todos los secretos; la revisión
+humana sigue siendo necesaria. La revisión y congelación están disponibles solo
+mediante una API administrativa protegida por `AI_HOME_TRAINING_REVIEW_TOKEN`
+(secreto aleatorio de al menos 32 caracteres) y no tienen aún una interfaz
+administrativa. Los datasets congelados son snapshots inmutables con hash y no
+se eliminan al borrar la cuenta; no existe todavía un proceso de entrenamiento
+real que los consuma. La pantalla **Colaborar** es independiente y requiere
+iniciar sesión y aceptar expresamente antes de registrar/iniciar
+un nodo. Las credenciales de nodo también usan el almacén seguro del sistema
+operativo; las preferencias no secretas quedan en el directorio de
+configuración del usuario.
 
 ### Pruebas
 

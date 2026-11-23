@@ -2,74 +2,85 @@
 
 Las fases son objetivos secuenciales; no implican que estén implementadas. Cada
 fase debe cerrar con código ejecutable, pruebas pertinentes, documentación y
-un estado honesto en [PROGRESS.md](PROGRESS.md).
+un estado honesto en [PROGRESS.md](PROGRESS.md). Los 36 criterios de aceptación
+detallados se conservan en el plan de implementación.
 
-## Fase 0 — Base y contratos
+## Fase 1 — Base ejecutable y preparación comunitaria
 
-- Documentar arquitectura, límites de privacidad, amenazas y gobernanza.
-- Elegir licencia y política de contribución antes de publicación pública.
-- Acordar contratos iniciales de trabajo y contabilidad.
+- Monorepo, configuración, migraciones, CI, Compose y documentación operativa.
+- Revisar secretos, dependencias, licencias y privacidad antes de abrir el
+  repositorio; preparar contribuciones y reporte privado de vulnerabilidades.
 
-## Fase 1 — API y persistencia
+## Fase 2 — API, identidad y privacidad
 
-- Crear configuración reproducible de desarrollo y pruebas.
-- Implementar API modular, migraciones y comprobaciones de salud.
-- Definir identidad y autorización antes de exponer datos de usuario.
+- Autenticación, autorización por recurso, sesiones y persistencia PostgreSQL.
+- Probar aislamiento, exportación, retención y eliminación de datos personales.
 
-## Fase 2 — Trabajos y créditos
+## Fase 3 — Trabajos y nodos voluntarios
 
-- Implementar estados tipados, concesiones con vencimiento y reintentos.
-- Añadir libro mayor transaccional, idempotencia, reserva y liquidación.
-- Probar duplicados, fallos parciales, concurrencia y auditoría.
+- Contratos versionados, hardware por dispositivo, leases, reintentos,
+  cancelación y resultados validados.
+- Ejecutar únicamente trabajos tipados y permitidos; nunca código arbitrario.
+- Aportar cómputo debe ser optativo, separable del uso de IA y revocable.
 
-## Fase 3 — Nodo voluntario
+## Fase 4 — Créditos integrados
 
-- Aplicación de escritorio para elegir servidor y separar el uso de IA de la
-  aportación de cómputo, que debe ser siempre opcional.
-- Detección de hardware con consentimiento y límites locales.
-- Ejecución aislada y de larga duración de trabajos públicos no sensibles.
-- Validación de resultados y actualizaciones verificables del cliente.
+- Conectar el ledger transaccional con trabajos aceptados y validados.
+- Comprobar concurrencia, idempotencia, reserva, liquidación y reembolso en
+  PostgreSQL real antes de activar recompensas.
 
-## Fase 4 — Inferencia y conversación
+## Fase 5 — Cliente de escritorio y proveedores BYOK
 
-- Integrar un runtime/modelo abierto con licencia y procedencia verificadas;
-  el proxy actual solo conecta a un proveedor compatible configurado.
-- Completar la API de conversación e interfaz básica conectada al cliente de
-  escritorio, con límites y controles de uso.
-- No anunciar modelos, rendimiento ni capacidades que no se hayan medido.
+- Cliente Windows/Linux para instancias comunitarias y autohospedadas.
+- Adaptadores directos para OpenAI, Anthropic, Google Gemini y endpoints
+  OpenAI-compatibles.
+- Guardar las claves solo en el almacén seguro del sistema operativo; no
+  degradar a texto plano. Las llamadas directas salen del cliente al proveedor,
+  nunca pasan por AI@Home. Explicar el tratamiento del proveedor externo.
+- Mantener la contribución de cómputo separada y opcional.
 
-## Fase 5 — Privacidad y memoria
+## Fase 6 — Interfaz web e inferencia propia
 
-- Memoria privada por usuario, exportación y eliminación.
-- Controles de acceso y pruebas automatizadas de aislamiento entre cuentas.
-- Evaluación de registros, cachés, embeddings y retención.
+- Frontend React/TypeScript funcional, conectado a servicios reales.
+- Definir contratos de serving local/remoto e integrar el modelo AI@Home solo
+  después de entrenarlo y superar gates reproducibles.
+- Identificar claramente los servicios o modelos externos; no presentarlos
+  como un modelo propio.
 
-## Fase 6 — Conocimiento recuperable
+## Fase 7 — Multimodalidad y conocimiento privado
 
-- Conectores autorizados, registro de procedencia e indexación incremental.
-- Recuperación textual/semántica y citas comprobables.
-- Política para licencias, datos personales y retirada de contenido.
+- Imagen, audio, documentos, RAG, citas y memoria privada con control de acceso
+  y pruebas negativas entre cuentas.
+- Aislar artefactos, índices y datos privados; no enviarlos a nodos voluntarios.
 
-## Fase 7 — Contribuciones y evaluación
+## Fase 8 — Conocimiento web y datos autorizados
 
-- Feedback voluntario separado de consentimiento para entrenamiento.
-- Datasets versionados y control de contaminación.
-- Benchmarks reproducibles y revisión de regresiones.
+- Conectores con procedencia, licencias, límites y tratamiento de páginas como
+  datos no confiables.
+- Conversaciones candidatas al entrenamiento solo con opt-in por conversación,
+  apagado por defecto, revisión de derechos, privacidad, secretos y procedencia.
+- Permitir consulta y retirada antes de congelar datasets; advertir que no se
+  garantiza deshacer influencia en pesos publicados.
 
-## Fase 8 — Entrenamiento experimental
+## Fase 9 — Modelo fundacional y evaluación
 
-- Adaptadores y entrenamiento reproducible con datos autorizados.
-- Evaluación independiente y publicación de limitaciones.
-- No transferir memoria privada a los nodos comunitarios.
+- Investigar y entrenar desde inicialización aleatoria, no contar LoRA ni
+  ajuste de un modelo ajeno como modelo fundacional propio.
+- Antes de escalar, medir corpus autorizado, tokenizer, arquitectura, hardware,
+  consumo, coste y rendimiento con experimentos reproducibles.
+- Versionar datasets, semillas, checkpoints y evaluaciones; requerir aprobación
+  humana para promoción. Mantener el estado experimental si faltan recursos.
 
-## Fase 9 — Investigación y evolución
+## Fase 10 — Entrenamiento colaborativo e investigación
 
-- Generación de hipótesis y prototipos en entornos aislados.
-- Evaluación comparada con una referencia estable.
-- Revisión humana y despliegue gradual; reversión probada.
+- Validar colaboración real de nodos y documentar límites de comunicación y
+  hardware físico disponible.
+- Probar experimentos aislados, medibles y reversibles; ninguna IA aprueba o
+  despliega cambios críticos ni amplía permisos.
 
-## Fase 10 — Escala y modalidades
+## Fase 11 — Operación y entrega v1.0
 
-- Ampliar a múltiples modelos, modalidades y ejecución federada solo tras
-  validar aislamiento, costes, fiabilidad y gobernanza.
-- Revisar periódicamente las políticas con participación comunitaria.
+- Instaladores, actualizaciones firmadas, backups/restauración, observabilidad,
+  respuesta a incidentes y pruebas end-to-end.
+- Publicar solo después de auditorías de seguridad, datos y licencias; no
+  declarar misión o estatus legal sin ánimo de lucro sin sustento explícito.

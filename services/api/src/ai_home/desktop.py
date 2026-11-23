@@ -3,26 +3,253 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import hashlib
 import json
+import math
 import os
 import queue
 import threading
 from pathlib import Path
 import sys
-from typing import TypeVar
+from typing import TypeGuard, TypeVar
+from uuid import uuid4
 
 import httpx
 import keyring
 
 from ai_home.inference import chat_completion, extract_chat_content
+from ai_home.memory import (
+    MemoryNote,
+    delete_memory,
+    load_memories,
+    messages_with_memory_context,
+    memory_vault_path,
+    retrieve_memories,
+    save_memory,
+)
 from ai_home.node_worker import NodeAgent, register_node_with_server
-from ai_home.schemas import NodeCredentialResponse, SessionResponse
+from ai_home.providers import (
+    PROVIDER_DEFAULTS,
+    PROVIDER_LABELS,
+    ProviderId,
+    provider_completion,
+)
+from ai_home.privacy import contains_common_secret
+from ai_home.schemas import (
+    NodeCredentialResponse,
+    SessionResponse,
+    TrainingContributionExportResponse,
+    TrainingContributionResponse,
+)
 from ai_home.urls import normalize_base_url
 
 KEYRING_SERVICE = "ai-home-desktop"
-DEFAULT_CHAT_ENDPOINT = "http://localhost:11434/v1"
-DEFAULT_CHAT_MODEL = "llama3.2"
+_PROVIDER_ID_BY_LABEL = {
+    label: provider_id for provider_id, label in PROVIDER_LABELS.items()
+}
+_OS_KEYRING_MODULES = {
+    "keyring.backends.Windows",
+    "keyring.backends.macOS",
+    "keyring.backends.SecretService",
+    "keyring.backends.kwallet",
+}
 T = TypeVar("T")
+
+
+def _sphere_pointer_angles(
+    pointer_dx: float,
+    pointer_dy: float,
+    radius: float,
+) -> tuple[float, float]:
+    depth = max(radius * 2.8, 1)
+    yaw = max(-0.75, min(0.75, math.atan2(pointer_dx, depth)))
+    pitch = max(-0.5, min(0.5, -math.atan2(pointer_dy, depth)))
+    return yaw, pitch
+
+
+def _is_provider_id(value: str) -> TypeGuard[ProviderId]:
+    return value in PROVIDER_LABELS
+
+
+def _provider_keyring_account(provider: ProviderId, endpoint: str) -> str:
+    if provider == "openai-compatible":
+        normalized_endpoint = normalize_base_url(endpoint)
+    else:
+        normalized_endpoint = PROVIDER_DEFAULTS[provider][0]
+    endpoint_hash = hashlib.sha256(normalized_endpoint.encode("utf-8")).hexdigest()
+    return f"provider:{provider}:{endpoint_hash}"
+
+
+def _require_os_keyring() -> None:
+    try:
+        backend = keyring.get_keyring()
+    except keyring.errors.KeyringError as error:
+        raise RuntimeError(
+            "No se pudo acceder al almacén seguro del sistema operativo."
+        ) from error
+    if type(backend).__module__ not in _OS_KEYRING_MODULES:
+        raise RuntimeError(
+            "No se detectó un almacén seguro del sistema operativo compatible. "
+            "No se guardó ni se leyó ninguna clave."
+        )
+
+
+def get_provider_api_key(provider: ProviderId, endpoint: str) -> str:
+    _require_os_keyring()
+    try:
+        return (
+            keyring.get_password(
+                KEYRING_SERVICE,
+                _provider_keyring_account(provider, endpoint),
+            )
+            or ""
+        )
+    except keyring.errors.KeyringError as error:
+        raise RuntimeError(
+            "No se pudo acceder al almacén seguro del sistema. "
+            "No se guardó ni se usó la clave."
+        ) from error
+
+
+def save_provider_api_key(
+    provider: ProviderId,
+    endpoint: str,
+    api_key: str,
+) -> None:
+    if not api_key.strip():
+        raise ValueError("Introduce una clave API antes de guardarla.")
+    _require_os_keyring()
+    try:
+        keyring.set_password(
+            KEYRING_SERVICE,
+            _provider_keyring_account(provider, endpoint),
+            api_key,
+        )
+    except keyring.errors.KeyringError as error:
+        raise RuntimeError(
+            "No se pudo guardar la clave en el almacén seguro del sistema."
+        ) from error
+
+
+def delete_provider_api_key(provider: ProviderId, endpoint: str) -> bool:
+    _require_os_keyring()
+    try:
+        keyring.delete_password(
+            KEYRING_SERVICE,
+            _provider_keyring_account(provider, endpoint),
+        )
+    except keyring.errors.PasswordDeleteError:
+        return False
+    except keyring.errors.KeyringError as error:
+        raise RuntimeError(
+            "No se pudo acceder al almacén seguro del sistema."
+        ) from error
+    return True
+
+
+def submit_training_candidate(
+    server_url: str,
+    user_token: str,
+    conversation_id: str,
+    provider: ProviderId,
+    source_endpoint: str,
+    model: str,
+    messages: list[dict[str, str]],
+    *,
+    reviewed_for_submission: bool,
+    timeout_seconds: float = 20,
+    transport: httpx.BaseTransport | None = None,
+) -> TrainingContributionResponse:
+    with httpx.Client(
+        base_url=normalize_base_url(server_url),
+        headers={"Authorization": f"Bearer {user_token}"},
+        timeout=timeout_seconds,
+        transport=transport,
+    ) as client:
+        response = client.post(
+            "/api/v1/training/conversations",
+            json={
+                "conversation_id": conversation_id,
+                "provider": provider,
+                "source_endpoint": source_endpoint,
+                "model": model,
+                "messages": messages,
+                "consent": True,
+                "consent_version": "training_consent_v1",
+                "consent_scope": "conversation_for_aihome_training_candidates",
+                "provider_terms_allow_reuse": reviewed_for_submission,
+                "content_reviewed_for_sensitive_data": reviewed_for_submission,
+            },
+        )
+        response.raise_for_status()
+        return TrainingContributionResponse.model_validate(response.json())
+
+
+def list_training_candidates(
+    server_url: str,
+    user_token: str,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    timeout_seconds: float = 20,
+    transport: httpx.BaseTransport | None = None,
+) -> list[TrainingContributionResponse]:
+    with httpx.Client(
+        base_url=normalize_base_url(server_url),
+        headers={"Authorization": f"Bearer {user_token}"},
+        timeout=timeout_seconds,
+        transport=transport,
+    ) as client:
+        response = client.get(
+            "/api/v1/training/conversations",
+            params={"limit": limit, "offset": offset},
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, list):
+        raise ValueError("El servidor devolvió una lista de aportaciones no válida.")
+    return [TrainingContributionResponse.model_validate(item) for item in body]
+
+
+def get_training_candidate(
+    server_url: str,
+    user_token: str,
+    contribution_id: str,
+    *,
+    timeout_seconds: float = 20,
+    transport: httpx.BaseTransport | None = None,
+) -> TrainingContributionExportResponse:
+    with httpx.Client(
+        base_url=normalize_base_url(server_url),
+        headers={"Authorization": f"Bearer {user_token}"},
+        timeout=timeout_seconds,
+        transport=transport,
+    ) as client:
+        response = client.get(
+            f"/api/v1/training/conversations/{contribution_id}"
+        )
+        response.raise_for_status()
+        return TrainingContributionExportResponse.model_validate(response.json())
+
+
+def withdraw_training_candidate(
+    server_url: str,
+    user_token: str,
+    contribution_id: str,
+    *,
+    timeout_seconds: float = 20,
+    transport: httpx.BaseTransport | None = None,
+) -> None:
+    with httpx.Client(
+        base_url=normalize_base_url(server_url),
+        headers={"Authorization": f"Bearer {user_token}"},
+        timeout=timeout_seconds,
+        transport=transport,
+    ) as client:
+        response = client.delete(
+            f"/api/v1/training/conversations/{contribution_id}"
+        )
+        response.raise_for_status()
 
 
 def login_to_server(
@@ -43,7 +270,7 @@ def login_to_server(
             "/api/v1/auth/login",
             json={"email": email, "password": password},
         )
-        response.raise_for_status()
+        _raise_for_auth_response(response)
         return SessionResponse.model_validate(response.json())
 
 
@@ -65,7 +292,19 @@ def register_account(
             "/api/v1/auth/register",
             json={"email": email, "password": password},
         )
-        response.raise_for_status()
+        _raise_for_auth_response(response)
+
+
+def _raise_for_auth_response(response: httpx.Response) -> None:
+    if not response.is_error:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    if isinstance(body, dict) and isinstance(body.get("detail"), str):
+        raise RuntimeError(body["detail"])
+    response.raise_for_status()
 
 
 def server_chat_completion(
@@ -145,17 +384,534 @@ def main() -> None:
             self.session_token: str | None = None
             self.session_server_url: str | None = None
             self.messages: list[dict[str, str]] = []
+            self.conversation_id = str(uuid4())
+            self.conversation_source: tuple[str, str, str] | None = None
             self.chat_request_active = False
+            self.training_submission_active = False
+            self.training_candidate_submitted = False
             self.node_registration_active = False
             self.node_stop: threading.Event | None = None
             self.node_thread: threading.Thread | None = None
+            self.sphere_yaw = 0.0
+            self.sphere_pitch = 0.0
+            self.status_var = tk.StringVar(value="Listo para empezar")
             self._build_ui(ttk)
             self.protocol("WM_DELETE_WINDOW", self._close)
             self.after(100, self._drain_events)
+            self.after(24, self._orient_sphere_to_pointer)
 
         def _build_ui(self, ttk) -> None:
-            account = ttk.LabelFrame(self, text="Cuenta y servidor AI@Home")
-            account.pack(fill="x", padx=12, pady=(12, 6))
+            header = ttk.Frame(self, padding=(18, 14, 18, 8))
+            header.pack(fill="x")
+            ttk.Label(
+                header,
+                text="AI@Home",
+                font=("Segoe UI", 18, "bold"),
+            ).pack(anchor="w")
+            ttk.Label(
+                header,
+                text="Tu espacio para conversar con IA y colaborar, si quieres.",
+            ).pack(anchor="w", pady=(2, 0))
+
+            self.page_stack = ttk.Notebook(self)
+            style = ttk.Style(self)
+            style.layout("AIHome.TNotebook.Tab", [])
+            style.configure("AIHome.TNotebook", borderwidth=0)
+            self.page_stack.configure(style="AIHome.TNotebook")
+            self.page_stack.pack(fill="both", expand=True)
+            chat_tab = ttk.Frame(self.page_stack)
+            provider_tab = ttk.Frame(self.page_stack, padding=20)
+            account_tab = ttk.Frame(self.page_stack, padding=20)
+            node_tab = ttk.Frame(self.page_stack, padding=20)
+            self.page_stack.add(chat_tab, text="Chat")
+            self.page_stack.add(provider_tab, text="Conectar IA")
+            self.page_stack.add(account_tab, text="Cuenta y aportes")
+            self.page_stack.add(node_tab, text="Colaborar")
+            self._build_chat_tab(ttk, chat_tab)
+            self._build_provider_tab(ttk, provider_tab)
+            self._build_account_tab(ttk, account_tab)
+            self._build_node_tab(ttk, node_tab)
+            nav = ttk.Frame(header)
+            nav.pack(side="right", anchor="n")
+            ttk.Button(
+                nav,
+                text="Chat",
+                command=lambda: self._show_page(chat_tab),
+            ).pack(side="left", padx=3)
+            ttk.Button(
+                nav,
+                text="Nueva conversación",
+                command=self._clear_chat,
+            ).pack(side="left", padx=3)
+            ttk.Button(
+                nav,
+                text="Memoria local",
+                command=self._manage_memories,
+            ).pack(side="left", padx=3)
+            ttk.Button(
+                nav,
+                text="Conectar IA",
+                command=lambda: self._show_page(provider_tab),
+            ).pack(side="left", padx=3)
+            ttk.Button(
+                nav,
+                text="Cuenta",
+                command=lambda: self._show_page(account_tab),
+            ).pack(side="left", padx=3)
+            ttk.Button(
+                nav,
+                text="Colaborar",
+                command=lambda: self._show_page(node_tab),
+            ).pack(side="left", padx=3)
+            ttk.Label(
+                self,
+                textvariable=self.status_var,
+                anchor="w",
+                padding=(16, 3),
+                foreground="#62676b",
+            ).pack(fill="x", padx=8, pady=(0, 3))
+
+        def _show_page(self, page) -> None:
+            self.page_stack.select(page)
+
+        def _layout_home(self, _event=None) -> None:
+            canvas = self.face_canvas
+            width = max(canvas.winfo_width(), 1)
+            center_x = width / 2
+            center_y = 76
+            orb_radius = min(62, width * 0.14)
+            canvas.delete("face")
+
+            canvas.create_oval(
+                center_x - orb_radius * 0.9,
+                center_y + orb_radius * 0.72,
+                center_x + orb_radius * 0.95,
+                center_y + orb_radius * 1.05,
+                fill="#d9d9d9",
+                outline="#d9d9d9",
+                tags=("face", "head"),
+            )
+            for layer in range(40, -1, -1):
+                ratio = (40 - layer) / 40
+                shade = round(211 + ratio * 44)
+                light_x = -0.10 + 0.23 * math.cos(self.sphere_yaw)
+                red = min(255, shade + round(ratio * 1))
+                green = min(255, shade + round(ratio * 2))
+                blue = min(255, shade + round(ratio * 4))
+                color = f"#{red:02x}{green:02x}{blue:02x}"
+                inset = layer * orb_radius / 48
+                highlight_x = center_x + orb_radius * light_x * ratio
+                highlight_y = center_y + orb_radius * (
+                    -0.10 + 0.16 * math.sin(self.sphere_pitch)
+                ) * ratio
+                canvas.create_oval(
+                    highlight_x - orb_radius + inset,
+                    highlight_y - orb_radius + inset,
+                    highlight_x + orb_radius - inset,
+                    highlight_y + orb_radius - inset,
+                    fill=color,
+                    outline=color,
+                    tags=("face", "head"),
+                )
+
+            for eye_x, eye_scale in (
+                (-0.34, 0.26),
+                (0.25, 0.30),
+            ):
+                eye_y = -0.02
+                eye_z = math.sqrt(1 - eye_x**2 - eye_y**2)
+                rotated_x = (
+                    eye_x * math.cos(self.sphere_yaw)
+                    + eye_z * math.sin(self.sphere_yaw)
+                )
+                rotated_z = (
+                    -eye_x * math.sin(self.sphere_yaw)
+                    + eye_z * math.cos(self.sphere_yaw)
+                )
+                projected_y = (
+                    eye_y * math.cos(self.sphere_pitch)
+                    - rotated_z * math.sin(self.sphere_pitch)
+                )
+                eye_depth = (
+                    eye_y * math.sin(self.sphere_pitch)
+                    + rotated_z * math.cos(self.sphere_pitch)
+                )
+                if eye_depth <= 0.04:
+                    continue
+                projected_x = center_x + rotated_x * orb_radius
+                projected_eye_y = center_y + projected_y * orb_radius
+                perspective = min(1.0, eye_depth / eye_z)
+                eye_width = orb_radius * eye_scale * perspective
+                eye_height = eye_width * 1.26
+                canvas.create_oval(
+                    projected_x - eye_width / 2,
+                    projected_eye_y - eye_height / 2,
+                    projected_x + eye_width / 2,
+                    projected_eye_y + eye_height / 2,
+                    fill="#76533c",
+                    outline="#76533c",
+                    tags=("face", "head"),
+                )
+                pupil = canvas.create_oval(
+                    projected_x - eye_width * 0.32,
+                    projected_eye_y - eye_height * 0.40,
+                    projected_x + eye_width * 0.32,
+                    projected_eye_y + eye_height * 0.40,
+                    fill="#241b17",
+                    outline="#241b17",
+                    tags=("face", "head"),
+                )
+                glint = canvas.create_oval(
+                    projected_x - eye_width * 0.24,
+                    projected_eye_y - eye_height * 0.31,
+                    projected_x - eye_width * 0.04,
+                    projected_eye_y - eye_height * 0.10,
+                    fill="#ffffff",
+                    outline="#ffffff",
+                    tags=("face", "head"),
+                )
+        def _orient_sphere_to_pointer(self) -> None:
+            if not self.winfo_exists():
+                return
+            if self.face_canvas.winfo_ismapped():
+                pointer_x, pointer_y = self.winfo_pointerxy()
+                center_x = self.face_canvas.winfo_rootx() + (
+                    self.face_canvas.winfo_width() / 2
+                )
+                center_y = self.face_canvas.winfo_rooty() + 76
+                target_yaw, target_pitch = _sphere_pointer_angles(
+                    pointer_x - center_x,
+                    pointer_y - center_y,
+                    min(62, self.face_canvas.winfo_width() * 0.14),
+                )
+                next_yaw = self.sphere_yaw + (target_yaw - self.sphere_yaw) * 0.27
+                next_pitch = self.sphere_pitch + (
+                    target_pitch - self.sphere_pitch
+                ) * 0.27
+                if (
+                    abs(next_yaw - self.sphere_yaw) > 0.001
+                    or abs(next_pitch - self.sphere_pitch) > 0.001
+                ):
+                    self.sphere_yaw = next_yaw
+                    self.sphere_pitch = next_pitch
+                    self._layout_home()
+            self.after(24, self._orient_sphere_to_pointer)
+
+        def _chat_canvas_resized(self, event) -> None:
+            previous_bottom = self.chat_messages_canvas.canvasy(
+                self.chat_messages_canvas.winfo_height()
+            )
+            self._render_chat_canvas()
+            bounds = self.chat_messages_canvas.bbox("all")
+            if bounds and previous_bottom >= bounds[3] - 80:
+                self.chat_messages_canvas.yview_moveto(1)
+
+        def _render_chat_canvas(self) -> None:
+            canvas = self.chat_messages_canvas
+            width = max(canvas.winfo_width(), 1)
+            viewport_height = max(canvas.winfo_height(), 1)
+            graph_height = max(viewport_height, len(self.messages) * 92 + 140)
+            canvas.delete("all")
+
+            notes = self.memory_notes
+            points: dict[str, tuple[float, float]] = {}
+            for index, note in enumerate(notes):
+                digest = hashlib.sha256(note.id.encode("ascii")).digest()
+                points[note.id] = (
+                    30 + digest[0] / 255 * max(width - 60, 1),
+                    30
+                    + (index + 0.5) * max(graph_height - 60, 1) / max(len(notes), 1),
+                )
+
+            drawn_edges: set[tuple[str, str]] = set()
+            for note in notes:
+                for linked_id in note.links:
+                    if linked_id not in points:
+                        continue
+                    edge = tuple(sorted((note.id, linked_id)))
+                    if edge in drawn_edges:
+                        continue
+                    drawn_edges.add(edge)
+                    connected = (
+                        note.id in self.active_memory_ids
+                        or linked_id in self.active_memory_ids
+                    )
+                    start_x, start_y = points[note.id]
+                    end_x, end_y = points[linked_id]
+                    canvas.create_line(
+                        start_x,
+                        start_y,
+                        end_x,
+                        end_y,
+                        fill="#c6a960" if connected else "#dce0dc",
+                        width=2 if connected else 1,
+                        tags=("memory_graph",),
+                    )
+
+            if not notes and not self.messages:
+                canvas.create_text(
+                    width / 2,
+                    viewport_height / 2,
+                    text="Tu grafo personal aparecerá aquí\nAñade recuerdos desde «Memoria local»",
+                    justify="center",
+                    fill="#a0a5a1",
+                    font=("Segoe UI", 10),
+                    tags=("memory_graph",),
+                )
+
+            for note in notes:
+                node_x, node_y = points[note.id]
+                active = note.id in self.active_memory_ids
+                node_color = "#bd9140" if active else "#cbd2cc"
+                if active:
+                    canvas.create_oval(
+                        node_x - 12,
+                        node_y - 12,
+                        node_x + 12,
+                        node_y + 12,
+                        outline="#dfc98e",
+                        width=2,
+                        tags=("memory_graph",),
+                    )
+                canvas.create_oval(
+                    node_x - (6 if active else 4),
+                    node_y - (6 if active else 4),
+                    node_x + (6 if active else 4),
+                    node_y + (6 if active else 4),
+                    fill=node_color,
+                    outline=node_color,
+                    tags=("memory_graph", f"memory:{note.id}"),
+                )
+                canvas.create_text(
+                    node_x + 10,
+                    node_y - 2,
+                    text=note.title,
+                    anchor="w",
+                    fill="#8a938c" if active else "#c0c6c1",
+                    font=("Segoe UI", 8),
+                    tags=("memory_graph", f"memory:{note.id}"),
+                )
+            margin = 30
+            text_width = max(160, min(width * 0.67, width - margin * 2))
+            y = 16
+            for message in self.messages:
+                is_user = message["role"] == "user"
+                speaker = "Tú" if is_user else "AI@Home"
+                anchor = "ne" if is_user else "nw"
+                x = width - margin if is_user else margin
+                canvas.create_text(
+                    x,
+                    y,
+                    text=speaker,
+                    anchor=anchor,
+                    fill="#777777",
+                    font=("Segoe UI", 9, "bold"),
+                    tags=("chat_text",),
+                )
+                y += 17
+                text_item = canvas.create_text(
+                    x,
+                    y,
+                    text=message["content"],
+                    width=text_width,
+                    anchor=anchor,
+                    justify="right" if is_user else "left",
+                    fill="#262626",
+                    font=("Segoe UI", 10),
+                    tags=("chat_text",),
+                )
+                bounds = canvas.bbox(text_item)
+                y = (bounds[3] if bounds else y + 24) + 22
+
+            content_height = max(graph_height, y)
+            canvas.configure(scrollregion=(0, 0, width, content_height))
+            canvas.tag_raise("chat_text")
+
+        def _memory_graph_clicked(self, event) -> None:
+            item = self.chat_messages_canvas.find_withtag("current")
+            if not item:
+                return
+            for tag in self.chat_messages_canvas.gettags(item[0]):
+                if tag.startswith("memory:"):
+                    note_id = tag.partition(":")[2]
+                    note = next(
+                        (candidate for candidate in self.memory_notes if candidate.id == note_id),
+                        None,
+                    )
+                    if note is not None:
+                        self._show_memory(note)
+                    return
+
+        def _show_memory(self, note: MemoryNote) -> None:
+            messagebox.showinfo(note.title, note.content, parent=self)
+
+        def _reload_memories(self) -> None:
+            self.memory_notes = load_memories()
+            self.active_memory_ids.intersection_update(
+                note.id for note in self.memory_notes
+            )
+            self._render_chat_canvas()
+
+        def _manage_memories(self) -> None:
+            window = tk.Toplevel(self)
+            window.title("Memoria personal local")
+            window.geometry("700x440")
+            window.transient(self)
+            ttk.Label(
+                window,
+                text=f"Recuerdos guardados solo en este equipo: {memory_vault_path()}",
+                wraplength=660,
+            ).pack(anchor="w", padx=12, pady=(12, 8))
+            body = ttk.Frame(window, padding=(12, 0, 12, 8))
+            body.pack(fill="both", expand=True)
+            memories_list = tk.Listbox(
+                body,
+                width=30,
+                exportselection=False,
+                activestyle="dotbox",
+            )
+            memories_list.pack(side="left", fill="y")
+            details = tk.Text(body, wrap="word", state="disabled")
+            details.pack(side="left", fill="both", expand=True, padx=(10, 0))
+            actions = ttk.Frame(window, padding=(12, 0, 12, 12))
+            actions.pack(fill="x")
+
+            def refresh(selected_id: str | None = None) -> None:
+                self._reload_memories()
+                memories_list.delete(0, "end")
+                for index, note in enumerate(self.memory_notes):
+                    memories_list.insert("end", note.title)
+                    if note.id == selected_id:
+                        memories_list.selection_set(index)
+                        memories_list.activate(index)
+                show_selected()
+
+            def show_selected(_event=None) -> None:
+                selected = memories_list.curselection()
+                details.configure(state="normal")
+                details.delete("1.0", "end")
+                if selected and selected[0] < len(self.memory_notes):
+                    note = self.memory_notes[selected[0]]
+                    linked = [
+                        candidate.title
+                        for candidate in self.memory_notes
+                        if candidate.id in note.links
+                    ]
+                    details.insert(
+                        "end",
+                        f"{note.title}\n\n{note.content}",
+                    )
+                    if linked:
+                        details.insert("end", "\n\nConectado con: " + ", ".join(linked))
+                details.configure(state="disabled")
+
+            def add_note() -> None:
+                self._add_memory_dialog(window, lambda note: refresh(note.id))
+
+            def remove_note() -> None:
+                selected = memories_list.curselection()
+                if not selected:
+                    return
+                note = self.memory_notes[selected[0]]
+                if not messagebox.askyesno(
+                    "Eliminar recuerdo",
+                    f"¿Eliminar «{note.title}» del equipo?",
+                    parent=window,
+                ):
+                    return
+                delete_memory(note.id)
+                refresh()
+
+            memories_list.bind("<<ListboxSelect>>", show_selected)
+            ttk.Button(
+                actions,
+                text="Añadir recuerdo",
+                command=add_note,
+            ).pack(side="left")
+            ttk.Button(
+                actions,
+                text="Eliminar seleccionado",
+                command=remove_note,
+            ).pack(side="left", padx=8)
+            ttk.Button(
+                actions,
+                text="Cerrar",
+                command=window.destroy,
+            ).pack(side="right")
+            refresh()
+
+        def _add_memory_dialog(self, parent, on_saved) -> None:
+            window = tk.Toplevel(parent)
+            window.title("Añadir recuerdo")
+            window.geometry("540x500")
+            window.transient(parent)
+            window.grab_set()
+            content = ttk.Frame(window, padding=14)
+            content.pack(fill="both", expand=True)
+            ttk.Label(content, text="Título").pack(anchor="w")
+            title = ttk.Entry(content)
+            title.pack(fill="x", pady=(3, 10))
+            ttk.Label(content, text="Recuerdo").pack(anchor="w")
+            body = tk.Text(content, height=8, wrap="word")
+            body.pack(fill="both", expand=True, pady=(3, 10))
+            ttk.Label(content, text="Conectar con recuerdos existentes (opcional)").pack(
+                anchor="w"
+            )
+            links = tk.Listbox(
+                content,
+                height=6,
+                selectmode="multiple",
+                exportselection=False,
+            )
+            links.pack(fill="x", pady=(3, 10))
+            existing = list(self.memory_notes)
+            for note in existing:
+                links.insert("end", note.title)
+
+            def save_note() -> None:
+                selected_links = tuple(
+                    existing[index].id for index in links.curselection()
+                )
+                try:
+                    note = save_memory(
+                        title.get(),
+                        body.get("1.0", "end"),
+                        links=selected_links,
+                    )
+                except (OSError, RuntimeError, ValueError) as error:
+                    messagebox.showerror("Memoria local", str(error), parent=window)
+                    return
+                on_saved(note)
+                window.destroy()
+
+            actions = ttk.Frame(content)
+            actions.pack(fill="x")
+            ttk.Button(actions, text="Guardar en este equipo", command=save_note).pack(
+                side="left"
+            )
+            ttk.Button(actions, text="Cancelar", command=window.destroy).pack(
+                side="right"
+            )
+
+        def _scroll_chat(self, event):
+            if getattr(event, "num", None) == 4:
+                direction = -1
+            elif getattr(event, "num", None) == 5:
+                direction = 1
+            else:
+                direction = -int(event.delta / 120)
+            if direction:
+                self.chat_messages_canvas.yview_scroll(direction, "units")
+            return "break"
+
+        def _build_account_tab(self, ttk, parent) -> None:
+            ttk.Label(
+                parent,
+                text="Inicia sesión solo para funciones de la comunidad.",
+                wraplength=760,
+            ).pack(anchor="w", pady=(0, 10))
+            account = ttk.LabelFrame(parent, text="Cuenta AI@Home", padding=12)
+            account.pack(fill="x", pady=(0, 12))
             self.server_var = tk.StringVar(
                 value=self.settings.get("server_url", "http://localhost:8000")
             )
@@ -174,7 +930,11 @@ def main() -> None:
             ttk.Button(account, text="Entrar", command=self._login).grid(
                 row=0, column=2, padx=6, pady=3
             )
-            ttk.Button(account, text="Crear cuenta", command=self._register).grid(
+            ttk.Button(
+                account,
+                text="Crear cuenta",
+                command=self._register_account,
+            ).grid(
                 row=1, column=2, padx=6, pady=3
             )
             ttk.Button(account, text="Salir de la cuenta", command=self._logout).grid(
@@ -182,20 +942,53 @@ def main() -> None:
             )
             account.columnconfigure(1, weight=1)
 
-            tabs = ttk.Notebook(self)
-            tabs.pack(fill="both", expand=True, padx=12, pady=6)
-            chat_tab = ttk.Frame(tabs, padding=12)
-            node_tab = ttk.Frame(tabs, padding=12)
-            tabs.add(chat_tab, text="Usar IA")
-            tabs.add(node_tab, text="Colaborar")
-            self._build_chat_tab(ttk, chat_tab)
-            self._build_node_tab(ttk, node_tab)
-            self.status_var = tk.StringVar(value="Desconectado")
-            ttk.Label(self, textvariable=self.status_var, anchor="w").pack(
-                fill="x",
-                padx=14,
-                pady=(0, 10),
+            contributions = ttk.LabelFrame(
+                parent,
+                text="Aportar una conversación (opcional)",
+                padding=12,
             )
+            contributions.pack(fill="x")
+            ttk.Label(
+                contributions,
+                text=(
+                    "Solo se envía si lo eliges. El contenido se guarda para "
+                    "revisión por el operador de tu servidor; no se entrena "
+                    "automáticamente y puedes retirarlo antes de congelarse."
+                ),
+                wraplength=760,
+            ).pack(anchor="w", pady=(0, 8))
+            self.training_consent_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(
+                contributions,
+                text="Quiero aportar esta conversación como candidata.",
+                variable=self.training_consent_var,
+            ).pack(anchor="w", pady=2)
+            ttk.Label(
+                contributions,
+                text=(
+                    "Antes, comprueba que no hay datos sensibles y que el "
+                    "proveedor permite compartir los mensajes."
+                ),
+                wraplength=760,
+            ).pack(anchor="w", pady=(6, 0))
+            self.training_review_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(
+                contributions,
+                text="He revisado los mensajes y puedo compartirlos.",
+                variable=self.training_review_var,
+            ).pack(anchor="w", pady=2)
+            actions = ttk.Frame(contributions)
+            actions.pack(anchor="w", pady=(8, 0))
+            ttk.Button(
+                actions,
+                text="Enviar para revisión",
+                command=self._submit_training_candidate,
+            ).pack(side="left", padx=(0, 8))
+            ttk.Button(
+                actions,
+                text="Ver o retirar mis aportes",
+                command=self._manage_training_candidates,
+            ).pack(side="left")
 
         def _entry_row(
             self,
@@ -223,69 +1016,327 @@ def main() -> None:
             )
 
         def _build_chat_tab(self, ttk, parent) -> None:
-            self.provider_var = tk.StringVar(
-                value=self.settings.get("chat_endpoint", DEFAULT_CHAT_ENDPOINT)
-            )
-            self.model_var = tk.StringVar(
-                value=self.settings.get("chat_model", DEFAULT_CHAT_MODEL)
-            )
-            self.api_key_var = tk.StringVar()
-            self._entry_row(ttk, parent, 0, "Proveedor OpenAI-compatible", self.provider_var)
-            self._entry_row(ttk, parent, 1, "Modelo", self.model_var)
-            self._entry_row(
-                ttk,
+            parent.configure(style="TFrame")
+            self.face_canvas = tk.Canvas(
                 parent,
-                2,
-                "Clave API (opcional)",
-                self.api_key_var,
-                show="*",
+                height=154,
+                background="#eeeeee",
+                highlightthickness=0,
             )
+            self.face_canvas.pack(fill="x")
+            self.face_canvas.bind("<Configure>", self._layout_home)
+            memory_controls = ttk.Frame(parent)
+            memory_controls.pack(fill="x", padx=28, pady=(0, 3))
+            ttk.Label(
+                memory_controls,
+                text=(
+                    "La memoria local se usa automáticamente; solo los recuerdos "
+                    "relevantes se envían al proveedor. No entrena el modelo."
+                ),
+                foreground="#666666",
+            ).pack(side="left", padx=(8, 0))
+            conversation = ttk.Frame(parent)
+            conversation.pack(fill="both", expand=True, padx=24, pady=(0, 8))
+            self.chat_messages_canvas = tk.Canvas(
+                conversation,
+                background="#eeeeee",
+                highlightthickness=0,
+            )
+            self.chat_messages_canvas.pack(side="left", fill="both", expand=True)
+            scrollbar = ttk.Scrollbar(
+                conversation,
+                orient="vertical",
+                command=self.chat_messages_canvas.yview,
+            )
+            scrollbar.pack(side="right", fill="y"            )
+            self.chat_messages_canvas.configure(yscrollcommand=scrollbar.set)
+            self.memory_notes = load_memories()
+            self.active_memory_ids: set[str] = set()
+            self.chat_message_items: list[tuple[int, int, str]] = []
+            self.chat_messages_canvas.bind(
+                "<Configure>",
+                self._chat_canvas_resized,
+            )
+            self.chat_messages_canvas.bind("<MouseWheel>", self._scroll_chat)
+            self.chat_messages_canvas.bind("<Button-4>", self._scroll_chat)
+            self.chat_messages_canvas.bind("<Button-5>", self._scroll_chat)
+            self.chat_messages_canvas.bind("<Button-1>", self._memory_graph_clicked)
+            self._render_chat_canvas()
+
+            composer = tk.Frame(
+                parent,
+                background="#ffffff",
+                padx=8,
+                pady=4,
+            )
+            composer.pack(fill="x", padx=24, pady=(0, 18))
+            ttk.Label(
+                composer,
+                text="✦",
+                foreground="#747474",
+                background="#ffffff",
+                font=("Segoe UI Symbol", 13),
+            ).pack(side="left", padx=(5, 8))
+            self.prompt = tk.Text(
+                composer,
+                width=1,
+                height=1,
+                wrap="word",
+                background="#ffffff",
+                foreground="#303030",
+                insertbackground="#303030",
+                font=("Segoe UI", 11),
+                padx=2,
+                pady=7,
+                relief="flat",
+                borderwidth=0,
+            )
+            self.prompt_placeholder = "Pregúntale algo a tu IA..."
+            self.prompt_is_placeholder = True
+            self.prompt.insert("1.0", self.prompt_placeholder)
+            self.prompt.configure(foreground="#999999")
+            self.prompt.pack(side="left", fill="both", expand=True)
+            self.prompt.bind("<FocusIn>", self._prompt_focus_in)
+            self.prompt.bind("<FocusOut>", self._prompt_focus_out)
+            tk.Button(
+                composer,
+                text="↑",
+                command=self._send_message,
+                background="#f0f0f0",
+                foreground="#3d3d3d",
+                activebackground="#e2e2e2",
+                activeforeground="#222222",
+                relief="flat",
+                borderwidth=0,
+                font=("Segoe UI", 13, "bold"),
+                width=3,
+                cursor="hand2",
+            ).pack(side="right", padx=(8, 2))
+            self.prompt.bind("<Return>", self._send_from_enter)
+
+        def _send_from_enter(self, _event):
+            self._send_message()
+            return "break"
+
+        def _prompt_focus_in(self, _event) -> None:
+            if self.prompt_is_placeholder:
+                self.prompt.delete("1.0", "end")
+                self.prompt.configure(foreground="#303030")
+                self.prompt_is_placeholder = False
+
+        def _prompt_focus_out(self, _event) -> None:
+            if not self.prompt.get("1.0", "end").strip():
+                self.prompt.insert("1.0", self.prompt_placeholder)
+                self.prompt.configure(foreground="#999999")
+                self.prompt_is_placeholder = True
+
+        def _scroll_chat(self, event):
+            if getattr(event, "num", None) == 4:
+                direction = -1
+            elif getattr(event, "num", None) == 5:
+                direction = 1
+            else:
+                direction = -int(event.delta / 120)
+            if direction:
+                self.chat_messages_canvas.yview_scroll(direction, "units")
+            return "break"
+
+        def _build_provider_tab(self, ttk, parent) -> None:
+            ttk.Label(
+                parent,
+                text="Conecta tu proveedor de IA",
+                font=("Segoe UI", 14, "bold"),
+            ).pack(anchor="w")
             ttk.Label(
                 parent,
                 text=(
-                    "En modo directo, los mensajes se envían al proveedor indicado "
-                    "(Ollama local por defecto). El modo AI@Home usa el proveedor "
-                    "configurado por la instancia seleccionada."
+                    "AI@Home aún no tiene un LLM propio entrenado. Mientras tanto, "
+                    "puedes configurar un proveedor externo opcional; los "
+                    "endpoints compatibles no tienen un modelo preseleccionado."
                 ),
-                wraplength=800,
-            ).grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=8)
+                wraplength=760,
+            ).pack(anchor="w", pady=(2, 12))
+
+            configured_provider = self.settings.get(
+                "chat_provider",
+                "openai-compatible",
+            )
+            if not _is_provider_id(configured_provider):
+                configured_provider = "openai-compatible"
+            self.provider_id: ProviderId = configured_provider
+            self.provider_var = tk.StringVar(value=PROVIDER_LABELS[self.provider_id])
+            self.provider_var.trace_add("write", self._provider_changed)
+            default_endpoint, default_model = PROVIDER_DEFAULTS[self.provider_id]
+            endpoint_setting = (
+                "chat_endpoint"
+                if self.provider_id == "openai-compatible"
+                else f"chat_endpoint_{self.provider_id}"
+            )
+            model_setting = f"chat_model_{self.provider_id}"
+            self.endpoint_var = tk.StringVar(
+                value=self.settings.get(
+                    endpoint_setting,
+                    self.settings.get("chat_endpoint", default_endpoint)
+                    if self.provider_id == "openai-compatible"
+                    else default_endpoint,
+                )
+            )
+            self.model_var = tk.StringVar(
+                value=self.settings.get(
+                    model_setting,
+                    self.settings.get("chat_model", default_model)
+                    if self.provider_id == "openai-compatible"
+                    else default_model,
+                )
+            )
+            self.api_key_var = tk.StringVar()
+
+            provider = ttk.LabelFrame(parent, text="Proveedor y modelo", padding=12)
+            provider.pack(fill="x", pady=(0, 10))
+            ttk.Label(provider, text="Proveedor").grid(
+                row=0, column=0, sticky="w", padx=6, pady=4
+            )
+            ttk.Combobox(
+                provider,
+                textvariable=self.provider_var,
+                values=list(_PROVIDER_ID_BY_LABEL),
+                state="readonly",
+            ).grid(row=0, column=1, sticky="ew", padx=6, pady=4)
+            ttk.Label(provider, text="Modelo").grid(
+                row=1, column=0, sticky="w", padx=6, pady=4
+            )
+            ttk.Entry(provider, textvariable=self.model_var).grid(
+                row=1, column=1, sticky="ew", padx=6, pady=4
+            )
+            ttk.Label(provider, text="Endpoint personalizado").grid(
+                row=2, column=0, sticky="w", padx=6, pady=4
+            )
+            self.provider_endpoint_entry = ttk.Entry(
+                provider,
+                textvariable=self.endpoint_var,
+            )
+            self.provider_endpoint_entry.grid(
+                row=2, column=1, sticky="ew", padx=6, pady=4
+            )
+            if self.provider_id != "openai-compatible":
+                self.provider_endpoint_entry.configure(state="disabled")
+            provider.columnconfigure(1, weight=1)
+
+            credentials = ttk.LabelFrame(parent, text="Clave API", padding=12)
+            credentials.pack(fill="x", pady=(0, 10))
+            ttk.Label(
+                credentials,
+                text="Solo es necesaria para proveedores cloud; déjala vacía para usar una clave ya guardada.",
+                wraplength=760,
+            ).pack(anchor="w", pady=(0, 6))
+            ttk.Entry(
+                credentials,
+                textvariable=self.api_key_var,
+                show="*",
+            ).pack(fill="x", pady=(0, 8))
+            key_actions = ttk.Frame(credentials)
+            key_actions.pack(anchor="w")
+            ttk.Button(
+                key_actions,
+                text="Guardar clave en este equipo",
+                command=self._save_provider_key,
+            ).pack(side="left", padx=(0, 8))
+            ttk.Button(
+                key_actions,
+                text="Eliminar clave guardada",
+                command=self._delete_provider_key,
+            ).pack(side="left")
+
+            routing = ttk.LabelFrame(parent, text="Dónde se procesa el chat", padding=12)
+            routing.pack(fill="x")
+            ttk.Label(
+                routing,
+                text=(
+                    "Por defecto, el chat va directamente de este equipo al "
+                    "proveedor seleccionado. El proveedor procesa tus mensajes "
+                    "según sus propias condiciones."
+                ),
+                wraplength=760,
+            ).pack(anchor="w")
             self.use_server_ai_var = tk.BooleanVar(value=False)
             ttk.Checkbutton(
-                parent,
-                text="Usar el proveedor configurado en el servidor AI@Home",
+                routing,
+                text="Usar el proveedor configurado por mi servidor AI@Home",
                 variable=self.use_server_ai_var,
-            ).grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=3)
-            self.chat_view = tk.Text(parent, wrap="word", state="disabled", height=18)
-            self.chat_view.grid(
-                row=5,
-                column=0,
-                columnspan=2,
-                sticky="nsew",
-                padx=6,
-                pady=6,
+            ).pack(anchor="w", pady=(8, 0))
+            ttk.Label(
+                routing,
+                text="La clave nunca se envía al servidor AI@Home.",
+                foreground="#52606d",
+            ).pack(anchor="w", pady=(6, 0))
+
+        def _provider_changed(self, *_args) -> None:
+            provider_id = _PROVIDER_ID_BY_LABEL.get(self.provider_var.get())
+            if provider_id is None or provider_id == self.provider_id:
+                return
+            self.provider_id = provider_id
+            endpoint, model = PROVIDER_DEFAULTS[provider_id]
+            endpoint_setting = (
+                "chat_endpoint"
+                if provider_id == "openai-compatible"
+                else f"chat_endpoint_{provider_id}"
             )
-            self.prompt = tk.Text(parent, height=4, wrap="word")
-            self.prompt.grid(
-                row=6,
-                column=0,
-                sticky="ew",
-                padx=6,
-                pady=6,
+            model_setting = f"chat_model_{provider_id}"
+            self.endpoint_var.set(self.settings.get(endpoint_setting, endpoint))
+            self.model_var.set(self.settings.get(model_setting, model))
+            self.provider_endpoint_entry.configure(
+                state="normal" if provider_id == "openai-compatible" else "disabled"
             )
-            ttk.Button(parent, text="Enviar", command=self._send_message).grid(
-                row=6,
-                column=1,
-                sticky="n",
-                padx=6,
-                pady=6,
+
+        def _selected_provider(self) -> tuple[ProviderId, str]:
+            provider = self.provider_id
+            if not _is_provider_id(provider):
+                raise ValueError("Selecciona un proveedor compatible.")
+            if provider == "openai-compatible":
+                endpoint = normalize_base_url(self.endpoint_var.get())
+                if contains_common_secret(endpoint):
+                    raise ValueError(
+                        "La URL del endpoint no debe incluir credenciales."
+                    )
+            else:
+                endpoint = PROVIDER_DEFAULTS[provider][0]
+            return provider, endpoint
+
+        def _save_provider_key(self) -> None:
+            try:
+                provider, endpoint = self._selected_provider()
+                save_provider_api_key(
+                    provider,
+                    endpoint,
+                    self.api_key_var.get(),
+                )
+            except (ValueError, RuntimeError) as error:
+                messagebox.showerror("AI@Home", str(error), parent=self)
+                return
+            self.api_key_var.set("")
+            messagebox.showinfo(
+                "AI@Home",
+                "Clave guardada en el almacén seguro del sistema.",
+                parent=self,
             )
-            ttk.Button(
-                parent,
-                text="Limpiar conversación",
-                command=self._clear_chat,
-            ).grid(row=7, column=0, sticky="w", padx=6, pady=6)
-            parent.columnconfigure(0, weight=1)
-            parent.rowconfigure(5, weight=1)
+
+        def _delete_provider_key(self) -> None:
+            try:
+                provider, endpoint = self._selected_provider()
+                deleted = delete_provider_api_key(provider, endpoint)
+            except (ValueError, RuntimeError) as error:
+                messagebox.showerror("AI@Home", str(error), parent=self)
+                return
+            self.api_key_var.set("")
+            messagebox.showinfo(
+                "AI@Home",
+                (
+                    "Clave eliminada."
+                    if deleted
+                    else "No había una clave guardada para este proveedor."
+                ),
+                parent=self,
+            )
 
         def _build_node_tab(self, ttk, parent) -> None:
             ttk.Label(
@@ -401,7 +1452,7 @@ def main() -> None:
                 on_success,
             )
 
-        def _register(self) -> None:
+        def _register_account(self) -> None:
             try:
                 server_url, email, password = self._credentials()
                 if not email or len(password) < 12:
@@ -414,10 +1465,11 @@ def main() -> None:
                 return
 
             def on_success(_result) -> None:
-                self.status_var.set("Cuenta creada; ya puedes iniciar sesión.")
+                self.status_var.set("Cuenta creada; revisa tu correo si se solicita.")
                 messagebox.showinfo(
                     "AI@Home",
-                    "Cuenta creada correctamente.",
+                    "Cuenta creada. Si Supabase solicita confirmar el correo, "
+                    "hazlo antes de iniciar sesión.",
                     parent=self,
                 )
 
@@ -459,6 +1511,8 @@ def main() -> None:
         def _send_message(self) -> None:
             if self.chat_request_active:
                 return
+            if self.prompt_is_placeholder:
+                return
             prompt = self.prompt.get("1.0", "end").strip()
             if not prompt:
                 return
@@ -466,6 +1520,11 @@ def main() -> None:
                 *self.messages,
                 {"role": "user", "content": prompt},
             ]
+            selected_memories = retrieve_memories(prompt, self.memory_notes)
+            request_messages = messages_with_memory_context(
+                messages,
+                selected_memories,
+            )
             try:
                 use_server = self.use_server_ai_var.get()
                 if use_server:
@@ -476,23 +1535,55 @@ def main() -> None:
                     server_url = self.session_server_url
                     user_token = self.session_token
                     model = "AI@Home"
+                    selected_source = (
+                        "ai-home-server",
+                        model,
+                        server_url,
+                    )
+                    if (
+                        self.conversation_source is not None
+                        and self.conversation_source != selected_source
+                    ):
+                        raise ValueError(
+                            "Mantén el mismo proveedor y modelo durante una "
+                            "conversación, o límpiala antes de cambiar."
+                        )
+                    self.api_key_var.set("")
                     operation = lambda: server_chat_completion(
                         server_url,
                         user_token,
-                        messages,
+                        request_messages,
                     )
                 else:
-                    provider_url = normalize_base_url(self.provider_var.get())
+                    provider_id, provider_url = self._selected_provider()
                     model = self.model_var.get().strip()
-                    api_key = self.api_key_var.get()
-                    self.settings["chat_endpoint"] = provider_url
-                    self.settings["chat_model"] = model
+                    if not model:
+                        raise ValueError("Introduce el nombre del modelo.")
+                    selected_source = (provider_id, model, provider_url)
+                    if (
+                        self.conversation_source is not None
+                        and self.conversation_source != selected_source
+                    ):
+                        raise ValueError(
+                            "Mantén el mismo proveedor y modelo durante una "
+                            "conversación, o límpiala antes de cambiar."
+                        )
+                    entered_api_key = self.api_key_var.get()
+                    self.api_key_var.set("")
+                    self.settings["chat_provider"] = provider_id
+                    if provider_id == "openai-compatible":
+                        self.settings["chat_endpoint"] = provider_url
+                    self.settings[f"chat_model_{provider_id}"] = model
+                    if provider_id == "openai-compatible":
+                        self.settings["chat_model"] = model
                     save_settings(self.settings)
-                    operation = lambda: chat_completion(
-                        provider_url,
+                    operation = lambda: provider_completion(
+                        provider_id,
                         model,
-                        messages,
-                        api_key=api_key,
+                        request_messages,
+                        api_key=entered_api_key
+                        or get_provider_api_key(provider_id, provider_url),
+                        endpoint_url=provider_url,
                     )
             except ValueError as error:
                 messagebox.showerror("AI@Home", str(error), parent=self)
@@ -501,6 +1592,8 @@ def main() -> None:
                 messagebox.showerror("AI@Home", str(error), parent=self)
                 return
 
+            if self.conversation_source is None:
+                self.conversation_source = selected_source
             self.prompt.delete("1.0", "end")
             self.chat_request_active = True
             self.messages.append({"role": "user", "content": prompt})
@@ -510,6 +1603,9 @@ def main() -> None:
             def on_success(answer: str) -> None:
                 self.chat_request_active = False
                 self.messages.append({"role": "assistant", "content": answer})
+                self.active_memory_ids.update(
+                    note.id for note in selected_memories
+                )
                 self._append_chat("IA", answer)
                 self.status_var.set(f"Respuesta de {model}")
 
@@ -520,16 +1616,242 @@ def main() -> None:
             )
 
         def _append_chat(self, speaker: str, content: str) -> None:
-            self.chat_view.configure(state="normal")
-            self.chat_view.insert("end", f"{speaker}:\n{content}\n\n")
-            self.chat_view.configure(state="disabled")
-            self.chat_view.see("end")
+            self._render_chat_canvas()
+            self.chat_messages_canvas.yview_moveto(1.0)
 
         def _clear_chat(self) -> None:
             self.messages.clear()
-            self.chat_view.configure(state="normal")
-            self.chat_view.delete("1.0", "end")
-            self.chat_view.configure(state="disabled")
+            self.conversation_id = str(uuid4())
+            self.conversation_source = None
+            self.training_candidate_submitted = False
+            self.training_consent_var.set(False)
+            self.training_review_var.set(False)
+            self.active_memory_ids.clear()
+            self._render_chat_canvas()
+            self.chat_messages_canvas.yview_moveto(0)
+
+        def _submit_training_candidate(self) -> None:
+            if self.training_submission_active:
+                return
+            if self.training_candidate_submitted:
+                messagebox.showerror(
+                    "AI@Home",
+                    "Esta conversación ya fue enviada. Inicia una conversación "
+                    "nueva para crear otra aportación.",
+                    parent=self,
+                )
+                return
+            if not self.training_consent_var.get():
+                messagebox.showerror(
+                    "AI@Home",
+                    "Activa el consentimiento explícito para esta conversación.",
+                    parent=self,
+                )
+                return
+            if not self.training_review_var.get():
+                messagebox.showerror(
+                    "AI@Home",
+                    "Revisa el contenido y las condiciones del proveedor antes "
+                    "de enviarlo.",
+                    parent=self,
+                )
+                return
+            if self.conversation_source is None:
+                messagebox.showerror(
+                    "AI@Home",
+                    "Inicia y completa una conversación antes de aportarla.",
+                    parent=self,
+                )
+                return
+            source_provider, model, source_endpoint = self.conversation_source
+            if source_provider == "ai-home-server":
+                messagebox.showerror(
+                    "AI@Home",
+                    "No se puede aportar una conversación del proxy de instancia "
+                    "porque aún no expone la procedencia exacta del proveedor.",
+                    parent=self,
+                )
+                return
+            if not _is_provider_id(source_provider):
+                messagebox.showerror(
+                    "AI@Home",
+                    "No se pudo verificar la procedencia de esta conversación.",
+                    parent=self,
+                )
+                return
+            if self.session_token is None or self.session_server_url is None:
+                messagebox.showerror(
+                    "AI@Home",
+                    "Inicia sesión en el servidor AI@Home que recibirá la aportación.",
+                    parent=self,
+                )
+                return
+            if self.chat_request_active:
+                messagebox.showerror(
+                    "AI@Home",
+                    "Espera a que termine la respuesta antes de aportar la conversación.",
+                    parent=self,
+                )
+                return
+            provider: ProviderId = source_provider
+            messages = [
+                message
+                for message in self.messages
+                if message["role"] in {"user", "assistant"}
+            ]
+            if not any(item["role"] == "user" for item in messages) or not any(
+                item["role"] == "assistant" for item in messages
+            ):
+                messagebox.showerror(
+                    "AI@Home",
+                    "La conversación necesita al menos una pregunta y una respuesta.",
+                    parent=self,
+                )
+                return
+            server_url = self.session_server_url
+            user_token = self.session_token
+            conversation_id = self.conversation_id
+            self.training_submission_active = True
+
+            def on_success(contribution: TrainingContributionResponse) -> None:
+                self.training_submission_active = False
+                self.training_candidate_submitted = True
+                self.training_consent_var.set(False)
+                self.training_review_var.set(False)
+                self.status_var.set("Aportación pendiente de revisión humana.")
+                messagebox.showinfo(
+                    "AI@Home",
+                    "Aportación recibida como candidata. No se usará para entrenar "
+                    "hasta superar la revisión y los controles de procedencia. "
+                    f"Puedes retirarla mientras no se congele un dataset.\n\n"
+                    f"ID: {contribution.contribution_id}",
+                    parent=self,
+                )
+
+            self._background(
+                lambda: submit_training_candidate(
+                    server_url,
+                    user_token,
+                    conversation_id,
+                    provider,
+                    source_endpoint,
+                    model,
+                    messages,
+                    reviewed_for_submission=True,
+                ),
+                on_success,
+                lambda: setattr(self, "training_submission_active", False),
+            )
+
+        def _manage_training_candidates(self) -> None:
+            if self.session_token is None or self.session_server_url is None:
+                messagebox.showerror(
+                    "AI@Home",
+                    "Inicia sesión para consultar o retirar tus aportaciones.",
+                    parent=self,
+                )
+                return
+            window = tk.Toplevel(self)
+            window.title("Mis aportaciones para entrenamiento")
+            window.geometry("760x360")
+            listing = tk.Listbox(window, height=12)
+            listing.pack(fill="both", expand=True, padx=10, pady=10)
+            records: list[TrainingContributionResponse] = []
+            offset = 0
+            server_url = self.session_server_url
+            user_token = self.session_token
+
+            def refresh(page_offset: int | None = None) -> None:
+                nonlocal offset
+                if page_offset is not None:
+                    offset = max(0, page_offset)
+
+                def on_success(
+                    contributions: list[TrainingContributionResponse],
+                ) -> None:
+                    records[:] = contributions
+                    listing.delete(0, "end")
+                    for contribution in records[:50]:
+                        listing.insert(
+                            "end",
+                            f"{contribution.provider} / {contribution.model} — "
+                            f"{contribution.status} — "
+                            f"{contribution.contribution_id}",
+                        )
+                    previous_button.configure(state="normal" if offset else "disabled")
+                    next_button.configure(
+                        state="normal" if len(records) > 50 else "disabled"
+                    )
+
+                self._background(
+                    lambda: list_training_candidates(
+                        server_url,
+                        user_token,
+                        limit=51,
+                        offset=offset,
+                    ),
+                    on_success,
+                )
+
+            def withdraw_selected() -> None:
+                selection = listing.curselection()
+                if not selection:
+                    messagebox.showerror(
+                        "AI@Home",
+                        "Selecciona una aportación para retirarla.",
+                        parent=window,
+                    )
+                    return
+                contribution_id = records[selection[0]].contribution_id
+
+                def on_success(_result) -> None:
+                    self.status_var.set("Aportación retirada y eliminada.")
+                    refresh()
+
+                self._background(
+                    lambda: withdraw_training_candidate(
+                        server_url,
+                        user_token,
+                        contribution_id,
+                    ),
+                    on_success,
+                )
+
+            buttons = ttk.Frame(window)
+            buttons.pack(fill="x", padx=10, pady=(0, 10))
+            previous_button = ttk.Button(
+                buttons,
+                text="Anterior",
+                command=lambda: refresh(offset - 50),
+                state="disabled",
+            )
+            previous_button.pack(side="left", padx=(0, 6))
+            next_button = ttk.Button(
+                buttons,
+                text="Siguiente",
+                command=lambda: refresh(offset + 50),
+                state="disabled",
+            )
+            next_button.pack(side="left", padx=(0, 6))
+            ttk.Button(buttons, text="Actualizar", command=refresh).pack(
+                side="left",
+                padx=(0, 6),
+            )
+            ttk.Button(
+                buttons,
+                text="Retirar seleccionada",
+                command=withdraw_selected,
+            ).pack(side="left")
+            ttk.Label(
+                window,
+                text=(
+                    "Las aportaciones pendientes no se entrenan automáticamente. "
+                    "Una vez congeladas en un dataset o incorporadas a pesos "
+                    "publicados, su influencia no puede garantizarse reversible."
+                ),
+                wraplength=720,
+            ).pack(fill="x", padx=10, pady=(0, 10))
+            refresh()
 
         def _start_contribution(self) -> None:
             if self.node_registration_active:
@@ -710,7 +2032,7 @@ def main() -> None:
 
     try:
         app = AIHomeDesktop()
-    except (OSError, RuntimeError) as error:
+    except (OSError, RuntimeError, ValueError) as error:
         messagebox.showerror("AI@Home", str(error))
         return
     app.mainloop()

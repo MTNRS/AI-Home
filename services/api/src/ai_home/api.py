@@ -1,10 +1,16 @@
 """HTTP API for initial identity and account-isolation flows."""
 
 from collections.abc import Generator
+import hashlib
+import hmac
+import json
 import logging
+import time
+from typing import Literal
+import uuid
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -17,7 +23,9 @@ from ai_home.auth import (
     InvalidSession,
     authenticate_user,
     create_user,
+    create_supabase_user,
     issue_session,
+    issue_supabase_session,
     resolve_session,
     revoke_session,
     verify_password,
@@ -43,7 +51,15 @@ from ai_home.jobs import (
     revoke_node,
     submit_job_result,
 )
-from ai_home.models import AuthSession, ComputeJob, ComputeNode, User
+from ai_home.models import (
+    AuthSession,
+    ComputeJob,
+    ComputeNode,
+    TrainingContribution,
+    TrainingDataset,
+    User,
+)
+from ai_home.privacy import contains_common_secret
 from ai_home.schemas import (
     DeleteAccountRequest,
     ClaimedJobResponse,
@@ -58,7 +74,22 @@ from ai_home.schemas import (
     RegisterRequest,
     SessionResponse,
     SubmitJobResultRequest,
+    TrainingContributionExportResponse,
+    TrainingContributionReviewResponse,
+    TrainingContributionRequest,
+    TrainingContributionResponse,
+    TrainingDatasetExportResponse,
+    TrainingDatasetResponse,
+    TrainingReviewRequest,
+    TrainingReviewResponse,
+    FreezeTrainingDatasetRequest,
     UserResponse,
+)
+from ai_home.supabase_auth import (
+    InvalidSupabaseToken,
+    SupabaseAuth,
+    SupabaseAuthError,
+    SupabaseAuthUnavailable,
 )
 
 _BEARER = HTTPBearer(auto_error=False)
@@ -72,6 +103,7 @@ def get_db(request: Request) -> Generator[Session, None, None]:
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_BEARER),
     session: Session = Depends(get_db),
 ) -> AuthenticatedUser:
@@ -81,6 +113,37 @@ def get_current_user(
             detail="Authentication required.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    supabase_auth: SupabaseAuth | None = request.app.state.supabase_auth
+    if supabase_auth is not None:
+        try:
+            local_session = resolve_session(session, credentials.credentials)
+            identity = supabase_auth.verify_access_token(credentials.credentials)
+        except (InvalidSession, InvalidSupabaseToken):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired session.",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from None
+        except SupabaseAuthUnavailable:
+            _LOGGER.exception("Supabase signing-key verification failed.")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Supabase authentication is temporarily unavailable.",
+            ) from None
+        if local_session.user_id != identity.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired session.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user = session.get(User, identity.user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired session.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return AuthenticatedUser(user_id=identity.user_id, email=identity.email)
     try:
         return resolve_session(session, credentials.credentials)
     except InvalidSession:
@@ -111,10 +174,34 @@ def get_current_node(
         ) from None
 
 
+def require_training_reviewer(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_BEARER),
+) -> None:
+    settings: Settings = request.app.state.settings
+    expected_token = settings.training_review_token.get_secret_value()
+    if not expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Training review is not configured for this server.",
+        )
+    if (
+        credentials is None
+        or credentials.scheme.lower() != "bearer"
+        or not hmac.compare_digest(credentials.credentials, expected_token)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Training reviewer authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 def create_app(
     settings: Settings | None = None,
     *,
     engine: Engine | None = None,
+    supabase_auth: SupabaseAuth | None = None,
 ) -> FastAPI:
     application_settings = settings or Settings()
     database_engine = engine or build_engine(application_settings.database_url)
@@ -128,6 +215,21 @@ def create_app(
     app.state.settings = application_settings
     app.state.engine = database_engine
     app.state.session_factory = session_factory
+    if supabase_auth is not None:
+        app.state.supabase_auth = supabase_auth
+    elif application_settings.supabase_url is None:
+        app.state.supabase_auth = None
+    elif application_settings.supabase_jwks_url is None:
+        raise RuntimeError("The configured Supabase project has no JWKS URL.")
+    else:
+        app.state.supabase_auth = SupabaseAuth(
+            project_url=application_settings.supabase_url,
+            publishable_key=(
+                application_settings.supabase_publishable_key.get_secret_value()
+            ),
+            secret_key=application_settings.supabase_secret_key.get_secret_value(),
+            jwks_url=application_settings.supabase_jwks_url,
+        )
 
     @app.middleware("http")
     async def disable_private_api_caching(request: Request, call_next):
@@ -161,6 +263,50 @@ def create_app(
         payload: RegisterRequest,
         session: Session = Depends(get_db),
     ) -> User:
+        supabase_client: SupabaseAuth | None = app.state.supabase_auth
+        if supabase_client is not None:
+            try:
+                identity = supabase_client.sign_up(
+                    email=str(payload.email),
+                    password=payload.password.get_secret_value(),
+                )
+                with session.begin():
+                    user = create_supabase_user(
+                        session,
+                        user_id=identity.user_id,
+                        email=identity.email,
+                    )
+            except SupabaseAuthError as error:
+                if error.status_code in {400, 409, 422} and any(
+                    marker in error.code
+                    for marker in (
+                        "already registered",
+                        "already exists",
+                        "user_already",
+                        "email_exists",
+                    )
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="An account with this email already exists.",
+                    ) from None
+                _LOGGER.warning("Supabase rejected account registration.")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Supabase could not create the account.",
+                ) from None
+            except SupabaseAuthUnavailable:
+                _LOGGER.exception("Supabase account registration failed.")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Supabase Auth is temporarily unavailable.",
+                ) from None
+            except IntegrityError:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="An account with this email already exists.",
+                ) from None
+            return user
         try:
             with session.begin():
                 user = create_user(
@@ -183,6 +329,63 @@ def create_app(
         response: Response,
         session: Session = Depends(get_db),
     ) -> SessionResponse:
+        supabase_client: SupabaseAuth | None = app.state.supabase_auth
+        if supabase_client is not None:
+            try:
+                issued = supabase_client.sign_in(
+                    email=str(payload.email),
+                    password=payload.password.get_secret_value(),
+                )
+                with session.begin():
+                    user = create_supabase_user(
+                        session,
+                        user_id=issued.identity.user_id,
+                        email=issued.identity.email,
+                    )
+                    issue_supabase_session(
+                        session,
+                        user=user,
+                        access_token=issued.access_token,
+                        expires_at_epoch=issued.expires_at_epoch,
+                    )
+            except SupabaseAuthError as error:
+                if error.status_code in {400, 401, 403}:
+                    if (
+                        "email_not_confirmed" in error.code
+                        or "email not confirmed" in error.code
+                    ):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail=(
+                                "Confirma tu correo electrónico antes de iniciar sesión."
+                            ),
+                        ) from None
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid email or password.",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    ) from None
+                _LOGGER.warning("Supabase rejected account login.")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Supabase Auth is temporarily unavailable.",
+                ) from None
+            except SupabaseAuthUnavailable:
+                _LOGGER.exception("Supabase account login failed.")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Supabase Auth is temporarily unavailable.",
+                ) from None
+            except IntegrityError:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="The Supabase account conflicts with a local profile.",
+                ) from None
+            response.headers["Cache-Control"] = "no-store"
+            return SessionResponse(
+                access_token=issued.access_token,
+                expires_at_epoch=issued.expires_at_epoch,
+            )
         try:
             with session.begin():
                 user = authenticate_user(
@@ -209,6 +412,7 @@ def create_app(
 
     @app.post("/api/v1/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
     def logout(
+        request: Request,
         credentials: HTTPAuthorizationCredentials | None = Depends(_BEARER),
         _current_user: AuthenticatedUser = Depends(get_current_user),
         session: Session = Depends(get_db),
@@ -219,6 +423,32 @@ def create_app(
                 detail="Authentication required.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        supabase_client: SupabaseAuth | None = request.app.state.supabase_auth
+        if supabase_client is not None:
+            try:
+                revoke_session(session, credentials.credentials)
+                session.commit()
+            except InvalidSession:
+                session.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired session.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                ) from None
+            try:
+                supabase_client.sign_out(credentials.credentials)
+            except SupabaseAuthError:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Could not end the Supabase session.",
+                ) from None
+            except SupabaseAuthUnavailable:
+                _LOGGER.exception("Supabase logout failed.")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Supabase Auth is temporarily unavailable.",
+                ) from None
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
         try:
             revoke_session(session, credentials.credentials)
             session.commit()
@@ -273,6 +503,328 @@ def create_app(
             ]
         )
 
+    @app.post(
+        "/api/v1/training/conversations",
+        response_model=TrainingContributionResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def create_training_contribution(
+        payload: TrainingContributionRequest,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> TrainingContribution:
+        messages = [message.model_dump() for message in payload.messages]
+        if _contains_secret(messages):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "The conversation appears to contain a credential or secret; "
+                    "remove it before submitting."
+                ),
+            )
+        contribution = TrainingContribution(
+            contribution_id=str(uuid.uuid4()),
+            owner_user_id=current_user.user_id,
+            conversation_id=str(payload.conversation_id),
+            provider=payload.provider,
+            source_endpoint=payload.source_endpoint,
+            model=payload.model.strip(),
+            messages=messages,
+            consent_version=payload.consent_version,
+            consent_scope=payload.consent_scope,
+            consent_at_epoch=int(time.time()),
+            status="pending_review",
+        )
+        session.add(contribution)
+        try:
+            session.commit()
+        except IntegrityError as error:
+            session.rollback()
+            if not _is_training_conversation_unique_violation(error):
+                raise
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This conversation already has a training contribution.",
+            ) from None
+        return contribution
+
+    @app.get(
+        "/api/v1/training/conversations",
+        response_model=list[TrainingContributionResponse],
+    )
+    def get_training_contributions(
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> list[TrainingContribution]:
+        return list(
+            session.scalars(
+                select(TrainingContribution)
+                .where(TrainingContribution.owner_user_id == current_user.user_id)
+                .order_by(
+                    TrainingContribution.consent_at_epoch.desc(),
+                    TrainingContribution.contribution_id.desc(),
+                )
+                .offset(offset)
+                .limit(limit)
+            )
+        )
+
+    @app.get(
+        "/api/v1/training/conversations/{contribution_id}",
+        response_model=TrainingContributionExportResponse,
+    )
+    def get_training_contribution(
+        contribution_id: str,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> TrainingContribution:
+        contribution = session.scalar(
+            select(TrainingContribution).where(
+                TrainingContribution.contribution_id == contribution_id,
+                TrainingContribution.owner_user_id == current_user.user_id,
+            )
+        )
+        if contribution is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Training contribution not found.",
+            )
+        return contribution
+
+    @app.delete(
+        "/api/v1/training/conversations/{contribution_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    def delete_training_contribution(
+        contribution_id: str,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> Response:
+        contribution = session.scalar(
+            select(TrainingContribution).where(
+                TrainingContribution.contribution_id == contribution_id,
+                TrainingContribution.owner_user_id == current_user.user_id,
+            ).with_for_update()
+        )
+        if contribution is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Training contribution not found.",
+            )
+        if contribution.status == "frozen":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This contribution is already part of a frozen dataset; "
+                    "its influence on published model weights cannot be undone."
+                ),
+            )
+        session.delete(contribution)
+        session.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.get(
+        "/api/v1/admin/training/conversations",
+        response_model=list[TrainingContributionReviewResponse],
+    )
+    def list_training_contributions_for_review(
+        status_filter: Literal["pending_review", "eligible"] = Query(
+            default="pending_review",
+            alias="status",
+        ),
+        limit: int = Query(default=20, ge=1, le=50),
+        offset: int = Query(default=0, ge=0),
+        _reviewer: None = Depends(require_training_reviewer),
+        session: Session = Depends(get_db),
+    ) -> list[TrainingContribution]:
+        return list(
+            session.scalars(
+                select(TrainingContribution)
+                .where(TrainingContribution.status == status_filter)
+                .order_by(
+                    TrainingContribution.consent_at_epoch,
+                    TrainingContribution.contribution_id,
+                )
+                .offset(offset)
+                .limit(limit)
+            )
+        )
+
+    @app.post(
+        "/api/v1/admin/training/conversations/{contribution_id}/review",
+        response_model=TrainingReviewResponse,
+    )
+    def review_training_contribution(
+        contribution_id: str,
+        payload: TrainingReviewRequest,
+        request: Request,
+        _reviewer: None = Depends(require_training_reviewer),
+        session: Session = Depends(get_db),
+    ) -> TrainingReviewResponse:
+        contribution = session.scalar(
+            select(TrainingContribution)
+            .where(TrainingContribution.contribution_id == contribution_id)
+            .with_for_update()
+        )
+        if contribution is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Training contribution not found.",
+            )
+        if contribution.status != "pending_review":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only pending training contributions can be reviewed.",
+            )
+        reviewed_at_epoch = int(time.time())
+        reviewer_id = request.app.state.settings.training_reviewer_id.strip()
+        contribution.reviewer_id = reviewer_id
+        contribution.reviewed_at_epoch = reviewed_at_epoch
+        review_checklist = {
+            "provider_terms_verified": payload.provider_terms_verified,
+            "sensitive_data_reviewed": payload.sensitive_data_reviewed,
+            "reuse_rights_verified": payload.reuse_rights_verified,
+        }
+        contribution.review_checklist = review_checklist
+        if payload.approve:
+            contribution.status = "eligible"
+        else:
+            contribution.status = "rejected"
+            contribution.messages = []
+        session.commit()
+        return TrainingReviewResponse(
+            contribution_id=contribution.contribution_id,
+            status=contribution.status,
+            reviewer_id=reviewer_id,
+            reviewed_at_epoch=reviewed_at_epoch,
+            review_checklist=review_checklist,
+        )
+
+    @app.post(
+        "/api/v1/admin/training/datasets",
+        response_model=TrainingDatasetResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def freeze_training_dataset(
+        payload: FreezeTrainingDatasetRequest,
+        _reviewer: None = Depends(require_training_reviewer),
+        session: Session = Depends(get_db),
+    ) -> TrainingDataset:
+        contribution_ids = sorted(str(value) for value in payload.contribution_ids)
+        contributions = list(
+            session.scalars(
+                select(TrainingContribution)
+                .where(TrainingContribution.contribution_id.in_(contribution_ids))
+                .order_by(TrainingContribution.contribution_id)
+                .with_for_update()
+            )
+        )
+        if len(contributions) != len(contribution_ids):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="One or more training contributions were not found.",
+            )
+        if any(
+            item.status != "eligible"
+            or item.reviewer_id is None
+            or item.reviewed_at_epoch is None
+            or item.review_checklist is None
+            or not all(item.review_checklist.values())
+            for item in contributions
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Datasets may include only human-reviewed eligible contributions.",
+            )
+
+        records = [
+            {
+                "contribution_id": item.contribution_id,
+                "provider": item.provider,
+                "source_endpoint": item.source_endpoint,
+                "model": item.model,
+                "consent_version": item.consent_version,
+                "consent_scope": item.consent_scope,
+                "consent_at_epoch": item.consent_at_epoch,
+                "reviewer_id": item.reviewer_id,
+                "reviewed_at_epoch": item.reviewed_at_epoch,
+                "review_checklist": item.review_checklist,
+                "messages": item.messages,
+            }
+            for item in contributions
+        ]
+        manifest = {
+            "dataset_version": payload.dataset_version,
+            "records": records,
+        }
+        manifest_sha256 = hashlib.sha256(
+            json.dumps(
+                manifest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        dataset = TrainingDataset(
+            dataset_id=str(uuid.uuid4()),
+            dataset_version=payload.dataset_version,
+            manifest_sha256=manifest_sha256,
+            item_count=len(records),
+            records=records,
+        )
+        session.add(dataset)
+        for contribution in contributions:
+            contribution.status = "frozen"
+        try:
+            session.commit()
+        except IntegrityError as error:
+            session.rollback()
+            if not _is_dataset_version_violation(error):
+                raise
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A dataset with this version already exists.",
+            ) from None
+        return dataset
+
+    @app.get(
+        "/api/v1/admin/training/datasets",
+        response_model=list[TrainingDatasetResponse],
+    )
+    def list_training_datasets(
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        _reviewer: None = Depends(require_training_reviewer),
+        session: Session = Depends(get_db),
+    ) -> list[TrainingDataset]:
+        return list(
+            session.scalars(
+                select(TrainingDataset)
+                .order_by(TrainingDataset.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        )
+
+    @app.get(
+        "/api/v1/admin/training/datasets/{dataset_id}",
+        response_model=TrainingDatasetExportResponse,
+    )
+    def get_training_dataset(
+        dataset_id: str,
+        _reviewer: None = Depends(require_training_reviewer),
+        session: Session = Depends(get_db),
+    ) -> TrainingDataset:
+        dataset = session.get(TrainingDataset, dataset_id)
+        if dataset is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Training dataset not found.",
+            )
+        return dataset
+
     @app.get("/api/v1/users/me", response_model=UserResponse)
     def get_me(
         current_user: AuthenticatedUser = Depends(get_current_user),
@@ -304,6 +856,7 @@ def create_app(
     @app.delete("/api/v1/users/me", status_code=status.HTTP_204_NO_CONTENT)
     def delete_me(
         payload: DeleteAccountRequest,
+        request: Request,
         current_user: AuthenticatedUser = Depends(get_current_user),
         session: Session = Depends(get_db),
     ) -> Response:
@@ -314,7 +867,49 @@ def create_app(
                 detail="Invalid or expired session.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        if not verify_password(
+        supabase_client: SupabaseAuth | None = request.app.state.supabase_auth
+        if supabase_client is not None:
+            try:
+                confirmation = supabase_client.sign_in(
+                    email=user.email,
+                    password=payload.password.get_secret_value(),
+                )
+            except SupabaseAuthError:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Password confirmation failed.",
+                ) from None
+            except SupabaseAuthUnavailable:
+                _LOGGER.exception("Supabase account deletion confirmation failed.")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Supabase Auth is temporarily unavailable.",
+                ) from None
+            if confirmation.identity.user_id != current_user.user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Password confirmation failed.",
+                )
+            try:
+                supabase_client.delete_user(current_user.user_id)
+            except SupabaseAuthUnavailable as error:
+                if not supabase_client.secret_key:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Supabase account deletion is not configured.",
+                    ) from None
+                _LOGGER.exception("Supabase account deletion failed.")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Supabase account deletion failed.",
+                ) from error
+            except SupabaseAuthError:
+                _LOGGER.exception("Supabase account deletion was rejected.")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Supabase account deletion failed.",
+                ) from None
+        elif user.password_hash is None or not verify_password(
             user.password_hash,
             payload.password.get_secret_value(),
         ):
@@ -347,6 +942,11 @@ def create_app(
         )
         session.execute(
             delete(ComputeNode).where(ComputeNode.owner_user_id == current_user.user_id)
+        )
+        session.execute(
+            delete(TrainingContribution).where(
+                TrainingContribution.owner_user_id == current_user.user_id
+            )
         )
         session.delete(user)
         session.commit()
@@ -564,4 +1164,35 @@ def _claimed_job_response(claim: ClaimedJob) -> ClaimedJobResponse:
         payload=claim.job.payload,
         lease_token=claim.lease_token,
         lease_expires_epoch=claim.job.lease_expires_epoch or 0,
+    )
+
+
+def _contains_secret(messages: list[dict[str, str]]) -> bool:
+    return any(
+        contains_common_secret(message["content"])
+        for message in messages
+    )
+
+
+def _is_training_conversation_unique_violation(error: IntegrityError) -> bool:
+    diagnostic = getattr(error.orig, "diag", None)
+    if (
+        getattr(diagnostic, "constraint_name", None)
+        == "uq_training_contributions_owner_conversation"
+    ):
+        return True
+    return (
+        "UNIQUE constraint failed: "
+        "training_contributions.owner_user_id, "
+        "training_contributions.conversation_id"
+    ) in str(error.orig)
+
+
+def _is_dataset_version_violation(error: IntegrityError) -> bool:
+    diagnostic = getattr(error.orig, "diag", None)
+    if getattr(diagnostic, "constraint_name", None) == "uq_training_datasets_version":
+        return True
+    return (
+        "UNIQUE constraint failed: training_datasets.dataset_version"
+        in str(error.orig)
     )

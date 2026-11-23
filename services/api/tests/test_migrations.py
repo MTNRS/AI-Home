@@ -31,8 +31,15 @@ def test_initial_migration_creates_identity_and_credit_tables(tmp_path, monkeypa
         "credit_postings",
         "compute_nodes",
         "compute_jobs",
+        "training_contributions",
+        "training_datasets",
         "alembic_version",
     } <= table_names
+    engine = create_engine(database_url)
+    try:
+        assert inspect(engine).get_columns("users")[2]["nullable"]
+    finally:
+        engine.dispose()
     command.check(config)
 
     command.downgrade(config, "base")
@@ -49,4 +56,6 @@ def test_initial_migration_creates_identity_and_credit_tables(tmp_path, monkeypa
         "credit_postings",
         "compute_nodes",
         "compute_jobs",
+        "training_contributions",
+        "training_datasets",
     } & table_names

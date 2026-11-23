@@ -14,9 +14,11 @@ colaborativo, rastreo web o autoevolución.
 ## Topología inicial
 
 ```text
-Aplicación de escritorio (pendiente) / cliente de nodo (experimental)
-              |
-       API FastAPI
+Aplicación de escritorio experimental
+    |                       |
+    |                       +-- BYOK directo --> Proveedor externo
+    v
+API FastAPI <--- opt-in --- Candidaturas privadas pendientes
               |
   +-----------+------------------+
   |                              |
@@ -46,15 +48,17 @@ de confianza que lo justifiquen.
 ## Límites de dominio
 
 - **Identidad y autorización:** cuentas, sesiones, credenciales y permisos por
-  recurso. Las comprobaciones de autorización se realizan en el servidor en
-  cada operación.
+  recurso. Supabase Auth gestiona las credenciales; FastAPI verifica sus JWT
+  con JWKS y mantiene una proyección mínima para las relaciones de datos. Las
+  comprobaciones de autorización se realizan en el servidor en cada operación.
 - **Trabajos y scheduler:** ciclo de vida de trabajos, asignación, expiración,
   reintentos y verificación de resultados.
 - **Créditos:** libro mayor transaccional, reservas, liquidaciones y reembolsos.
   Los saldos se derivan de asientos confirmados, no de mensajes de una cola.
-- **Inferencia y modelos:** actualmente hay un proxy autenticado a un proveedor
-  OpenAI-compatible configurado por quien opera la instancia. AI@Home aún no
-  ejecuta ni distribuye modelos propios; su origen, versión y licencia deberán
+- **Inferencia y modelos:** el escritorio ofrece BYOK directo para OpenAI,
+  Anthropic, Gemini y endpoints OpenAI-compatibles; un proxy autenticado usa
+  el proveedor configurado por quien opera la instancia. AI@Home aún no ejecuta
+  ni distribuye modelos propios; su origen, versión y licencia deberán
   registrarse al integrar un runtime.
 - **Conocimiento:** conectores autorizados, procedencia, indexación y
   recuperación. Los índices globales no incluyen datos privados.
@@ -64,9 +68,10 @@ de confianza que lo justifiquen.
   propuesta generada automáticamente no puede cambiar permisos, privacidad,
   contabilidad o autenticación sin revisión y autorización explícitas.
 
-Estos límites guían la implementación. Identidad, trabajos, créditos y el proxy
-de inferencia tienen componentes iniciales; un runtime propio, conocimiento,
-memoria y evolución siguen siendo áreas de diseño, no capacidades disponibles.
+Estos límites guían la implementación. Identidad Supabase opcional, identidad
+local de desarrollo, trabajos, créditos, BYOK y el proxy de inferencia tienen
+componentes iniciales; el despliegue de FastAPI, un runtime propio,
+conocimiento, memoria y evolución siguen siendo áreas de diseño o pendientes.
 
 ## Fronteras de datos y confianza
 
@@ -75,7 +80,9 @@ Clasificación inicial:
 1. **Público:** código, documentación y conjuntos de datos autorizados para el
    propósito concreto.
 2. **Operativo:** identificadores de trabajos, métricas y telemetría mínima.
-3. **Personal privado:** conversaciones, archivos y memoria de una cuenta.
+3. **Personal privado:** conversaciones, archivos y memoria de una cuenta;
+   las conversaciones candidatas se guardan solo por opt-in explícito y quedan
+   pendientes de revisión.
 4. **Secreto:** credenciales, claves y tokens.
 
 Los nodos voluntarios son entornos no confiables. Solo podrán recibir tareas
@@ -88,6 +95,15 @@ Todo acceso a recursos privados debe tener un principal autenticado, una
 comprobación de pertenencia/autorización y una prueba automatizada que rechace
 acceso entre usuarios. Los registros de auditoría no deben copiar contenido
 privado.
+
+Las claves BYOK se mantienen en el almacén seguro local y nunca se envían a
+AI@Home. El chat ordinario no se persiste; una candidatura solo llega al
+servidor después de consentimiento por conversación y una acción explícita.
+Las candidaturas actuales se guardan como JSON sin cifrado de campo, pueden
+ser leídas por el operador de la instancia y no se usan automáticamente para
+entrenamiento. Un endpoint administrativo con secreto configurado permite
+revisión humana y snapshots versionados con hash; no hay interfaz administrativa
+ni entrenamiento que consuma esos datasets.
 
 ## Ciclo de trabajo distribuido
 
