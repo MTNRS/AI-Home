@@ -70,12 +70,28 @@ experimental; producción pendiente.**
   GeForce RTX 4070 SUPER con 12 GiB de VRAM; la detección usa `nvidia-smi`.
 - CI aprobada previamente en Python 3.11/3.12 con PostgreSQL 17 para la línea
   base; los cambios BYOK/candidaturas aún requieren ejecución en CI/PostgreSQL.
-- Suite local más reciente: `python -m pytest -q` — 103 pruebas aprobadas y 4
-  pruebas PostgreSQL omitidas por no haber servidor disponible localmente.
-- PyTorch no está instalado en el entorno de desarrollo y todavía no hay un
-  corpus autorizado preparado para preentrenamiento. La RTX 4070 SUPER de 12
-  GiB permite investigar un modelo pequeño, no asumir que se puede entrenar
-  aquí un LLM competitivo desde cero.
+- Suite local más reciente antes de este cambio: `python -m pytest -q` — 103
+  pruebas aprobadas y 4 pruebas PostgreSQL omitidas por no haber servidor
+  disponible localmente.
+- Suite local tras implementar el pipeline del LLM: `python -m pytest -q` —
+  120 aprobadas y 4 omitidas por no haber servidor PostgreSQL local.
+- PyTorch no estaba instalado ni había corpus local al iniciar este cambio. Se
+  añadió como extra opcional; la validación usó una versión CPU, no una sesión
+  de entrenamiento real en GPU. La RTX 4070 SUPER de 12 GiB permite investigar
+  un modelo pequeño, no asumir que se puede entrenar aquí un LLM competitivo.
+- Implementado un GPT byte-level pequeño con pesos inicializados aleatoriamente,
+  entrenamiento local con PyTorch opcional y carga de checkpoints locales. La
+  app lo selecciona por defecto y muestra un error explícito hasta que exista
+  un checkpoint; no hace fallback silencioso a proveedores externos.
+- Importadores experimentales para Wikipedia en español y para conversaciones
+  revisadas en español de OASST1 (Apache-2.0). Cada corpus lleva manifiesto,
+  hash al entrenar y registros de atribución; el entrenamiento puede mezclar
+  corpus con muestreo equilibrado. No se descarga contenido automáticamente.
+- El código de entrenamiento y los importadores están implementados. Se
+  verificó la importación real de OASST1 (3.054 ejemplos conversacionales en
+  español tras filtros), pero no se entrenó/evaluó un checkpoint con ese corpus.
+  El modelo byte-level es una prueba de concepto; no se afirma que pueda
+  mantener conversaciones coherentes.
 - Las pruebas incluyen adaptadores de proveedores con transportes simulados,
   keyring aislado, consentimiento, bloqueo de secretos comunes, aislamiento y
   retirada. No se hicieron llamadas de proveedor con credenciales reales ni
@@ -99,9 +115,9 @@ experimental; producción pendiente.**
   opcional y no se presume.
 - Verificación manual de la interfaz gráfica y publicación de instaladores
   Windows/Linux.
-- Modelo propio, entrenamiento fundacional desde inicialización aleatoria,
-  evaluación y serving AI@Home; hoy solo hay un proxy hacia el proveedor
-  configurado.
+- Entrenamiento real con corpus autorizado, evaluación de calidad/seguridad y
+  publicación del checkpoint. Los datasets congelados de conversaciones
+  aportadas aún no alimentan el entrenamiento.
 - Límites locales de CPU/RAM, controles de pausa/reanudación y sandbox
   reforzado para el nodo.
 - Integración del libro mayor con trabajos verificados y autorización.

@@ -12,14 +12,23 @@ from ai_home.privacy import contains_common_secret
 from ai_home.urls import normalize_base_url
 
 ProviderId = Literal["openai", "anthropic", "gemini", "openai-compatible"]
+ChatProviderId = Literal[
+    "ai-home-local",
+    "openai",
+    "anthropic",
+    "gemini",
+    "openai-compatible",
+]
 
-PROVIDER_LABELS: dict[ProviderId, str] = {
+PROVIDER_LABELS: dict[ChatProviderId, str] = {
+    "ai-home-local": "AI@Home (modelo local, experimental)",
     "openai": "OpenAI",
     "anthropic": "Anthropic",
     "gemini": "Google Gemini",
     "openai-compatible": "OpenAI-compatible / local",
 }
-PROVIDER_DEFAULTS: dict[ProviderId, tuple[str, str]] = {
+PROVIDER_DEFAULTS: dict[ChatProviderId, tuple[str, str]] = {
+    "ai-home-local": ("", "AI@Home desde cero"),
     "openai": ("https://api.openai.com/v1", "gpt-4o-mini"),
     "anthropic": ("https://api.anthropic.com", "claude-3-5-haiku-latest"),
     "gemini": (
@@ -36,7 +45,7 @@ _OFFICIAL_ENDPOINTS: dict[Literal["openai", "anthropic", "gemini"], str] = {
 
 
 def provider_completion(
-    provider: ProviderId,
+    provider: ChatProviderId,
     model: str,
     messages: list[dict[str, str]],
     *,
@@ -47,10 +56,14 @@ def provider_completion(
 ) -> str:
     if provider not in PROVIDER_LABELS:
         raise ValueError("Selecciona un proveedor compatible.")
-    if not model.strip():
-        raise ValueError("Introduce el nombre del modelo.")
     if not messages or not any(message["role"] == "user" for message in messages):
         raise ValueError("Escribe un mensaje antes de iniciar la conversación.")
+    if provider == "ai-home-local":
+        from ai_home.local_llm import complete_locally
+
+        return complete_locally(messages)
+    if not model.strip():
+        raise ValueError("Introduce el nombre del modelo.")
     if provider != "openai-compatible" and not api_key.strip():
         raise ValueError("Añade la clave API del proveedor seleccionado.")
 

@@ -118,8 +118,20 @@ manifest de datasets, versiones, licencias, filtros y lineage del modelo. La
 anonimización simple no se considera garantía de que una contribución no pueda
 ser inferida o memorizada. Las candidaturas actuales son únicamente una etapa
 de recolección/revisión; los snapshots versionados y con hash quedan congelados
-para una futura evaluación. Falta integrar entrenamiento fundacional real y
-verificar legalmente las condiciones de cada proveedor/dataset.
+para una futura evaluación y todavía no se consumen en el pipeline local. Este
+último ya puede entrenar desde inicialización aleatoria, pero aún no se ha
+entrenado ni evaluado un checkpoint real. Hay que verificar legalmente las
+condiciones de cada proveedor/dataset antes de publicar los pesos derivados.
+
+El pipeline local experimental admite corpus importados de Wikipedia y OASST1.
+Los importadores registran fuente, licencia, fecha, filtros y atribución por
+artículo/mensaje; el entrenador rechaza corpus sin manifiesto y guarda el hash
+de cada corpus dentro del checkpoint. Los chats de invitados, el historial
+local y las candidaturas del servidor no se incorporan automáticamente a este
+entrenamiento. Cualquier uso futuro requiere un proceso de consentimiento,
+revisión y procedencia que cubra explícitamente ese modelo y ese propósito.
+Los pesos derivados no se publican automáticamente; hay que revisar las
+licencias y obligaciones de atribución/compartir-igual antes de distribuirlos.
 
 ## Claves de proveedores
 

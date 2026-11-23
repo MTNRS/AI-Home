@@ -6,9 +6,10 @@ comprometer la privacidad de sus participantes.
 
 El proyecto está en desarrollo temprano. Ya incluye una API inicial de
 identidad y sesiones, un protocolo experimental de nodos voluntarios y un
-núcleo interno de libro mayor, además de un primer cliente de escritorio. AI@Home
-aún no aloja sus propios modelos de inferencia/chat y los trabajos de nodos no
-están conectados a créditos.
+núcleo interno de libro mayor, además de un primer cliente de escritorio y el
+código de un LLM experimental entrenable desde inicialización aleatoria.
+Todavía no hay un checkpoint entrenado ni se incluye un modelo ya preparado;
+los trabajos de nodos no están conectados a créditos.
 
 ## Principios
 
@@ -111,7 +112,7 @@ Con Python 3.11+ y Tk instalado (incluido normalmente en Windows), instala el
 proyecto y ejecuta:
 
 ```powershell
-python -m pip install -e .
+python -m pip install -e ".[llm]"
 python -m ai_home.desktop
 ```
 
@@ -121,15 +122,17 @@ Muestra las respuestas de la IA a la izquierda y tus mensajes a la derecha,
 sin fondos de color en los mensajes. La barra superior da acceso a **Conectar
 IA**, **Cuenta** y **Colaborar** sin mezclar esas opciones con el chat. En
 **Conectar IA** puedes
-elegir OpenAI, Anthropic, Google Gemini o configurar manualmente un endpoint
+usar el modelo local experimental (opción predeterminada), elegir OpenAI,
+Anthropic, Google Gemini o configurar manualmente un endpoint
 OpenAI-compatible. Las claves BYOK se guardan únicamente en el almacén seguro
 del sistema operativo, se pueden eliminar desde la aplicación y nunca se
 guardan en las preferencias, se envían al servidor AI@Home ni se usan para
 entrenamiento. Si el almacén seguro no está disponible, no hay fallback a
 texto plano. Las solicitudes directas salen del escritorio al proveedor
 elegido; el proveedor externo procesa el contenido según sus propias
-condiciones. AI@Home todavía no tiene un modelo propio entrenado ni preselecciona
-un modelo externo compatible como si lo fuera.
+condiciones. El modelo local no necesita clave ni envía el chat a un servicio
+externo. Si todavía no hay checkpoint, la aplicación explica cómo prepararlo;
+no cambia silenciosamente a un proveedor externo.
 
 No hace falta una cuenta para abrir una sesión de invitado y conversar con un
 proveedor configurado o usar la memoria personal local. En **Cuenta**, elige
@@ -188,12 +191,55 @@ humana sigue siendo necesaria. La revisión y congelación están disponibles so
 mediante una API administrativa protegida por `AI_HOME_TRAINING_REVIEW_TOKEN`
 (secreto aleatorio de al menos 32 caracteres) y no tienen aún una interfaz
 administrativa. Los datasets congelados son snapshots inmutables con hash y no
-se eliminan al borrar la cuenta; no existe todavía un proceso de entrenamiento
-real que los consuma. La pantalla **Colaborar** es independiente y requiere
+se eliminan al borrar la cuenta; el pipeline local experimental aún no consume
+esos snapshots. La pantalla **Colaborar** es independiente y requiere
 iniciar sesión y aceptar expresamente antes de registrar/iniciar
 un nodo. Las credenciales de nodo también usan el almacén seguro del sistema
 operativo; las preferencias no secretas quedan en el directorio de
 configuración del usuario.
+
+### Entrenamiento experimental del LLM propio
+
+El modelo es un pequeño GPT byte-level implementado con PyTorch, inicializado
+sin pesos preentrenados. El importador de Wikipedia crea ejemplos de pregunta
+y respuesta basados en las introducciones de artículos; el importador OASST1
+selecciona conversaciones revisadas en español bajo licencia Apache-2.0. Ambos
+producen manifiestos y registros de atribución. No se utilizan conversaciones
+de invitados ni chats locales como datos de entrenamiento.
+
+Descarga manualmente los archivos oficiales: un dump de artículos de Wikipedia
+en español desde [Wikimedia Dumps](https://dumps.wikimedia.org/eswiki/) y el
+archivo
+[`2023-04-12_oasst_ready.messages.jsonl.gz`](https://huggingface.co/datasets/OpenAssistant/oasst1/resolve/main/2023-04-12_oasst_ready.messages.jsonl.gz)
+de la exportación
+[OpenAssistant OASST1](https://huggingface.co/datasets/OpenAssistant/oasst1).
+Después prepara ambos corpus:
+
+```powershell
+python -m ai_home.wikipedia_corpus `
+  --dump C:\datasets\eswiki-latest-pages-articles-multistream.xml.bz2 `
+  --output C:\datasets\wiki-es.txt `
+  --source-url https://dumps.wikimedia.org/eswiki/latest/eswiki-latest-pages-articles-multistream.xml.bz2
+
+python -m ai_home.conversation_corpus `
+  --source C:\datasets\2023-04-12_oasst_ready.messages.jsonl.gz `
+  --output C:\datasets\oasst-es.txt
+
+python -m ai_home.train_llm `
+  --corpus C:\datasets\wiki-es.txt C:\datasets\oasst-es.txt `
+  --output "$env:APPDATA\ai-home\models\aihome-small.pt" `
+  --steps 10000 `
+  --device auto
+```
+
+El entrenamiento muestrea ambos corpus por igual para que el dump enciclopédico
+no eclipse el diálogo. Se puede omitir `--output` para guardar el checkpoint
+en la carpeta de configuración del usuario que consulta automáticamente el
+escritorio. Antes de distribuir corpus o pesos derivados, revisa las licencias,
+las atribuciones y posibles excepciones por artículo. Un modelo pequeño y unos
+pocos pasos no garantizan una conversación coherente: esta implementación es
+un primer experimento local, no un asistente competitivo; hay que evaluar sus
+respuestas y entrenarlo con datos conversacionales autorizados suficientes.
 
 ### Pruebas
 

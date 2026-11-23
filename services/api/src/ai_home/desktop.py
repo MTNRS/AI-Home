@@ -33,6 +33,7 @@ from ai_home.node_worker import NodeAgent, register_node_with_server
 from ai_home.providers import (
     PROVIDER_DEFAULTS,
     PROVIDER_LABELS,
+    ChatProviderId,
     ProviderId,
     provider_completion,
 )
@@ -106,11 +107,17 @@ def _blend_sphere_color(base: str, tint: str, amount: float) -> str:
     return "#" + "".join(f"{channel:02x}" for channel in channels)
 
 
-def _is_provider_id(value: str) -> TypeGuard[ProviderId]:
+def _is_provider_id(value: str) -> TypeGuard[ChatProviderId]:
     return value in PROVIDER_LABELS
 
 
-def _provider_keyring_account(provider: ProviderId, endpoint: str) -> str:
+def _is_training_provider(value: str) -> TypeGuard[ProviderId]:
+    return value in {"openai", "anthropic", "gemini", "openai-compatible"}
+
+
+def _provider_keyring_account(provider: ChatProviderId, endpoint: str) -> str:
+    if provider == "ai-home-local":
+        return "local-model"
     if provider == "openai-compatible":
         normalized_endpoint = normalize_base_url(endpoint)
     else:
@@ -133,7 +140,7 @@ def _require_os_keyring() -> None:
         )
 
 
-def get_provider_api_key(provider: ProviderId, endpoint: str) -> str:
+def get_provider_api_key(provider: ChatProviderId, endpoint: str) -> str:
     _require_os_keyring()
     try:
         return (
@@ -151,7 +158,7 @@ def get_provider_api_key(provider: ProviderId, endpoint: str) -> str:
 
 
 def save_provider_api_key(
-    provider: ProviderId,
+    provider: ChatProviderId,
     endpoint: str,
     api_key: str,
 ) -> None:
@@ -170,7 +177,7 @@ def save_provider_api_key(
         ) from error
 
 
-def delete_provider_api_key(provider: ProviderId, endpoint: str) -> bool:
+def delete_provider_api_key(provider: ChatProviderId, endpoint: str) -> bool:
     _require_os_keyring()
     try:
         keyring.delete_password(
@@ -406,6 +413,13 @@ def load_settings() -> dict[str, str]:
         data.pop("chat_endpoint", None)
         data.pop("chat_model", None)
         data.pop("chat_model_openai-compatible", None)
+        data["chat_provider"] = "ai-home-local"
+        save_settings(data)
+    elif (
+        data.get("chat_provider") == "openai-compatible"
+        and not data.get("chat_endpoint", "").strip()
+    ):
+        data["chat_provider"] = "ai-home-local"
         save_settings(data)
     return data
 
@@ -1258,26 +1272,27 @@ def main() -> None:
         def _build_provider_tab(self, ttk, parent) -> None:
             ttk.Label(
                 parent,
-                text="Conecta tu proveedor de IA",
+                text="Modelo de lenguaje",
                 font=("Segoe UI", 14, "bold"),
             ).pack(anchor="w")
             ttk.Label(
                 parent,
                 text=(
-                    "AI@Home aún no tiene un LLM propio entrenado. Mientras tanto, "
-                    "puedes configurar un proveedor externo opcional; los "
-                    "endpoints compatibles no tienen un modelo preseleccionado."
+                    "AI@Home usa por defecto su modelo local experimental, "
+                    "entrenado desde cero. Hasta que exista un checkpoint "
+                    "entrenado, el chat local no podrá responder. Los proveedores "
+                    "externos son opcionales."
                 ),
                 wraplength=760,
             ).pack(anchor="w", pady=(2, 12))
 
             configured_provider = self.settings.get(
                 "chat_provider",
-                "openai-compatible",
+                "ai-home-local",
             )
             if not _is_provider_id(configured_provider):
-                configured_provider = "openai-compatible"
-            self.provider_id: ProviderId = configured_provider
+                configured_provider = "ai-home-local"
+            self.provider_id: ChatProviderId = configured_provider
             self.provider_var = tk.StringVar(value=PROVIDER_LABELS[self.provider_id])
             self.provider_var.trace_add("write", self._provider_changed)
             default_endpoint, default_model = PROVIDER_DEFAULTS[self.provider_id]
@@ -1319,7 +1334,11 @@ def main() -> None:
             ttk.Label(provider, text="Modelo").grid(
                 row=1, column=0, sticky="w", padx=6, pady=4
             )
-            ttk.Entry(provider, textvariable=self.model_var).grid(
+            self.provider_model_entry = ttk.Entry(
+                provider,
+                textvariable=self.model_var,
+            )
+            self.provider_model_entry.grid(
                 row=1, column=1, sticky="ew", padx=6, pady=4
             )
             ttk.Label(provider, text="Endpoint personalizado").grid(
@@ -1334,13 +1353,18 @@ def main() -> None:
             )
             if self.provider_id != "openai-compatible":
                 self.provider_endpoint_entry.configure(state="disabled")
+            if self.provider_id == "ai-home-local":
+                self.provider_model_entry.configure(state="disabled")
             provider.columnconfigure(1, weight=1)
 
             credentials = ttk.LabelFrame(parent, text="Clave API", padding=12)
             credentials.pack(fill="x", pady=(0, 10))
             ttk.Label(
                 credentials,
-                text="Solo es necesaria para proveedores cloud; déjala vacía para usar una clave ya guardada.",
+                text=(
+                    "El modelo local no necesita clave. Solo se usa para "
+                    "proveedores externos."
+                ),
                 wraplength=760,
             ).pack(anchor="w", pady=(0, 6))
             ttk.Entry(
@@ -1401,17 +1425,22 @@ def main() -> None:
             self.provider_endpoint_entry.configure(
                 state="normal" if provider_id == "openai-compatible" else "disabled"
             )
+            self.provider_model_entry.configure(
+                state="disabled" if provider_id == "ai-home-local" else "normal"
+            )
 
-        def _selected_provider(self) -> tuple[ProviderId, str]:
+        def _selected_provider(self) -> tuple[ChatProviderId, str]:
             provider = self.provider_id
             if not _is_provider_id(provider):
                 raise ValueError("Selecciona un proveedor compatible.")
+            if provider == "ai-home-local":
+                return provider, ""
             if provider == "openai-compatible":
                 configured_endpoint = self.endpoint_var.get().strip()
                 if not configured_endpoint:
                     raise ValueError(
                         "Configura un proveedor en «Conectar IA» antes de enviar "
-                        "mensajes. AI@Home aún no tiene un modelo propio."
+                        "mensajes."
                     )
                 endpoint = normalize_base_url(configured_endpoint)
                 if contains_common_secret(endpoint):
@@ -1425,6 +1454,8 @@ def main() -> None:
         def _save_provider_key(self) -> None:
             try:
                 provider, endpoint = self._selected_provider()
+                if provider == "ai-home-local":
+                    raise ValueError("El modelo local no necesita una clave API.")
                 save_provider_api_key(
                     provider,
                     endpoint,
@@ -1725,12 +1756,17 @@ def main() -> None:
                     if provider_id == "openai-compatible":
                         self.settings["chat_model"] = model
                     save_settings(self.settings)
+                    provider_api_key = entered_api_key
+                    if not provider_api_key and provider_id != "ai-home-local":
+                        provider_api_key = get_provider_api_key(
+                            provider_id,
+                            provider_url,
+                        )
                     operation = lambda: provider_completion(
                         provider_id,
                         model,
                         request_messages,
-                        api_key=entered_api_key
-                        or get_provider_api_key(provider_id, provider_url),
+                        api_key=provider_api_key,
                         endpoint_url=provider_url,
                     )
             except ValueError as error:
@@ -1822,10 +1858,11 @@ def main() -> None:
                     parent=self,
                 )
                 return
-            if not _is_provider_id(source_provider):
+            if not _is_training_provider(source_provider):
                 messagebox.showerror(
                     "AI@Home",
-                    "No se pudo verificar la procedencia de esta conversación.",
+                    "Solo se pueden aportar conversaciones de proveedores "
+                    "externos con procedencia verificable.",
                     parent=self,
                 )
                 return

@@ -22,6 +22,7 @@ from ai_home.desktop import (
     submit_training_candidate,
     withdraw_training_candidate,
 )
+from ai_home.providers import provider_completion
 
 
 def test_sphere_orientation_tracks_pointer_with_a_wide_smooth_range():
@@ -221,10 +222,69 @@ def test_load_settings_removes_legacy_ollama_configuration(
 
     assert settings == {
         "server_url": "https://community.example",
-        "chat_provider": "openai-compatible",
+        "chat_provider": "ai-home-local",
         "email": "alice@example.com",
     }
     assert json.loads(settings_path.read_text(encoding="utf-8")) == settings
+
+
+def test_load_settings_selects_local_model_after_old_endpoint_was_removed(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("ai_home.desktop.sys.platform", "linux")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    settings_path = tmp_path / "ai-home" / "desktop.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(
+        json.dumps(
+            {
+                "chat_provider": "openai-compatible",
+                "email": "alice@example.com",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    settings = load_settings()
+
+    assert settings == {
+        "chat_provider": "ai-home-local",
+        "email": "alice@example.com",
+    }
+
+
+def test_local_provider_routes_to_the_first_party_model(monkeypatch):
+    received_messages = []
+
+    def complete(messages):
+        received_messages.extend(messages)
+        return "Respuesta del modelo local."
+
+    monkeypatch.setattr("ai_home.local_llm.complete_locally", complete)
+
+    answer = provider_completion(
+        "ai-home-local",
+        "",
+        [{"role": "user", "content": "Hola"}],
+    )
+
+    assert answer == "Respuesta del modelo local."
+    assert received_messages == [{"role": "user", "content": "Hola"}]
+
+
+def test_local_provider_reports_missing_trained_checkpoint(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+
+    with pytest.raises(RuntimeError, match="todavía no está entrenado"):
+        provider_completion(
+            "ai-home-local",
+            "",
+            [{"role": "user", "content": "Hola"}],
+        )
 
 
 def test_provider_keys_use_keyring_and_are_partitioned_by_provider_and_endpoint(
