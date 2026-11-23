@@ -20,8 +20,8 @@ Las decisiones aquí registradas son iniciales y pueden revisarse con evidencia.
   permisos ni saldo.
 - **Motivo:** créditos y transiciones necesitan restricciones y transacciones
   duraderas.
-- **Alcance actual:** el primer núcleo probado usa SQLAlchemy y SQLite en
-  memoria; PostgreSQL, migraciones y despliegue no están validados todavía.
+- **Alcance actual:** el núcleo y la migración inicial se probaron con SQLite;
+  falta validar el runtime y las transacciones contra PostgreSQL.
 
 ## D-003 — Nodos voluntarios como entornos no confiables
 
@@ -41,11 +41,13 @@ Las decisiones aquí registradas son iniciales y pueden revisarse con evidencia.
 - **Consecuencia:** consentimiento granular, trazable y revocable para cada
   propósito.
 
-## D-005 — Licencia pendiente de decisión
+## D-005 — Apache-2.0 para el código del repositorio
 
-- **Estado:** pendiente.
-- **Decisión:** no añadir una licencia por defecto. Elegir una licencia de
-  software y definir licencias para documentación, modelos y datasets antes de
-  abrir el repositorio al público.
-- **Motivo:** “sin ánimo de lucro” y “código abierto” no determinan por sí
-  solos los derechos de uso y redistribución.
+- **Estado:** aceptada; aplicada en `LICENSE`.
+- **Decisión:** aplicar Apache License 2.0 al código del proyecto.
+- **Motivo:** licencia permisiva con concesión expresa de patentes, adecuada
+  para contribuciones de software comunitarias.
+- **Alcance:** no determina licencia ni permiso de redistribución para pesos de
+  modelos, datasets, contenido web, dependencias o marcas. Revisarlos
+  individualmente. Esta licencia tampoco crea una entidad legal sin ánimo de
+  lucro.

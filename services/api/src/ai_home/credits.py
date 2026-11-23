@@ -23,7 +23,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column
+
+from ai_home.database import Base
 
 
 class LedgerError(Exception):
@@ -44,10 +46,6 @@ class InsufficientCredits(LedgerError):
 
 class IdempotencyConflict(LedgerError):
     """Raised when an idempotency key is reused for a different transaction."""
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 class Account(Base):

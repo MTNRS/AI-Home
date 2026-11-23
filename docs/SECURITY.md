@@ -47,6 +47,18 @@ afirma que el producto tenga ya controles desplegados.
    probada.
 10. Evaluación de riesgos de extracción y memorización antes de usar datos
     privados en cualquier entrenamiento.
+11. Limitación de intentos de autenticación, protección de recuperación de
+    cuentas y operación segura de sesiones.
+
+## Controles implementados inicialmente
+
+- Contraseñas con Argon2id y validación mínima de longitud.
+- Tokens de sesión aleatorios, guardados como hash y revocables.
+- Consulta de perfil limitada al sujeto de la sesión; no hay endpoint de
+  lectura de perfiles ajenos.
+- La configuración rechaza SQLite cuando `AI_HOME_ENVIRONMENT=production`.
+
+Estos controles son una base de desarrollo, no una API lista para Internet.
 
 ## Reporte de vulnerabilidades
 

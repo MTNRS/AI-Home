@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+*.db
+*.sqlite
+*.sqlite3
 .pytest_cache/
 .venv/
 venv/
