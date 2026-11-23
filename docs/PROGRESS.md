@@ -41,7 +41,8 @@
 - Inventario local verificado: 16 hilos lógicos, 31 GiB de RAM y una NVIDIA
   GeForce RTX 4070 SUPER con 12 GiB de VRAM; la detección usa `nvidia-smi`.
 - CI aprobada en Python 3.11/3.12 con PostgreSQL 17: migraciones, API de
-  identidad, reclamación concurrente de trabajos, ledger y cliente de escritorio.
+  identidad, reclamación concurrente de trabajos, ledger, cliente de escritorio
+  y proxy de chat autenticado.
 - Suite local más reciente: `python -m pytest -q` — 52 pruebas aprobadas y 4
   pruebas PostgreSQL omitidas por no haber servidor disponible localmente.
 - Migración Alembic inicial verificada en SQLite, comparada con el metadata
@@ -50,8 +51,8 @@
 
 ## Aún no implementado
 
-- Ejecutar en GitHub Actions el nuevo proxy de chat autenticado junto con la
-  matriz PostgreSQL; PostgreSQL no está disponible localmente.
+- PostgreSQL no está disponible localmente; su integración y concurrencia se
+  validan mediante GitHub Actions.
 - Endurecimiento de producción de autenticación: límite de intentos,
   verificación de correo y recuperación de cuenta.
 - Detección de hardware en otros equipos y sistemas operativos; CUDA es

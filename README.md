@@ -119,8 +119,8 @@ python -m pytest
 
 Las pruebas locales de dominio/API usan SQLite en memoria. GitHub Actions está
 configurada para probar Python 3.11 y 3.12 e integración/concurrencia con
-PostgreSQL 17; las pruebas automatizadas del cliente de escritorio también
-pasaron en ambas versiones.
+PostgreSQL 17; las pruebas automatizadas del cliente de escritorio y el proxy
+de chat pasaron en ambas versiones.
 
 ## Estado y límites
 
