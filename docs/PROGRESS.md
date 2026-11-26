@@ -1388,3 +1388,13 @@ botones visibles, textos legibles, sin solapamientos observados. Ventanas de
 prueba cerradas. Limitación: solo DPI actual. CI Tests de 28fc6c8 completado
 correctamente (45839308547); Foundation 45839308567 seguía en instalación de
 Xvfb, con pytest y smokes previos aprobados, al registrar esta actualización.
+
+### Aislamiento del nodo entre perfiles
+
+Corregidos dos comportamientos: el cambio de perfil ahora detiene el bucle del
+nodo e invalida sus eventos pendientes; la reutilización de credenciales exige
+verificar propiedad con la sesión actual. Smoke real CPU/HTTP/Tk confirma bloqueo
+de reutilización cruzada después de ejecutar y liquidar un gradiente. Tk confirma
+parada y reinicio de consentimientos. 36 pruebas de escritorio/privacidad pasan.
+La verificación de propiedad conserva el límite de 100 nodos del listado actual;
+trabajos ya iniciados pueden terminar para la cuenta original.

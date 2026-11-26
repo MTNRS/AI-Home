@@ -2694,7 +2694,9 @@ def main() -> None:
                         self.status_var.set("Error")
                         messagebox.showerror("AI@Home", str(error), parent=self)
                 elif kind == "node_status":
-                    self.status_var.set(str(payload))
+                    status, valid = payload
+                    if valid():
+                        self.status_var.set(status)
             self.after(100, self._drain_events)
 
         def _credentials(self) -> tuple[str, str, str]:
@@ -3010,6 +3012,13 @@ def main() -> None:
         def _switch_memory_profile(self, server_url=None, user_id=None) -> None:
             vault = profile_memory_vault(server_url, user_id)
             notes = load_memories(vault)
+            if self.node_stop is not None:
+                self.node_stop.set()
+            self.node_stop = None
+            self.node_registration_active = False
+            self.consent_var.set(False)
+            self.node_training_var.set(False)
+            self.transfer_probe_var.set(False)
             for window in self.private_windows:
                 if window.winfo_exists():
                     window.destroy()
@@ -3454,7 +3463,18 @@ def main() -> None:
                 self._launch_node(server_url, credentials.node_id, credentials.node_token)
 
             if token:
-                self._launch_node(server_url, existing_id, token)
+                def verify_owned_node():
+                    with httpx.Client(base_url=server_url, timeout=20) as client:
+                        response = client.get("/api/v1/nodes", headers={"Authorization": f"Bearer {user_token}"})
+                        response.raise_for_status()
+                        if not any(node["node_id"] == existing_id for node in response.json()):
+                            raise ValueError("El nodo guardado no pertenece a esta cuenta o está revocado. Inicia sesión con su propietario para gestionarlo.")
+                self.node_registration_active = True
+                def on_owned(_):
+                    self.node_registration_active = False
+                    self._launch_node(server_url, existing_id, token)
+                self._background(verify_owned_node, on_owned,
+                                 lambda: setattr(self, "node_registration_active", False))
             else:
                 self.node_registration_active = True
                 self._background(
@@ -3489,6 +3509,7 @@ def main() -> None:
                               allow_foundation_training=allow_training,
                               foundation_device=foundation_device if allow_training else "cpu",
                               transfer_probe_interval=60 if measure_transfer else None)
+            valid = lambda: self.node_stop is stop_event
             try:
                 agent.configure_capabilities()
                 while not stop_event.is_set():
@@ -3503,13 +3524,13 @@ def main() -> None:
                             status += "; medición HTTP fallida (se reintentará)"
                         elif agent.last_transfer_measurement is not None:
                             status += "; medición HTTP enviada"
-                    self.events.put(("node_status", status))
+                    self.events.put(("node_status", (status, valid)))
                     stop_event.wait(10)
             except Exception as error:
-                self.events.put(("error", error))
+                self.events.put(("error", (error, None, valid)))
             finally:
                 agent.close()
-                self.events.put(("node_status", f"Nodo {node_id} detenido."))
+                self.events.put(("node_status", (f"Nodo {node_id} detenido.", valid)))
 
         def _stop_contribution(self) -> None:
             if self.node_stop is None:

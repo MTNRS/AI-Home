@@ -350,3 +350,23 @@ trabajo completado, trabajador gana 3 créditos, solicitante disponible/reservad
 revisión del arnés falló por importar messagebox desde el módulo equivocado;
 se corrigió y las dos ejecuciones finales pasaron. CI incorpora ahora el mismo
 flujo CPU contra el paquete instalado bajo Xvfb; su ejecución queda pendiente.
+
+## Aislamiento del nodo al cambiar de cuenta
+
+Cambiar de perfil solicita detener el bucle del nodo, invalida sus mensajes de
+estado/error pendientes y reinicia los consentimientos de contribución,
+entrenamiento y sondeo. Un trabajo ya iniciado puede terminar y liquidarse a
+la cuenta original; no se transfiere a la nueva cuenta. Antes de reutilizar una
+credencial guardada, el escritorio consulta los nodos activos de la cuenta
+actual en el servidor y exige encontrar el identificador guardado. Si no puede
+verificarlo, no inicia el nodo. Esta consulta usa el listado existente limitado
+a los 100 nodos más recientes: un nodo antiguo fuera de esa lista tampoco se
+reutiliza. No borra ni revoca automáticamente credenciales de otra cuenta.
+
+Verificado con Tk y HTTP reales en `verify_desktop_node.py`: una cuenta crea el
+nodo, completa un gradiente y gana créditos; al cambiar a la otra cuenta, el
+intento de reutilizarlo se rechaza y no nace otro trabajador. Los estados
+pendientes anteriores no sustituyen el estado del nuevo perfil. Informe:
+`DESKTOP_NODE_ISOLATION_SMOKE.json`. La prueba de cambio de perfil visual comprueba
+también la señal de parada y los consentimientos; 36 pruebas de escritorio y
+privacidad aprobadas. No se simula cálculo neuronal en este ensayo.

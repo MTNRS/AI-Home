@@ -139,11 +139,33 @@ try:
                     assert node.hardware['resources']['foundation_device'] == args.device
                     assert 'transfer_measurement' in node.hardware
                     hardware = dict(node.hardware)
+                old_thread = window.node_thread
+                previous_stop = window.node_stop
+                window._switch_memory_profile(url, owner_id)
+                window.session_token = owner_token
+                window.status_var.set('NEW-PROFILE')
+                window._drain_events()
+                assert previous_stop.is_set() and window.node_stop is None
+                assert window.status_var.get() == 'NEW-PROFILE'
+                assert not window.consent_var.get() and not window.node_training_var.get()
+                errors = []
+                messagebox.showerror = lambda *a, **kw: errors.append(a)
+                window.consent_var.set(True)
+                window._start_contribution()
+                deadline = time.monotonic() + 10
+                while window.node_registration_active and time.monotonic() < deadline:
+                    window.update()
+                    window._drain_events()
+                    time.sleep(.01)
+                assert errors and 'no pertenece' in str(errors)
+                assert window.node_thread is old_thread and not old_thread.is_alive()
                 report = {'format': 'ai-home-desktop-node-smoke-v1', 'device': args.device,
                     'transport': 'real loopback HTTP', 'job_status': job['status'],
                     'token_count': job['result']['token_count'], 'worker_credits': worker_credits,
                     'owner_credits': owner_credits,
                     'transfer_measurement': hardware['transfer_measurement'],
+                    'cross_account_node_reuse_blocked': True,
+                    'old_node_status_discarded': True,
                     'claim': 'Real Tk registration and node loop; one host; synthetic accounts and test credits; no general capability claim'}
                 (output / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
                 (output / 'result.json').write_text(json.dumps(job['result']), encoding='utf-8')

@@ -54,6 +54,7 @@ def test_profile_switch_clears_chat_and_closes_old_memory_dialogs(tmp_path, monk
         private_windows=[window], memory_notes=["old secret"],
         prompt=Mock(), api_key_var=Mock(), use_knowledge_var=Mock(), prompt_is_placeholder=True,
         _clear_chat=Mock(), server_version_combo=Mock(), stream_enabled_var=Mock(),
+        node_stop=Mock(), consent_var=Mock(), node_training_var=Mock(), transfer_probe_var=Mock(),
     )
     method("_switch_memory_profile")(app, "https://one.example", str(uuid4()))
     assert app.memory_notes == []

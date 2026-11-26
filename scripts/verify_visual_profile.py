@@ -61,7 +61,13 @@ def run(app, *args):
         next(w for w in widgets if isinstance(w, ttk.Button) and w.cget("text") == "Generar").invoke()
         assert started.wait(2), "Worker did not start"
         app.session_token = "synthetic-new-session"
+        node_stop = threading.Event()
+        app.node_stop = node_stop
+        app.consent_var.set(True)
+        app.node_training_var.set(True)
         app._switch_memory_profile("https://example.invalid", "00000000-0000-0000-0000-000000000002")
+        assert node_stop.is_set() and app.node_stop is None
+        assert not app.consent_var.get() and not app.node_training_var.get()
         assert not old.winfo_exists()
         assert stopped.wait(2), "Destroyed profile window did not cancel producer"
         new = visual_desktop.open_visual_dialog(app)
