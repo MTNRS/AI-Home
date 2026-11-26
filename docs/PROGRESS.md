@@ -1760,3 +1760,10 @@ legibles sin solapamientos; en minimo, Revocar es accesible mediante scroll; en
 normal, todos los controles visibles. Fixtures cerradas correctamente. No hubo
 cambios de permisos ni actividad de red. Evidencia limitada al DPI actual;
 actualizado DESKTOP_VISUAL_REVIEW.md, sin cambios de codigo necesarios.
+
+### Revision visual del dialogo de evolucion
+
+Verificados 900x650 y 640x520 en Windows con Computer Use: campos, controles y
+mensaje inicial visibles sin solapamientos. Casilla de disco accesible. Fixtures
+cerradas correctamente, sin activar permisos ni ejecutar trabajos. Documentado
+alcance limitado al DPI/estado observado; no se necesitaron cambios de codigo.

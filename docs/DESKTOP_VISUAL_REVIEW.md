@@ -152,3 +152,17 @@ seleccionar/activar exclusivamente la ventana de prueba antes de evaluar el pane
 La evidencia corresponde al DPI actual de este escritorio, no a escalas distintas
 ni a una auditoria completa de accesibilidad. Los smokes funcionales CPU/CUDA
 siguen documentados por separado.
+
+### Dialogo de evolucion con cache de secuencias (revision 06cad73)
+
+Inspeccionado nativamente en Windows a 900x650 (tamano inicial) y 640x520
+(tamano reducido de prueba, no minimo impuesto). Son visibles los siete campos
+de archivos/salida, selector de dispositivo, learning rate, tokens, consentimiento
+SFT, casilla de secuencias en disco, Ejecutar/Parar y mensaje inicial. No se
+observaron solapamientos ni recortes en esos estados. No hubo que modificar el
+layout. No se activaron permisos ni se ejecuto entrenamiento mediante la UI.
+Ambas fixtures aisladas se cerraron con salida cero.
+
+La inspeccion cubre el DPI actual y el estado inicial. No comprueba todos los
+mensajes de error largos, traducciones, tamanos inferiores ni accesibilidad
+completa. Las pruebas funcionales de entrenamiento y cancelacion son separadas.
