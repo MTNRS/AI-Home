@@ -21,6 +21,31 @@ def file_hash(path):
     return digest.hexdigest()
 
 
+def compare_evaluations(baseline, candidate):
+    for key in ("suite_sha256", "generation", "device", "torch_version"):
+        if baseline.get(key) != candidate.get(key):
+            raise ValueError(f"Evaluation comparison requires matching {key}")
+    if not baseline["all_prompts_fit"] or not candidate["all_prompts_fit"]:
+        raise ValueError("Truncated evaluation cannot establish regression safety")
+    old = {row["id"]: row for row in baseline["results"]}
+    new = {row["id"]: row for row in candidate["results"]}
+    if set(old) != set(new) or any(old[key]["category"] != new[key]["category"] for key in old):
+        raise ValueError("Evaluation probe sets differ")
+    regressions = sorted(key for key in old if old[key]["passed"] and not new[key]["passed"])
+    gains = sorted(key for key in old if not old[key]["passed"] and new[key]["passed"])
+    categories = {}
+    for category in sorted({row["category"] for row in old.values()}):
+        ids = [key for key in old if old[key]["category"] == category]
+        before = sum(old[key]["passed"] for key in ids)
+        after = sum(new[key]["passed"] for key in ids)
+        categories[category] = {"total": len(ids), "baseline_passed": before,
+                                "candidate_passed": after, "delta": after - before}
+    return {"baseline_checkpoint_sha256": baseline["checkpoint_sha256"],
+            "candidate_checkpoint_sha256": candidate["checkpoint_sha256"],
+            "suite_sha256": candidate["suite_sha256"], "regressions": regressions,
+            "gains": gains, "categories": categories, "passed": not regressions}
+
+
 class ModelRegistry:
     def __init__(self, directory):
         self.directory = Path(directory).resolve()
@@ -32,6 +57,9 @@ class ModelRegistry:
                     id TEXT PRIMARY KEY, checkpoint_hash TEXT NOT NULL,
                     evaluation TEXT NOT NULL, created REAL NOT NULL,
                     approved_by TEXT, approved_at REAL, minimum_accuracy REAL);
+                CREATE TABLE IF NOT EXISTS approval_comparisons (
+                    candidate_id TEXT PRIMARY KEY REFERENCES candidates(id),
+                    baseline_id TEXT REFERENCES candidates(id), comparison TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS activation (
                     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
                     candidate_id TEXT NOT NULL REFERENCES candidates(id),
@@ -100,9 +128,12 @@ class ModelRegistry:
                 raise ValueError("Unknown model candidate")
             result = dict(row)
             result["evaluation"] = json.loads(result["evaluation"])
+            comparison = db.execute("SELECT baseline_id, comparison FROM approval_comparisons WHERE candidate_id=?", (version,)).fetchone()
+            result["approval_comparison"] = None if comparison is None else {
+                "baseline_id": comparison["baseline_id"], "result": json.loads(comparison["comparison"])}
             return result
 
-    def approve(self, version, *, operator, minimum_accuracy=1.0):
+    def approve(self, version, *, operator, minimum_accuracy=1.0, baseline_version=None):
         if not isinstance(operator, str) or not operator.strip() or len(operator) > 200:
             raise ValueError("Approval operator required")
         if type(minimum_accuracy) not in (int, float) or not 0 <= minimum_accuracy <= 1:
@@ -120,6 +151,25 @@ class ModelRegistry:
                 raise ValueError("Candidate does not pass approval gates")
             if row["approved_by"] is not None:
                 raise ValueError("Candidate approval already recorded")
+            baseline_id = baseline_version
+            if baseline_id is None:
+                active = db.execute("SELECT candidate_id FROM activation ORDER BY sequence DESC LIMIT 1").fetchone()
+                if active is not None:
+                    baseline_id = active["candidate_id"]
+                else:
+                    latest = db.execute("SELECT id FROM candidates WHERE approved_by IS NOT NULL ORDER BY approved_at DESC, id LIMIT 1").fetchone()
+                    baseline_id = latest["id"] if latest is not None else None
+            comparison = {"bootstrap": True, "passed": True}
+            if baseline_id is not None:
+                baseline = db.execute("SELECT * FROM candidates WHERE id=?", (baseline_id,)).fetchone()
+                if baseline is None or baseline["approved_by"] is None or baseline_id == version:
+                    raise ValueError("Regression baseline must be another approved candidate")
+                self.checkpoint(baseline["checkpoint_hash"])
+                comparison = compare_evaluations(json.loads(baseline["evaluation"]), report)
+                if not comparison["passed"]:
+                    raise ValueError("Candidate regresses on previously passing probes")
+            db.execute("INSERT INTO approval_comparisons VALUES (?, ?, ?)",
+                       (version, baseline_id, json.dumps(comparison, sort_keys=True)))
             db.execute("UPDATE candidates SET approved_by=?, approved_at=?, minimum_accuracy=? WHERE id=?",
                        (operator, time.time(), minimum_accuracy, version))
 
@@ -160,6 +210,7 @@ def main():
     approve = commands.add_parser("approve")
     approve.add_argument("version")
     approve.add_argument("--operator", required=True)
+    approve.add_argument("--baseline", default=None)
     approve.add_argument("--minimum-accuracy", type=float, default=1.0)
     activate = commands.add_parser("activate")
     activate.add_argument("version")
@@ -176,7 +227,7 @@ def main():
     elif args.command == "inspect":
         print(json.dumps(registry.inspect(args.version), indent=2))
     elif args.command == "approve":
-        registry.approve(args.version, operator=args.operator, minimum_accuracy=args.minimum_accuracy)
+        registry.approve(args.version, operator=args.operator, minimum_accuracy=args.minimum_accuracy, baseline_version=args.baseline)
     elif args.command == "activate":
         registry.activate(args.version, operator=args.operator, reason=args.reason)
     else:

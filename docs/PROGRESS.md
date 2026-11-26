@@ -274,3 +274,16 @@ evaluation, explicit approval gates, transactional activation history and rollba
 Foundation API serving can select the active approved registry version. Direct
 checkpoint mode remains available and is not an approval claim. See
 [Model registry](MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.
+
+
+### Model approval regression gate (2026-11-26)
+
+Subsequent registry approvals now compare compatible retained evaluations against
+an approved baseline. The default is the active version (or most recent approval),
+with explicit baseline selection available and recorded. Previously passing probe
+regressions block approval even when total accuracy is unchanged. Category deltas
+and gained/lost probe IDs are committed atomically with approval. Incompatible
+suite/runtime settings fail closed. Existing approvals are preserved without
+inventing historical evidence.
+
+Validation: full CUDA-enabled suite 192 passed, 4 PostgreSQL tests skipped.

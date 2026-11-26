@@ -54,10 +54,34 @@ the retained bytes, and verify fail-closed inference without path disclosure.
 Zero-threshold approval is test-only evidence of lifecycle mechanics. No useful
 conversational capability or production release is claimed.
 
-The registry has no public mutation API or remote publication. Category-by-category
-regression comparison, approved-suite policies, signatures, revocation, desktop
+The registry has no public mutation API or remote publication. Approved-suite policies, signatures, revocation, desktop
 version selection, and multi-host deployment remain outstanding. Stored content
 hashes detect changes, not malicious modification by someone with registry write
 access. The full checkpoint is hashed on each selection, which favors verification
 over latency; production-scale serving will require immutable deployment storage
 and measured caching. Current registration file budget defaults to 2 GB.
+
+
+## Regression gate for subsequent approvals
+
+The first approved version is recorded as a bootstrap approval. Subsequent
+approvals compare against the active approved version, or the most recently
+approved version when none has been activated. An operator can explicitly select
+another approved baseline with `approve ... --baseline VERSION_ID`; that choice
+is retained in the approval record and is not an automatic claim of comparison
+to the active model.
+
+The reports must match suite hash, generation settings, device and PyTorch version,
+with all prompts fitting. The gate rejects every previously passing probe that
+now fails, even if the total score or category total stays unchanged. The retained
+comparison includes category deltas, gained/lost probe IDs and both checkpoint
+hashes. Approval plus comparison are committed in one SQLite transaction; a failed
+gate leaves the candidate unapproved. `inspect` includes this comparison.
+
+Existing approved versions created before this extension remain approved and have
+no retroactively invented comparison. Rollback can still reactivate a previously
+approved version without pretending it is a new improvement. This gate covers the
+fixed declarative probes only; it does not measure catastrophic forgetting across
+all knowledge or replace held-out loss/regression experiments. Changes to the
+suite/runtime require a deliberate evaluation policy transition; comparisons are
+not silently accepted across incomparable runs.
