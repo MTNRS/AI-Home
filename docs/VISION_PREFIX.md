@@ -64,3 +64,31 @@ reanudación, evaluación independiente e interfaz. El
 formato actual de checkpoint textual no acepta este wrapper. No se publica ni
 activa automáticamente, y no se conecta a contribuciones o nodos voluntarios.
 No se ha demostrado capacidad de describir, reconocer o razonar sobre imágenes.
+
+## Archivos locales e inferencia por CLI
+
+Instalar el extra `.[llm]`, que incluye Pillow >=12.2,<14.0. El módulo
+`foundation.vision_images.load_image` limita el archivo a 8 MB y la imagen a
+4 millones de píxeles antes de decodificarla. Solo admite PNG/JPEG de un cuadro.
+Aplica orientación EXIF, compone alpha sobre blanco y ajusta con interpolación
+bilineal y relleno blanco sin deformar la proporción. No aplica conversión ICC.
+Devuelve píxeles CPU FP32 en [0,1], hash del archivo y versión del preprocesamiento;
+no devuelve EXIF, nombre de archivo ni rutas. No convierte estos datos en un corpus
+ni concede permisos de entrenamiento. Referencia API:
+[Pillow ImageOps](https://pillow.readthedocs.io/en/stable/reference/ImageOps.html).
+
+```powershell
+$env:PYTHONPATH='services/api/src'
+python -m ai_home.foundation.vision_inference --checkpoint candidate.pt --image own.png --prompt "Describe" --device cpu --max-new-tokens 32
+```
+
+La CLI carga exclusivamente el formato candidato visual y ejecuta generación
+real local. Los checkpoints textuales no son compatibles. No ofrece garantías de
+calidad visual. El preprocesamiento debe mantenerse igual durante entrenamiento.
+
+Pruebas locales con Pillow 13.0.0: 6 passed in 1.80s para imágenes e inferencia;
+tras añadir prueba de CLI con pesos e imagen reales, 4 passed in 2.76s para imágenes.
+Incluyen padding, alpha, EXIF, JPEG, límites, corrupción y rechazo de animación.
+La instalación local mostró un conflicto con Streamlit 1.38 heredado del entorno
+global (requiere Pillow<11); no se alteró esa instalación. AI@Home no depende de
+Streamlit. Se recomienda su entorno aislado documentado para reproducción.

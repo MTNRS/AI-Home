@@ -1125,3 +1125,12 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - 18 pruebas pasaron en 18.23s (generación visual y regresión del modelo textual).
   Sin afirmaciones de calidad visual; datasets, entrenamiento reanudable e interfaz
   continúan pendientes. Véase [VISION_PREFIX.md](VISION_PREFIX.md).
+
+## 2026-11-26 — Entrada visual local y CLI
+
+- PNG/JPEG acotados, orientación EXIF, alpha sobre blanco, proporción conservada y
+  preprocesamiento versionado; solo píxeles y metadatos mínimos de hash/formato.
+- CLI conecta checkpoint visual real, archivo y generación local.
+- 6 pruebas imágenes/inferencia pasaron; 4 pruebas de imágenes pasaron tras añadir
+  la CLI. Pillow 13.0.0 en entorno CUDA; conflicto heredado Streamlit documentado.
+- Sin entrenamiento automático con imágenes ni capacidades visuales demostradas.
