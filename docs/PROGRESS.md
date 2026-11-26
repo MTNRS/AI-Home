@@ -791,3 +791,15 @@ La rama se publicó en la PR borrador #1; main permanece intacta. CI de código
 CUDA por versión; Foundation CPU, 262 correctas y 13 omisiones opcionales, más
 smoke real y artefacto. Se corrigieron dependencia torch ausente en la matriz y
 una carrera del test de cancelación, sin relajar gates ni omitir esos tests.
+
+### Primer conector público de conocimiento por red
+
+Implementado github-text-v1 con commit inmutable, host fijo, descarga acotada,
+sin credenciales/redirecciones y registro extensible de conectores instalados.
+Produce candidatos pendientes con hashes de bytes/texto, licencia declarada no
+verificada y permisos de entrenamiento/recuperación desactivados. Integrado con
+la revisión existente; las pruebas verifican permisos separados y rechazo de
+fuentes mutables, rutas inválidas, redirecciones, HTTP fallido y exceso de bytes.
+Descarga real de dos documentos AI-Home: 24.891 bytes JSONL; evidencia en
+GITHUB_CONNECTOR_SMOKE.json, sin aprobación automática. Suite Windows/CUDA:
+280 correctas, 5 PostgreSQL omitidas. Documentación en KNOWLEDGE_CONNECTORS.md.

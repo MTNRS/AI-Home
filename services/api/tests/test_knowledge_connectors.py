@@ -1,0 +1,61 @@
+import json
+
+import httpx
+import pytest
+
+from ai_home.knowledge_connectors import acquire
+from ai_home.knowledge_ingest import create_review_template, approve_records
+from ai_home.foundation.data import load_records
+
+
+def spec(path="README.md"):
+    return dict(connector="github-text-v1", repository="example/project", commit="a" * 40,
+                path=path, license="Apache-2.0", language="es")
+
+
+def test_public_connector_requires_review_before_use(tmp_path):
+    seen = []
+    def respond(request):
+        seen.append(request)
+        return httpx.Response(200, content=("Contenido autorizado " + request.url.path + "\r\n").encode())
+    pending = tmp_path / "pending.jsonl"
+    result = acquire([spec(), spec("docs/other.md")], pending, transport=httpx.MockTransport(respond))
+    assert result["documents"] == 2
+    assert all(r.url.host == "raw.githubusercontent.com" and "authorization" not in r.headers for r in seen)
+    rows = [json.loads(line) for line in pending.read_text(encoding="utf-8").splitlines()]
+    assert all(not r["training_allowed"] and not r["retrieval_allowed"] and not r["privacy_reviewed"] for r in rows)
+    assert rows[0]["source_sha256"] != rows[0]["sha256"]
+    review = tmp_path / "review.json"
+    create_review_template(pending, review)
+    approved = tmp_path / "dataset.json"
+    with pytest.raises(ValueError):
+        approve_records(pending, review, approved)
+    data = json.loads(review.read_text(encoding="utf-8"))
+    data.update(reviewer="fixture reviewer", date="2026-11-26")
+    for row in data["records"]:
+        row.update(privacy_reviewed=True, license_reviewed=True, retrieval_allowed=True)
+    review.write_text(json.dumps(data), encoding="utf-8")
+    approve_records(pending, review, approved)
+    assert len(load_records(approved, purpose="retrieval")[0]) == 2
+    with pytest.raises(ValueError, match="Training authorization"):
+        load_records(approved)
+
+
+@pytest.mark.parametrize("change", [{"commit": "main"}, {"path": "../secret.txt"},
+                                    {"repository": "https://example.com"}, {"path": "file.exe"},
+                                    {"connector": "arbitrary.module"}])
+def test_connector_rejects_unsafe_or_mutable_specs(tmp_path, change):
+    def forbidden(request):
+        pytest.fail("Invalid source must not issue a request")
+    with pytest.raises(ValueError):
+        acquire([{**spec(), **change}], tmp_path / "output", transport=httpx.MockTransport(forbidden))
+
+
+@pytest.mark.parametrize("response", [httpx.Response(302, headers={"location": "http://localhost/private"}),
+                                      httpx.Response(200, content=b"x" * 500001),
+                                      httpx.Response(200, content=b"\x00bad"), httpx.Response(403)])
+def test_download_failures_publish_no_pending_batch(tmp_path, response):
+    path = tmp_path / "output"
+    with pytest.raises((ValueError, httpx.HTTPError)):
+        acquire([spec()], path, transport=httpx.MockTransport(lambda _: response))
+    assert not path.exists()

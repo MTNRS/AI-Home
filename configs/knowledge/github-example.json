@@ -1,0 +1,18 @@
+[
+  {
+    "connector": "github-text-v1",
+    "repository": "MTNRS/AI-Home",
+    "commit": "2ddea7dd3c2a048212ca3e64b68190a26080ed76",
+    "path": "README.md",
+    "license": "Apache-2.0",
+    "language": "es"
+  },
+  {
+    "connector": "github-text-v1",
+    "repository": "MTNRS/AI-Home",
+    "commit": "2ddea7dd3c2a048212ca3e64b68190a26080ed76",
+    "path": "docs/ARCHITECTURE.md",
+    "license": "Apache-2.0",
+    "language": "es"
+  }
+]
