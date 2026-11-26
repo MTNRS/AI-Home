@@ -873,3 +873,14 @@ secretos, permisos, duplicados, revisión y compatibilidad de exportaciones prev
 Suite: 286 correctas, 5 PostgreSQL omitidas; comprobación final correcciones/revisión/
 migración: 10 correctas. No se migró producción. Ver TRAINING_CORRECTIONS.md.
 Interfaz de edición, contribuciones del propio proveedor y preferencias pendientes.
+
+### Procedencia Foundation en contribuciones consentidas
+
+El contrato de contribución admite ai-home-foundation con digest SHA-256 exacto
+como modelo y URI Foundation coincidente. No acepta nombres mutables ni URLs de
+proveedores para esa procedencia. Mantiene consentimiento, derechos y revisión.
+Test con checkpoint realmente entrenado y respuesta generada enlaza contribución
+y corrección; el servidor no confunde una declaración del cliente con atestación
+remota. Suite: 287 correctas, 5 PostgreSQL omitidas. CI PostgreSQL de la revisión
+anterior dfb7c70 (incluye migración 0009) pasó en run 45816699410. Falta transportar
+la identidad cargada en el escritorio antes de habilitar su envío Foundation.

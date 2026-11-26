@@ -6,6 +6,37 @@ from test_training_review import client, register_and_login, create_candidate, a
 from test_training_contributions import register_and_login as another_user, candidate_payload
 
 
+def test_real_foundation_reply_can_enter_consented_correction_pipeline(client, tmp_path):
+    from ai_home.foundation.training import train, TrainingConfig
+    from ai_home.foundation.checkpoint import load_checkpoint
+    from ai_home.foundation.inference import stream_text
+    from test_foundation_model import config, records
+    checkpoint = tmp_path / "own.pt"
+    train(records(), checkpoint, config(), TrainingConfig(steps=1, warmup=0), "cpu")
+    model, tokenizer, _ = load_checkpoint(checkpoint)
+    messages = [{"role": "user", "content": "Hi"}]
+    reply = "".join(stream_text(model, tokenizer, messages, max_new_tokens=4, temperature=0))
+    assert reply.strip()
+    messages.append({"role": "assistant", "content": reply})
+    token = register_and_login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    data = candidate_payload(provider="ai-home-foundation", model=model.checkpoint_sha256,
+                             source_endpoint=f"ai-home-foundation://sha256/{model.checkpoint_sha256}", messages=messages)
+    for change in ({"model": "mutable-model.pt"}, {"source_endpoint": "https://example.org"},
+                   {"consent": False}, {"provider_terms_allow_reuse": False}):
+        assert client.post("/api/v1/training/conversations", headers=headers, json={**data, **change}).status_code == 422
+    response = client.post("/api/v1/training/conversations", headers=headers, json=data)
+    assert response.status_code == 201 and response.json()["status"] == "pending_review"
+    correction = {key: data[key] for key in ("consent", "consent_version", "consent_scope",
+                                            "provider_terms_allow_reuse", "content_reviewed_for_sensitive_data")}
+    correction.update(conversation_id=str(uuid4()), message_index=1, replacement="A human-authored correction.")
+    corrected = client.post("/api/v1/training/conversations/" + response.json()["contribution_id"] + "/corrections",
+                            headers=headers, json=correction)
+    assert corrected.status_code == 201
+    assert corrected.json()["provider"] == "ai-home-foundation"
+    assert corrected.json()["model"] == model.checkpoint_sha256
+
+
 def test_correction_is_separate_consented_reviewed_and_exported(client, tmp_path):
     from ai_home.foundation.contributions import load_reviewed_export
     token = register_and_login(client)

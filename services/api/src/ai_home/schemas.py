@@ -107,6 +107,7 @@ class TrainingContributionRequest(BaseModel):
 
     conversation_id: UUID
     provider: Literal[
+        "ai-home-foundation",
         "openai",
         "anthropic",
         "gemini",
@@ -143,6 +144,12 @@ class TrainingContributionRequest(BaseModel):
             raise ValueError("A conversation must contain an assistant message.")
         if sum(len(message.content) for message in self.messages) > 32_000:
             raise ValueError("The conversation is too large to submit.")
+        if self.provider == "ai-home-foundation":
+            if not re.fullmatch(r"[0-9a-f]{64}", self.model):
+                raise ValueError("Foundation contributions require an exact checkpoint SHA-256")
+            if self.source_endpoint != f"ai-home-foundation://sha256/{self.model}":
+                raise ValueError("Foundation provenance must match the checkpoint digest")
+            return self
         normalized_endpoint = normalize_base_url(self.source_endpoint)
         if contains_common_secret(normalized_endpoint):
             raise ValueError("The provider endpoint must not contain credentials.")
