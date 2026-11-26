@@ -9,9 +9,9 @@ otros documentos describen el estado en que se escribieron, no el estado actual.
 ## Evidencia vigente de ejecución y entrega
 
 - Rama: `codex/foundation-validation`; PR borrador [#1](https://github.com/MTNRS/AI-Home/pull/1).
-- Revisión validada remotamente en este inventario: `3990136` (incluye vía visual y aislamiento de perfil). FP16/BF16 CUDA se verificaron localmente, no en los runners CPU.
-- [Matriz Linux/PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45832873887): Python 3.11 y 3.12, cada uno 340 pruebas correctas y 13 omitidas.
-- [Foundation CPU](https://github.com/MTNRS/AI-Home/actions/runs/45832874139): 333 correctas, 20 omitidas; smoke visual, paquete Nano, Tk, aislamiento visual de perfil y API/distribuido desde wheel también correctos.
+- Revisión validada remotamente en este inventario: `0a494aa` (incluye entrenamiento visual desde Tk y separación de píxeles entre particiones). FP16/BF16 CUDA se verificaron localmente, no en los runners CPU.
+- [Matriz Linux/PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45835023167): Python 3.11 y 3.12, cada uno 349 pruebas correctas y 13 omitidas.
+- [Foundation CPU](https://github.com/MTNRS/AI-Home/actions/runs/45835023241): 342 correctas, 20 omitidas; smoke visual, paquete Nano, Tk, aislamiento visual de perfil y API/distribuido desde wheel también correctos.
 - Experimento visual CUDA posterior: tres colores sólidos, 18 imágenes train y seis intensidades reservadas, 0/6 → 6/6 aciertos después de 200 pasos; control blanco 2/6. Evidencia limitada al generador sintético, no visión general. [Protocolo, resultados y límites](VISION_PREFIX.md).
 - Última suite local completa: 296 correctas, 7 PostgreSQL omitidas y 3 fallos por RAM insuficiente. Las tres pruebas pasaron en reintentos aislados sin rebajar protecciones; no fue una ejecución completa local en verde. PostgreSQL local separado: 7 correctas.
 - Reproducción con wheel instalado y pruebas CPU/CUDA: [alcance y comandos](CLEAN_REPRODUCTION.md). Visor de trabajos revisado visualmente en 860×640 y 640×480: [evidencia y límites](DESKTOP_VISUAL_REVIEW.md).

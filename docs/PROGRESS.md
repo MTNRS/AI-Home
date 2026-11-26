@@ -1287,3 +1287,12 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   aunque difieran bytes/resolución/metadatos; carga una imagen a la vez.
 - 27 pruebas pasaron en 5.16s. Reevaluación CUDA de colores conserva 6/6 y control
   2/6 tras verificar separación; VISUAL_COLOR_PIXEL_CHECK.json. No detecta near-duplicates.
+
+## 2026-11-26 — Entrenamiento visual instalado verificado en Linux
+
+- Revisión 0a494aa, Foundation 45835023241 success: 342 passed/20 skipped.
+  Tk instalado mostró métricas, canceló entrenamiento real y guardó checkpoint
+  coincidente; smokes, aislamiento de perfil, API y distribuido también pasaron.
+- PostgreSQL 45835023167: Python 3.11/3.12, 349 passed/13 skipped cada uno.
+- README enlaza vía visual con límites explícitos; primer hito marcado histórico.
+  FOUNDATION_STATUS actualizado, sin declarar completado el objetivo.

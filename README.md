@@ -1,6 +1,8 @@
 # AI@Home
 
-Estado experimental Foundation: [inventario de implementación, pruebas y pendientes](docs/FOUNDATION_STATUS.md). [PR de desarrollo #1](https://github.com/MTNRS/AI-Home/pull/1), todavía en borrador. Las pruebas de entrenamiento propio no demuestran calidad conversacional ni multimodalidad.
+Estado experimental Foundation: [inventario de implementación, pruebas y pendientes](docs/FOUNDATION_STATUS.md). [PR de desarrollo #1](https://github.com/MTNRS/AI-Home/pull/1), todavía en borrador. Hay entrenamiento textual y visual propio desde cero, sin calidad conversacional ni comprensión visual general demostradas.
+
+La [vía visual experimental](docs/VISION_PREFIX.md) permite entrenar pares PNG/JPEG–texto autorizados, reanudar checkpoints FP32/FP16/BF16 y ejecutar inferencia local con streaming desde el escritorio. TRAINING incluye entrenamiento visual con métricas y cancelación; FOUNDATION MODEL incluye prueba de imágenes. El único aprendizaje visual medido por ahora es un experimento de tres colores sólidos: 6/6 intensidades reservadas, control blanco 2/6; no representa fotografías ni objetos reales. Consulta la documentación para formatos, comandos reproducibles y límites.
 
 AI@Home es un proyecto comunitario de inteligencia artificial abierta, con el
 objetivo de permitir investigación colaborativa y computación voluntaria sin
@@ -263,6 +265,8 @@ siendo privado. Apache-2.0 se aplica al código de este repositorio; modelos,
 pesos y datasets tienen licencias propias que deben comprobarse individualmente.
 
 ## Foundation Model — implementación inicial (2026-11-26)
+
+**Registro histórico del primer hito.** Los resultados y pendientes de este apartado corresponden a aquella ejecución; para el estado actual usa [FOUNDATION_STATUS.md](docs/FOUNDATION_STATUS.md) y [PROGRESS.md](docs/PROGRESS.md).
 
 Se añade un subsistema propio en `ai_home.foundation` con BPE desde cero, Transformer RoPE/GQA, entrenamiento, checkpoints e inferencia. El modelo byte-level y las funcionalidades anteriores se conservan. La integración de escritorio añade un proveedor independiente para checkpoints propios.
 
