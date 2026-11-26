@@ -1767,3 +1767,13 @@ Verificados 900x650 y 640x520 en Windows con Computer Use: campos, controles y
 mensaje inicial visibles sin solapamientos. Casilla de disco accesible. Fixtures
 cerradas correctamente, sin activar permisos ni ejecutar trabajos. Documentado
 alcance limitado al DPI/estado observado; no se necesitaron cambios de codigo.
+
+
+### Visor de informes de evaluacion distribuida
+
+EVALUATION abre el informe causal distribuido con resumen de perdida, tokens
+y fragmentos, sin promover modelos. Valida coherencia de agregados, identidades
+y documentos; mantiene el aviso de que la lectura no verifica la ejecucion.
+Conservado el informe real CPU/CUDA de 468 tokens. Pruebas del lector y
+escritorio: 43 aprobadas (0.87 s), incluyendo informes alterados, booleanos
+y enteros fuera de rango. No se atribuyen capacidades linguisticas al resultado.

@@ -101,3 +101,19 @@ asignadas y checkpoints anteriores sin linaje de grupos mantienen sus límites.
 La protección de coincidencia textual existente sigue activa. Doce pruebas de
 evaluación/evolución/comparación aprobadas, incluido rechazo antes de inferencia,
 evaluación real de otra familia, validación de formato y serialización anterior.
+
+
+## Inspección de pérdida distribuida
+
+EVALUATION → Abrir informe admite `ai-home-distributed-loss-report-v1`,
+además de evaluaciones generativas y experimentos. Muestra pérdida causal,
+tokens, número de fragmentos y el JSON con las identidades del plan, checkpoint
+y trabajos. `DISTRIBUTED_EVALUATION_REPORT.json` conserva el informe del smoke
+CPU/CUDA local: dos fragmentos y 468 tokens.
+
+El lector comprueba hashes con formato válido, trabajos y documentos únicos,
+una misma base entre fragmentos, totales y media ponderada consistente. La
+lectura está limitada a 2 MB. Estas comprobaciones no autentican los hashes ni
+repiten la ejecución: se conserva el aviso de contenido local no verificado
+independientemente. Una pérdida causal no demuestra capacidad lingüística y
+abrir el informe no promueve modelos.

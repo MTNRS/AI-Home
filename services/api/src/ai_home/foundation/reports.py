@@ -1,10 +1,12 @@
 """Bounded local experiment report inspection; never executes report content."""
 import hashlib
 import json
+import math
+import re
 from pathlib import Path
 
 
-FORMATS = {"ai-home-evaluation-v1", "ai-home-evolution-result-v1"}
+FORMATS = {"ai-home-evaluation-v1", "ai-home-evolution-result-v1", "ai-home-distributed-loss-report-v1"}
 
 
 def read_report(path, max_bytes=2_000_000):
@@ -42,6 +44,8 @@ def read_report(path, max_bytes=2_000_000):
             raise ValueError("Evaluation category totals disagree with results")
         if report.get("all_prompts_fit") != (not any(r["prompt_truncated"] for r in rows)):
             raise ValueError("Evaluation truncation summary disagrees with results")
+    elif report["format"] == "ai-home-distributed-loss-report-v1":
+        validate_distributed_loss(report)
     else:
         if (report.get("decision") not in {"reject", "propose_acceptance"}
                 or report.get("promoted") is not False
@@ -51,3 +55,45 @@ def read_report(path, max_bytes=2_000_000):
     return {"file_sha256": hashlib.sha256(raw).hexdigest(), "file_bytes": len(raw),
             "notice": "Local report content; checkpoint identity and execution are not independently verified",
             "report": report}
+
+
+def validate_distributed_loss(report):
+    def digest(value):
+        return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+    def count(value):
+        return type(value) is int and 0 < value <= 2**63 - 1
+    def loss(value):
+        if type(value) not in (int, float):
+            return False
+        try:
+            return math.isfinite(value) and value >= 0
+        except OverflowError:
+            return False
+    shards, jobs = report.get("shards"), report.get("job_ids")
+    if (report.get("state") != "evaluated" or report.get("promoted") is not False
+            or not digest(report.get("checkpoint_sha256")) or not digest(report.get("plan_sha256"))
+            or not isinstance(shards, list) or not 1 <= len(shards) <= 8
+            or not isinstance(jobs, list) or len(jobs) != len(shards)
+            or any(not isinstance(job, str) or not job for job in jobs)
+            or len(set(jobs)) != len(jobs) or not count(report.get("tokens"))
+            or not loss(report.get("mean_loss"))):
+        raise ValueError("Invalid distributed loss report")
+    seen, bases, tokens, weighted = set(), set(), 0, 0.0
+    for shard in shards:
+        if (not isinstance(shard, dict) or shard.get("format") != "ai-home-evaluation-shard-v1"
+                or shard.get("objective") != "causal" or not count(shard.get("tokens"))
+                or not loss(shard.get("mean_loss")) or not digest(shard.get("base_sha256"))
+                or not digest(shard.get("dataset_sha256"))):
+            raise ValueError("Invalid distributed loss shard")
+        documents = shard.get("document_hashes")
+        if (not isinstance(documents, list) or not 2 <= len(documents) <= 32
+                or any(not digest(value) for value in documents)
+                or len(set(documents)) != len(documents) or seen.intersection(documents)):
+            raise ValueError("Duplicate or invalid evaluation documents")
+        seen.update(documents)
+        bases.add(shard["base_sha256"])
+        tokens += shard["tokens"]
+        weighted += shard["tokens"] * shard["mean_loss"]
+    if (len(bases) != 1 or tokens != report["tokens"]
+            or not math.isclose(weighted / tokens, report["mean_loss"], rel_tol=1e-12, abs_tol=1e-12)):
+        raise ValueError("Distributed loss summary disagrees with shards")

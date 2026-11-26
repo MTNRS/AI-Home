@@ -2292,6 +2292,10 @@ def main() -> None:
                     passed = sum(row["passed"] for row in report["results"])
                     summary.set(f"Evaluación: {passed}/{len(report['results'])} pruebas superadas. "
                                 f"Versión de suite: {report.get('suite_version', 'sin especificar')}")
+                elif report["format"] == "ai-home-distributed-loss-report-v1":
+                    summary.set(f"Pérdida causal distribuida: {report['mean_loss']:.6f}. "
+                                f"{report['tokens']} tokens en {len(report['shards'])} fragmentos. "
+                                "No mide capacidad lingüística ni autoriza promoción.")
                 else:
                     summary.set(f"Evolución: {report['decision']}. {report['reason']} — Sin promoción automática.")
                 content.configure(state="normal")

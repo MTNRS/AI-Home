@@ -34,3 +34,35 @@ def test_report_rejects_inconsistent_metrics_and_unbounded_input(tmp_path):
         target.write_text(invalid)
         with pytest.raises(ValueError):
             read_report(target)
+
+
+def test_inspect_real_distributed_loss_and_reject_inconsistent_shards(tmp_path):
+    import copy
+    document = read_report(DOCS / "DISTRIBUTED_EVALUATION_REPORT.json")
+    report = document["report"]
+    assert report["tokens"] == 468 and len(report["shards"]) == 2
+    assert "not independently verified" in document["notice"]
+    for change in ("tokens", "loss", "base", "documents", "jobs", "promotion", "boolean", "huge_tokens", "huge_loss"):
+        altered = copy.deepcopy(report)
+        if change == "tokens":
+            altered["tokens"] += 1
+        elif change == "loss":
+            altered["mean_loss"] += 1
+        elif change == "base":
+            altered["shards"][0]["base_sha256"] = "0" * 64
+        elif change == "documents":
+            altered["shards"][1]["document_hashes"] = altered["shards"][0]["document_hashes"]
+        elif change == "jobs":
+            altered["job_ids"][1] = altered["job_ids"][0]
+        elif change == "promotion":
+            altered["promoted"] = True
+        elif change == "huge_tokens":
+            altered["shards"][0]["tokens"] = 10**400
+        elif change == "huge_loss":
+            altered["mean_loss"] = 10**400
+        else:
+            altered["shards"][0]["tokens"] = True
+        path = tmp_path / "changed.json"
+        path.write_text(json.dumps(altered), encoding="utf-8")
+        with pytest.raises(ValueError):
+            read_report(path)
