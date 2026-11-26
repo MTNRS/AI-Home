@@ -607,3 +607,16 @@ fresh existence check after authentication. The deletion API test covers pending
 and settled reservations, final balances, session revocation and rejection of a
 late settlement attempt. Full suite: 258 passed, 4 PostgreSQL skips. Concurrent
 account deletion/admission has not been exercised against PostgreSQL here.
+
+
+### Actual PostgreSQL validation and concurrency correction
+
+Downloaded publisher-checksummed portable PostgreSQL 17.12, initialized an
+isolated localhost-only SCRAM cluster and ran the previously skipped integration
+tests. Added real concurrent inference reservation/settlement/expiry coverage.
+Found and fixed unreliable insert rowcount reporting on PostgreSQL: both same-key
+callers could claim admission although the ledger debited only once. RETURNING
+now determines admission, terminal transitions and account lock existence. Also
+bound migration execution to the explicit test database URL. Final full suite:
+263 passed, zero skipped. The test server was stopped afterward. Details and
+reproduction are in POSTGRES_VALIDATION.md; no production database was touched.

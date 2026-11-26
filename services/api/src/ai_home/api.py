@@ -513,8 +513,8 @@ def create_app(
             with request.app.state.session_factory() as session, session.begin():
                 # A no-op write serializes reservation admission with account deletion
                 # on SQLite as well as PostgreSQL; authentication alone can race deletion.
-                admitted = session.execute(update(User).where(User.user_id == user.user_id).values(user_id=user.user_id))
-                if not admitted.rowcount:
+                admitted = session.execute(update(User).where(User.user_id == user.user_id).values(user_id=user.user_id).returning(User.user_id)).scalar_one_or_none()
+                if admitted is None:
                     raise HTTPException(status_code=401, detail="Account no longer available.")
                 funding, created = reserve_inference(session, user.user_id, str(payload.credit_request_id), digest, price,
                                                       lifetime_seconds=request.app.state.settings.foundation_reservation_seconds)
@@ -1137,8 +1137,8 @@ def create_app(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Password confirmation failed.",
             )
-        admitted = session.execute(update(User).where(User.user_id == current_user.user_id).values(user_id=current_user.user_id))
-        if not admitted.rowcount:
+        admitted = session.execute(update(User).where(User.user_id == current_user.user_id).values(user_id=current_user.user_id).returning(User.user_id)).scalar_one_or_none()
+        if admitted is None:
             raise HTTPException(status_code=401, detail="Account no longer available.")
         refund_pending_inference(session, current_user.user_id)
         session.execute(

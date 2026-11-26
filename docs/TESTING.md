@@ -72,3 +72,5 @@ checkpoint mode remains available and is not an approval claim. See
 [Model registry](MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.
 
 Registry validation: full CUDA-enabled suite 191 passed, 4 PostgreSQL tests skipped.
+
+PostgreSQL has now been exercised locally: see [POSTGRES_VALIDATION.md](POSTGRES_VALIDATION.md). The complete suite passed 263 tests with no skips using the dedicated test database.

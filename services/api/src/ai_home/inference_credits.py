@@ -54,8 +54,8 @@ def reserve_inference(session, user_id, key, request_hash, amount, *, lifetime_s
         raise InvalidPosting("Unsupported accounting database")
     created = session.execute(insert(InferenceFunding).values(
         request_id=request_id, owner_account=owner, request_hash=request_hash,
-        amount=amount, status="reserved", expires_at=datetime.now(timezone.utc) + timedelta(seconds=lifetime_seconds)).on_conflict_do_nothing(index_elements=["request_id"]))
-    if not created.rowcount:
+        amount=amount, status="reserved", expires_at=datetime.now(timezone.utc) + timedelta(seconds=lifetime_seconds)).on_conflict_do_nothing(index_elements=["request_id"]).returning(InferenceFunding.request_id)).scalar_one_or_none()
+    if created is None:
         return reserve_inference(session, user_id, key, request_hash, amount, lifetime_seconds=lifetime_seconds)
     funding = session.get(InferenceFunding, request_id)
     escrow = "inference:" + request_id
@@ -78,8 +78,8 @@ def resolve_inference(session, request_id, user_id, *, refund=False):
     if not refund:
         conditions.append(InferenceFunding.expires_at > now)
     changed = session.execute(update(InferenceFunding).where(*conditions).values(
-        status=terminal, resolved_at=now).execution_options(synchronize_session=False))
-    if not changed.rowcount:
+        status=terminal, resolved_at=now).returning(InferenceFunding.request_id).execution_options(synchronize_session=False)).scalar_one_or_none()
+    if changed is None:
         session.refresh(funding)
         if funding.status != terminal:
             raise InvalidPosting("Inference reservation already resolved differently")

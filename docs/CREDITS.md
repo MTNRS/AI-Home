@@ -126,7 +126,8 @@ against guessing. Accounting records remain pseudonymous and durable.
 
 Foundation chat now connects these primitives to a configurable
 flat completion price. Expired reservations are recovered lazily as described below. SQLite transactional/concurrency tests cover the primitives; PostgreSQL
-runtime behavior remains unverified on this machine.
+concurrency and expiry were subsequently verified on an isolated local 17.12
+instance; see POSTGRES_VALIDATION.md.
 
 
 ## Foundation completion pricing

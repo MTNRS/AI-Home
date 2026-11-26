@@ -26,11 +26,17 @@ def postgres_engine():
     if not DATABASE_URL:
         pytest.skip("Set AI_HOME_TEST_POSTGRES_URL to run PostgreSQL integration tests.")
 
-    config = Config("alembic.ini")
-    command.upgrade(config, "head")
-    engine = create_engine(DATABASE_URL, pool_size=5, max_overflow=5)
-    yield engine
-    engine.dispose()
+    with pytest.MonkeyPatch.context() as patch:
+        # Alembic reads AI_HOME_DATABASE_URL, not the test URL. Bind both explicitly.
+        patch.setenv("AI_HOME_DATABASE_URL", DATABASE_URL)
+        patch.setenv("AI_HOME_ENVIRONMENT", "test")
+        config = Config("alembic.ini")
+        command.upgrade(config, "head")
+        engine = create_engine(DATABASE_URL, pool_size=5, max_overflow=5)
+        try:
+            yield engine
+        finally:
+            engine.dispose()
 
 
 def test_postgres_migrations_match_orm(postgres_engine):
@@ -185,3 +191,44 @@ def test_postgres_ledger_prevents_concurrent_overdraft(postgres_engine):
     assert ledger.balance(user_account) == 20
     assert ledger.balance(reserve_account) == 80
 
+
+
+def test_postgres_inference_duplicate_settlement_and_expiry(postgres_engine):
+    from datetime import datetime, timezone, timedelta
+    from ai_home.inference_credits import reserve_inference, resolve_inference, refund_expired_inference
+    from ai_home.credits import InvalidPosting
+    from ai_home.job_credits import user_account_id
+    owner = str(uuid4())
+    issuer = "pg:issuer:" + owner
+    ledger = CreditLedger(postgres_engine)
+    ledger.create_account(issuer, "test", allow_negative=True)
+    ledger.create_account(user_account_id(owner), "user")
+    ledger.post(idempotency_key="pg:fund:"+owner, operation="test",
+                postings={issuer:-20, user_account_id(owner):20})
+    barrier = Barrier(2)
+    def reserve(_):
+        barrier.wait(timeout=10)
+        with Session(postgres_engine) as session, session.begin():
+            row, created = reserve_inference(session, owner, "same", "a"*64, 7)
+            return row.request_id, created
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        rows = list(executor.map(reserve, range(2)))
+    assert sum(created for _, created in rows) == 1
+    key = rows[0][0]
+    def settle(_):
+        barrier.wait(timeout=10)
+        with Session(postgres_engine) as session, session.begin():
+            resolve_inference(session, key, owner)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(settle, range(2)))
+    assert ledger.balance(user_account_id(owner)) == 13
+    with Session(postgres_engine) as session, session.begin():
+        stale, _ = reserve_inference(session, owner, "expired", "b"*64, 5)
+        stale.expires_at = datetime.now(timezone.utc)-timedelta(seconds=1)
+        stale_key = stale.request_id
+    with pytest.raises(InvalidPosting):
+        with Session(postgres_engine) as session, session.begin():
+            resolve_inference(session, stale_key, owner)
+    with Session(postgres_engine) as session, session.begin():
+        assert refund_expired_inference(session, owner) == 1
+    assert ledger.balance(user_account_id(owner)) == 13
