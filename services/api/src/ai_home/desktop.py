@@ -749,7 +749,8 @@ def main() -> None:
             self.control_sections = {"CHAT": chat_tab, "DISTRIBUTED COMPUTE": node_tab}
             definitions = [
                 ("FOUNDATION MODEL", "Inspecciona la arquitectura, configuración, parámetros y estado de un checkpoint propio.",
-                 [("Inspeccionar checkpoint", self._inspect_checkpoint_dialog)]),
+                 [("Inspeccionar checkpoint", self._inspect_checkpoint_dialog),
+                  ("Probar imagen local (experimental)", self._visual_inference_dialog)]),
                 ("TRAINING", "Selecciona datasets autorizados, configuración y checkpoints. El entrenamiento produce un candidato; no lo publica automáticamente.",
                  [("Entrenar o reanudar", self._run_training_dialog), ("Inspeccionar entrenamiento", self._inspect_checkpoint_dialog),
                   ("Mis aportaciones consentidas", self._manage_training_candidates)]),
@@ -792,6 +793,10 @@ def main() -> None:
                 name = next((name for name, page in self.control_sections.items() if str(page) == selected), None)
                 self.control_section_var.set(name or "Configuración de cuenta / conexión")
             self.page_stack.bind("<<NotebookTabChanged>>", synchronize, add="+")
+
+        def _visual_inference_dialog(self):
+            from ai_home.visual_desktop import open_visual_dialog
+            open_visual_dialog(self)
 
         def _scrollable_page(self, parent):
             canvas = tk.Canvas(parent, highlightthickness=0, background="#eeeeee", height=400)

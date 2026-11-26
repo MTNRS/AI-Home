@@ -293,3 +293,21 @@ El resultado demuestra aprendizaje neuronal de esta tarea diminuta y evidencia d
 condicionamiento visual. No acredita objetos, escenas, fotografías, razonamiento,
 robustez a colores mixtos ni generalización fuera de este generador. No se promovió
 el candidato ni se sustituyó ningún modelo activo.
+
+## Ventana de inferencia visual local
+
+En FOUNDATION MODEL → «Probar imagen local (experimental)» se seleccionan
+checkpoint visual, PNG/JPEG, instrucción y CPU/CUDA. Generar ejecuta en el worker
+existente; Cancelar solicita parada entre tokens. Solo hay una ventana visual por
+instancia. Cerrar la ventana o cambiar de perfil la destruye y solicita cancelación;
+los callbacks usan la protección de sesión existente. No se persisten imagen,
+instrucción o respuesta en conversaciones ni se envían al servidor o entrenamiento.
+El cargador limita pesos e imágenes igual que la CLI. No hay preview de imagen ni
+streaming incremental en esta primera ventana: la respuesta se muestra al terminar.
+
+Prueba funcional real Windows Tk, `artifacts/verify-visual-dialog.py`: abrió el
+formulario, seleccionó checkpoint propio del experimento, PNG red-150 e instrucción
+Color?, invocó Generar y comprobó respuesta red; cerró las ventanas. La prueba usó
+la operación real con ejecución síncrona del harness; el código de producto usa
+_background. También pasó scripts/verify_desktop_sections.py con las diez rutas.
+No es una revisión visual de layout, DPI o accesibilidad; estas siguen pendientes.

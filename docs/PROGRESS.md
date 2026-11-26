@@ -1206,3 +1206,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   Evidencia limitada a sólidos RGB sintéticos; sin comprensión de fotografías.
 - Artefactos locales conservados y VISUAL_COLOR_EXPERIMENT.json versionado;
   no se promovió candidato. Código reproducible vision_color_experiment.
+
+## 2026-11-26 — Inferencia visual accesible desde escritorio
+
+- FOUNDATION MODEL abre ventana local con checkpoint, PNG/JPEG, prompt, CPU/CUDA
+  y cancelación. Sin persistir ni contribuir la imagen/respuesta al entrenamiento.
+- Prueba Tk real invocó controles y generó red con checkpoint propio y PNG reservado.
+  Las diez secciones existentes siguen pasando su prueba de navegación.
+- Layout visual/DPI y streaming incremental pendientes; alcance en VISION_PREFIX.md.
