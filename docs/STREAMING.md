@@ -39,3 +39,25 @@ redaction. TestClient buffers the HTTP response, so this is not a network latenc
 benchmark or proxy disconnect test. Full suite: 202 passed, 4 PostgreSQL skipped.
 Desktop incremental rendering and its stop button remain pending; current desktop
 chat continues to use the non-streaming route.
+
+
+## Cancellable client and real loopback verification
+
+`ai_home.chat_stream.stream_server_chat` is the background-thread client consumer.
+It validates metadata ordering and requested model UUID, emits text callbacks,
+requires a final event with matching character/chunk counts, bounds accumulated
+text to 65,536 characters, and rejects incomplete/error streams. Its cancellation
+event also interrupts a wait for response headers via an asynchronous HTTP task;
+context cleanup closes the connection. Callbacks must enqueue UI work rather than
+mutate Tk widgets directly. The helper is ready for desktop integration but is
+not yet wired to the chat widgets or a stop button.
+
+A real loopback test now starts Uvicorn on an ephemeral localhost TCP port, trains
+and loads a real tiny checkpoint, authenticates an account, receives a generated
+chunk with this client, cancels the connection, observes server cancellation and
+then completes a second ordinary inference request. To ensure the first request
+is still running when cancelled, the test holds the real generator after a real
+chunk until cancellation arrives. It does not replace model output with simulated
+text. The server is shut down and joined after the test. This establishes the
+HTTP disconnect path on this host, not Internet/proxy behavior or a latency bound
+for arbitrary CUDA kernels. The earlier buffered TestClient tests remain separate.

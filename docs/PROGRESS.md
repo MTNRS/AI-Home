@@ -343,3 +343,15 @@ partial streams require a done event before being considered complete. Retrieval
 context packing is shared between both routes. Validation: 202 passed, 4 skipped.
 Desktop integration and real-network disconnect/latency tests remain pending;
 see STREAMING.md for protocol details and cancellation limits.
+
+
+### Real HTTP streaming cancellation (2026-11-26)
+
+Added the cancellable client-side SSE consumer with version, ordering, completion
+and response-size checks. Verified cancellation while waiting for headers and
+rejection of incomplete streams. A real Uvicorn/HTTP loopback test trains a tiny
+checkpoint, receives real generated text, cancels an in-flight stream, observes
+server stop and succeeds on the next inference. The test controls pacing after
+an actual generated chunk. Desktop widget wiring remains pending.
+
+Validation: 210 passed, 4 PostgreSQL tests skipped; no warnings.
