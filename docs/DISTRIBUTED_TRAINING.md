@@ -171,3 +171,34 @@ supported task, RAM and PyTorch version. GPU throughput/VRAM/network-aware task
 ranking, larger shards, multi-host efficiency and independent scalable validation
 remain outstanding. Tiny CPU recomputation is intentionally expensive evidence,
 not a proposed production scaling strategy.
+
+### Recoverable aggregation boundary
+
+`python -m ai_home.foundation.distributed_round PARENT.pt ENVELOPES.json NEW.pt`
+reconstructs a next round from an existing public distributed checkpoint, including
+AdamW state. Envelopes contain the typed `payload` and `result` for each shard;
+2–8 shards are accepted and the CLI bounds their file to 16 MB. Every gradient is
+independently recomputed on CPU before aggregation. Overlap with the parent's
+fixed validation hashes is refused. The new candidate drops inherited validation
+scores, records parent/request/dataset identities and publishes complete bytes
+exclusively. Existing targets are reusable only for the identical parent and
+ordered shard request; other requests fail. A retry never mutates the parent or
+adds another optimizer update to an already committed output.
+
+The HTTP smoke now persists round envelopes before its in-memory update. This
+allows explicit reconstruction after a coordinator interruption from round 1
+onward; initial round bootstrap remains the smoke's responsibility. Example:
+
+```powershell
+python -m ai_home.foundation.distributed_smoke --output-dir artifacts/recovery --rounds 2 --worker-devices cpu cuda
+python -m ai_home.foundation.distributed_round artifacts/recovery/round-1.pt artifacts/recovery/round-2-envelopes.json artifacts/recovery/recovered-round-2.pt
+```
+
+Actual mixed CPU/CUDA loopback execution reconstructed identical weights to the
+uninterrupted second round, and retry preserved the committed bytes. Evidence is
+in DISTRIBUTED_RECOVERY.json. Tests inject interruption after aggregation but
+before publication and compare recovery with uninterrupted AdamW exactly.
+This covers the aggregation commit boundary only: automatic service restart,
+persisted job discovery/resubmission, multi-host failover and credit/job recovery
+coordination remain outstanding. Local checkpoint/envelope storage is trusted;
+this is not an authenticated remote coordinator protocol.

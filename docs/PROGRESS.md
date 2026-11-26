@@ -814,3 +814,16 @@ cancelación previa y carrera de publicación. Suite local: 282 correctas y 5
 PostgreSQL omitidas. La matriz PostgreSQL de la revisión anterior 7ee0a90 terminó
 correctamente en Actions (run 45813703815); esta modificación tiene validación
 local y todavía no se atribuye a aquella ejecución remota.
+
+### Recuperación del punto de agregación distribuida
+
+Añadida operación/CLI que reconstruye una ronda desde checkpoint público y sobres
+payload/resultado persistidos, recomputa gradientes, restaura AdamW y publica una
+nueva versión de forma exclusiva. Los reintentos idénticos conservan el resultado;
+solicitudes distintas no pueden ocupar la misma ruta. No hereda validaciones del
+padre como si evaluaran al hijo. Prueba de interrupción antes de publicar y smoke
+HTTP con workers CPU/CUDA: pesos recuperados exactamente iguales a los originales,
+retry sin doble actualización. Evidencia: DISTRIBUTED_RECOVERY.json. Suite completa:
+283 correctas, 5 PostgreSQL omitidas; ajuste final de metadatos de dataset probado
+con test enfocado y reconstrucción real. Reinicio automático del coordinador y
+recuperación de descubrimiento/envío de jobs siguen pendientes.

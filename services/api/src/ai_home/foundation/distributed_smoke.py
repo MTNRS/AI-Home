@@ -22,6 +22,7 @@ from ai_home.database import Base
 from ai_home.credits import CreditLedger
 from ai_home.job_credits import user_account_id
 from ai_home.node_worker import detect_hardware
+from ai_home.immutable_artifacts import publish_bytes
 from .checkpoint import FORMAT, atomic_save, load_checkpoint
 from .data import canonical_hash, prepare_records
 from .distributed import aggregate_gradients, encode_tensors
@@ -112,10 +113,12 @@ def main():
             for step in range(1, args.rounds + 1):
                 parameters = encode_tensors(dict(model.named_parameters()))
                 ids = []
+                round_payloads = []
                 for shard in range(2):
                     payload = {"shard": {"records": train_records[shard*2:shard*2+2], "tokenizer": tokenizer.to_dict()},
                         "config": asdict(config), "parameters": parameters, "torch_version": str(torch.__version__),
                         "weights_public_and_redistributable": True}
+                    round_payloads.append(payload)
                     response = client.post("/api/v1/jobs/foundation/gradient", json={"payload": payload,
                         "allow_public_node_processing": True, "idempotency_key": f"round-{step}-shard-{shard}",
                         "reward_credits": args.reward_credits})
@@ -137,6 +140,9 @@ def main():
                 if any(jobs[job_id]["status"] != "completed" for job_id in ids):
                     raise RuntimeError("A gradient shard failed verification")
                 results = [jobs[job_id]["result"] for job_id in ids]
+                publish_bytes(output / f"round-{step}-envelopes.json", json.dumps([
+                    {"payload": source, "result": result} for source, result in zip(round_payloads, results)
+                ], sort_keys=True).encode("utf-8"))
                 update = aggregate_gradients(model, tokenizer, results, optimizer)
                 metric = {"round": step, **update, "validation": evaluate(model, val_sequences, "cpu")}
                 metrics.append(metric)
