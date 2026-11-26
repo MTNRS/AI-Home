@@ -1290,16 +1290,26 @@ def create_app(
             ) from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    from ai_home.transfer_limits import TransferProbeLimiter
+    transfer_probe_limiter = TransferProbeLimiter()
+
+    def admit_transfer_probe(node, size):
+        if not transfer_probe_limiter.admit(str(node.node_id), size):
+            raise HTTPException(status_code=429, detail="Transfer probe budget exhausted; retry later.",
+                                headers={"Retry-After": "60"})
+
     @app.get("/api/v1/node/transfer-probe")
     def node_transfer_download(size: int = Query(default=65536, ge=0, le=1048576),
                                current_node: ComputeNode = Depends(get_current_node)):
         # Fixed public bytes, no job data, account contents or arbitrary execution.
+        admit_transfer_probe(current_node, size)
         return Response(content=bytes(range(256)) * (size // 256) + bytes(range(size % 256)),
                         media_type="application/octet-stream",
                         headers={"Cache-Control": "no-store", "Content-Encoding": "identity"})
 
     @app.post("/api/v1/node/transfer-probe")
     async def node_transfer_upload(request: Request, current_node: ComputeNode = Depends(get_current_node)):
+        admit_transfer_probe(current_node, 1048576)
         total, digest = 0, hashlib.sha256()
         if request.headers.get("content-encoding", "identity") != "identity":
             raise HTTPException(status_code=415, detail="Encoded probe bodies are unsupported.")

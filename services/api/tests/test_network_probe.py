@@ -24,3 +24,28 @@ def test_probe_requires_explicit_bounded_size():
     for size in (0, -1, True, 1048577):
         with pytest.raises(ValueError):
             measure_transfer(None, size=size)
+
+
+def test_probe_rate_limit_returns_retry_after(client):
+    register(client, "probe-limit@example.com")
+    node = create_node(client, login(client, "probe-limit@example.com"))
+    client.headers.update(user_headers(node["node_token"]))
+    for _ in range(10):
+        assert client.get("/api/v1/node/transfer-probe", params={"size": 0}).status_code == 200
+    response = client.get("/api/v1/node/transfer-probe", params={"size": 0})
+    assert response.status_code == 429 and response.headers["retry-after"] == "60"
+
+
+def test_probe_budget_concurrent_admission_and_expiry():
+    from concurrent.futures import ThreadPoolExecutor
+    from ai_home.transfer_limits import TransferProbeLimiter
+    now = [0.]
+    limiter = TransferProbeLimiter(clock=lambda: now[0])
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        accepted = list(pool.map(lambda _: limiter.admit("node", 1048576), range(40)))
+    assert sum(accepted) == 10
+    for index in range(54):
+        assert limiter.admit(str(index), 1048576)
+    assert not limiter.admit("other", 1)
+    now[0] = 60
+    assert limiter.admit("node", 1048576) and len(limiter.events) == 1

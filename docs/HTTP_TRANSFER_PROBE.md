@@ -40,3 +40,20 @@ transacciones 0→0. Informe HTTP_TRANSFER_SMOKE.json. Tiempos HTTP vacíos de e
 corrida aproximadamente 1.49–3.85 ms; no es RTT puro. CI añade el ensayo del paquete
 instalado con Python -I y publica informe; resultado remoto de esta adición pendiente.
 La evidencia es exclusivamente un equipo y loopback; no prueba red multihost.
+
+## Presupuesto de frecuencia por proceso
+
+El endpoint admite hasta 10 peticiones por nodo en ventana móvil de 60 segundos,
+1000 peticiones totales y 64 MiB reservados por proceso. El upload reserva 1 MiB
+antes de leer; fallos consumen su reserva. La respuesta de exceso es 429 con
+Retry-After: 60. Un lock protege la admisión concurrente y el registro en memoria
+queda acotado a 1000 eventos. La sonda de dos tamaños usa exactamente diez peticiones.
+
+No es una cuota distribuida: reiniciar el proceso borra la ventana y varios
+workers tienen presupuestos independientes. Para despliegue multihost sigue
+pendiente un límite compartido; no sustituye la protección del proxy/servidor.
+
+Pruebas: 4 passed in 1.13s, límite HTTP, admisión concurrente, presupuesto de bytes
+y expiración. El primer intento detectó uso incorrecto de id en vez de node_id;
+corregido antes de repetir la suite. Smoke HTTP repetido con éxito en
+artifacts/network-probe-http-v2, sin cambios en trabajos/créditos.

@@ -1312,3 +1312,10 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   64 KiB y 1 MiB verificadas. Trabajos y transacciones permanecen 0; cierre comprobado.
 - Informe HTTP_TRANSFER_SMOKE.json. Solo loopback, no ancho de banda físico.
 - Gate de paquete instalado añadido a CI con informe; resultado remoto pendiente.
+
+## 2026-11-26 — Presupuesto acotado para sondas HTTP
+
+- Ventana móvil por proceso: 10 peticiones/nodo, 1000 globales, 64 MiB reservados
+  por minuto; concurrencia bajo lock, respuesta 429/Retry-After.
+- 4 pruebas pasaron en 1.13s tras corregir atributo node_id; smoke HTTP real repetido
+  sin efectos en trabajos/créditos. Cuota compartida entre procesos pendiente.
