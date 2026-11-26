@@ -58,3 +58,28 @@ solo la causa ni justifica modificar una versión publicada.
 Informes completos [semilla 7](ARITHMETIC_SEED7.json) y
 [semilla 123](ARITHMETIC_SEED123.json); checkpoints y protocolos locales en
 `artifacts/arithmetic-seed7-v1` y `artifacts/arithmetic-seed123-v1`.
+
+## Robustez de formato sin reentrenamiento
+
+Evaluados los tres checkpoints existentes con 14 pares reservados en cuatro
+formatos: `a+b=`, `a + b =`, `Suma a+b` y `Add a+b`. Se fijó la suite antes de
+inferir; greedy, máximo cuatro tokens, CUDA. Todos los prompts caben en contexto.
+Los hashes del checkpoint identifican cada evaluación en el informe completo.
+
+| Semilla | Original | Espacios | Suma | Add |
+| --- | --- | --- | --- | --- |
+| 42 | 13/14 | 3/14 | 0/14 | 0/14 |
+| 7 | 6/14 | 3/14 | 0/14 | 1/14 |
+| 123 | 7/14 | 8/14 | 6/14 | 9/14 |
+
+La generalización depende marcadamente del formato y la semilla. Las variantes
+con palabras también omiten `=`, por lo que no aíslan causalmente comprensión
+del idioma. Sus etiquetas spanish/english identifican la forma de la pregunta,
+no una competencia lingüística. Son 14 problemas repetidos, no 56 problemas
+independientes por checkpoint. No hubo entrenamiento adicional ni selección de
+un ganador. El checkpoint mejor en el formato original no es el más robusto.
+
+Reproducción: `python -m ai_home.foundation.arithmetic_robustness --checkpoints
+RUTA1 RUTA2 RUTA3 --output-dir NUEVO --device cuda` (en una sola línea).
+[Informe completo](ARITHMETIC_ROBUSTNESS.json). Artefactos locales en
+`artifacts/arithmetic-robustness-v1`; script y suite procedural versionados.

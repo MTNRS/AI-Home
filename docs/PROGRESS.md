@@ -1423,3 +1423,11 @@ con 42; las tres parten de 0/14 tras un paso. Media descriptiva 61,9% sobre los
 mismos 14 casos, no 42 pruebas independientes. El mejor resultado no es estable
 entre semillas. Se conservan todos los informes/checkpoints y no se promueve
 ningún modelo. CLI admite semilla explícita; detalles en ARITHMETIC_EXPERIMENT.md.
+
+### Robustez aritmética por formato
+
+Evaluados los tres checkpoints sin entrenar: para semillas 42/7/123, espacios
+3/14,3/14,8/14; «Suma» 0/14,0/14,6/14; «Add» 0/14,1/14,9/14. Se reproduce el
+13/14,6/14,7/14 original y todos los prompts caben. Hay dependencia fuerte del
+formato; las variantes verbales no prueban comprensión lingüística. Conservado
+informe completo y CLI reproducible; no hay promoción ni selección del mejor.
