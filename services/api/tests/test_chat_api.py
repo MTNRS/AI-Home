@@ -249,6 +249,14 @@ def test_foundation_chat_uses_real_trained_checkpoint(client, tmp_path, monkeypa
     assert ledger.balance(owner) == 13
     assert client.get("/api/v1/credits", headers=headers).json()["reserved"] == 0
     assert client.post("/api/v1/chat/completions", headers=headers, json=failed).status_code == 409
+    from datetime import datetime, timezone, timedelta
+    from ai_home.inference_credits import reserve_inference
+    with client.app.state.session_factory() as session, session.begin():
+        stale, _ = reserve_inference(session, owner.removeprefix("user:"), "orphan", "a" * 64, 7)
+        stale.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    assert ledger.balance(owner) == 6
+    recovered = client.get("/api/v1/credits", headers=headers).json()
+    assert recovered["available"] == 13 and recovered["reserved"] == 0
     settings.foundation_inference_price = 0
     path.write_bytes(b"invalid checkpoint")
     response = client.post("/api/v1/chat/completions", headers=headers, json={"messages": messages})

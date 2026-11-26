@@ -1,5 +1,5 @@
 """Transactional inference reservations. Callers own commit/rollback and execution."""
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import re
 from uuid import NAMESPACE_URL, uuid5
 
@@ -23,11 +23,14 @@ class InferenceFunding(Base):
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-def reserve_inference(session, user_id, key, request_hash, amount):
+def reserve_inference(session, user_id, key, request_hash, amount, *, lifetime_seconds=600):
     """Return (reservation, created); a duplicate never authorizes another execution."""
+    if type(lifetime_seconds) is not int or not 30 <= lifetime_seconds <= 3600:
+        raise ValueError("Reservation lifetime must be between 30 and 3600 seconds")
     if type(amount) is not int or not 1 <= amount <= 1_000_000:
         raise ValueError("Invalid inference price")
     if not isinstance(key, str) or not key.strip() or len(key) > 128:
@@ -51,9 +54,9 @@ def reserve_inference(session, user_id, key, request_hash, amount):
         raise InvalidPosting("Unsupported accounting database")
     created = session.execute(insert(InferenceFunding).values(
         request_id=request_id, owner_account=owner, request_hash=request_hash,
-        amount=amount, status="reserved").on_conflict_do_nothing(index_elements=["request_id"]))
+        amount=amount, status="reserved", expires_at=datetime.now(timezone.utc) + timedelta(seconds=lifetime_seconds)).on_conflict_do_nothing(index_elements=["request_id"]))
     if not created.rowcount:
-        return reserve_inference(session, user_id, key, request_hash, amount)
+        return reserve_inference(session, user_id, key, request_hash, amount, lifetime_seconds=lifetime_seconds)
     funding = session.get(InferenceFunding, request_id)
     escrow = "inference:" + request_id
     ensure_account(session, escrow, "inference_escrow")
@@ -70,14 +73,18 @@ def resolve_inference(session, request_id, user_id, *, refund=False):
     if funding is None:
         raise InvalidPosting("Inference reservation not found")
     terminal = "refunded" if refund else "settled"
-    changed = session.execute(update(InferenceFunding).where(
-        InferenceFunding.request_id == request_id, InferenceFunding.status == "reserved"
-    ).values(status=terminal, resolved_at=datetime.now(timezone.utc)))
+    now = datetime.now(timezone.utc)
+    conditions = [InferenceFunding.request_id == request_id, InferenceFunding.status == "reserved"]
+    if not refund:
+        conditions.append(InferenceFunding.expires_at > now)
+    changed = session.execute(update(InferenceFunding).where(*conditions).values(
+        status=terminal, resolved_at=now).execution_options(synchronize_session=False))
     if not changed.rowcount:
         session.refresh(funding)
         if funding.status != terminal:
             raise InvalidPosting("Inference reservation already resolved differently")
         return funding
+    session.refresh(funding)
     destination = owner if refund else "service:foundation-inference"
     ensure_account(session, destination, "user" if refund else "service")
     escrow = "inference:" + request_id
@@ -86,3 +93,23 @@ def resolve_inference(session, request_id, user_id, *, refund=False):
                                 postings={escrow: -funding.amount, destination: funding.amount})
     session.flush()
     return funding
+
+
+def refund_expired_inference(session, user_id, *, limit=100):
+    """Lazy recovery after crashes; never refund another user's reservation."""
+    if type(limit) is not int or not 1 <= limit <= 1000:
+        raise ValueError("Invalid reconciliation batch limit")
+    rows = session.scalars(select(InferenceFunding).where(
+        InferenceFunding.owner_account == user_account_id(user_id),
+        InferenceFunding.status == "reserved", InferenceFunding.expires_at <= datetime.now(timezone.utc)
+    ).order_by(InferenceFunding.expires_at, InferenceFunding.request_id).limit(limit)).all()
+    recovered = 0
+    for row in rows:
+        try:
+            resolve_inference(session, row.request_id, user_id, refund=True)
+            recovered += 1
+        except InvalidPosting:
+            session.refresh(row)
+            if row.status != "settled":
+                raise
+    return recovered

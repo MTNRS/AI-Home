@@ -90,3 +90,33 @@ def test_concurrent_duplicate_reservation_and_settlement(engine):
     with ThreadPoolExecutor(max_workers=2) as pool:
         list(pool.map(settle, range(2)))
     assert CreditLedger(engine).balance("service:foundation-inference") == 7
+
+
+def test_expired_crash_reservations_refund_and_fence_late_workers(engine):
+    from datetime import datetime, timezone, timedelta
+    from ai_home.inference_credits import refund_expired_inference
+    with Session(engine) as session, session.begin():
+        stale, _ = reserve_inference(session, "alice", "crashed", "a" * 64, 7)
+        key = stale.request_id
+        stale.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        active, _ = reserve_inference(session, "alice", "active", "a" * 64, 9)
+        active_key = active.request_id
+    # A fresh connection after pool disposal reads durable evidence, no in-memory worker state.
+    engine.dispose()
+    with pytest.raises(InvalidPosting):
+        with Session(engine) as session, session.begin():
+            resolve_inference(session, key, "alice")
+    with Session(engine) as session, session.begin():
+        assert refund_expired_inference(session, "bob") == 0
+        assert refund_expired_inference(session, "alice") == 1
+        assert refund_expired_inference(session, "alice") == 0
+        assert session.get(InferenceFunding, active_key).status == "reserved"
+    assert CreditLedger(engine).balance("user:alice") == 91
+    with pytest.raises(InvalidPosting):
+        with Session(engine) as session, session.begin():
+            resolve_inference(session, key, "alice")
+    with Session(engine) as session, session.begin():
+        row, created = reserve_inference(session, "alice", "crashed", "a" * 64, 7)
+        assert not created and row.status == "refunded"
+        resolve_inference(session, active_key, "alice", refund=True)
+    assert CreditLedger(engine).balance("user:alice") == 100

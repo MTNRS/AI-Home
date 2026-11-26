@@ -581,3 +581,18 @@ request forms and receipt rejection; privacy fixtures updated for the new state.
 An initial source encoding issue and two outdated fixture failures were fixed.
 Final full suite: 257 passed, 4 PostgreSQL skips. Credit dialog layout has not
 been visually reviewed. Crash reconciliation remains outstanding.
+
+
+### Expiring inference reservations and lazy crash recovery
+
+Migration 0008 adds reservation deadlines (configurable 30–3600 seconds, default
+600). Settlement conditionally rejects expired reservations. Balance reads and
+new priced requests transactionally refund up to 100 expired reservations for
+the authenticated owner; unexpired and other-owner reservations remain intact.
+Recovery is lazy, not a global background service. Tests dispose/reopen database
+connections to recover durable abandoned reservations, reject late settlement,
+preserve live reservations, retain idempotency and verify API balance recovery.
+The initial SQLite naive/aware ORM synchronization failure was corrected by
+using database-only deadline predicates and refreshing the row. Final suite:
+258 passed, 4 PostgreSQL skips; migration upgrade/check/downgrade passed.
+No production database or real user balance was changed.

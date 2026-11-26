@@ -125,7 +125,7 @@ in this table. Hashes are integrity bindings, not encryption or proof of privacy
 against guessing. Accounting records remain pseudonymous and durable.
 
 Foundation chat now connects these primitives to a configurable
-flat completion price. Crash reconciliation remains to be implemented. SQLite transactional/concurrency tests cover the primitives; PostgreSQL
+flat completion price. Expired reservations are recovered lazily as described below. SQLite transactional/concurrency tests cover the primitives; PostgreSQL
 runtime behavior remains unverified on this machine.
 
 
@@ -146,9 +146,8 @@ include inference reservations; transaction history shows reserve/settle/refund.
 Charging covers completed computation, not guaranteed network delivery. A lost
 response is not cached or replayed, and a new key authorizes a new charge.
 
-Recovery of reservations left by a process crash is still outstanding. Keep the default free mode until those
-operational requirements are met; an interrupted reservation remains visible in
-the ledger. No existing deployment configuration has been changed by this work.
+Expired reservations are recoverable on the next balance query or paid request;
+an interrupted reservation remains visible until expiry and reconciliation. No existing deployment configuration has been changed by this work.
 
 
 ### Streaming settlement and cancellation
@@ -164,8 +163,7 @@ was not delivered. This is not an acknowledgement-based delivery charge.
 Insufficient balance and duplicate/conflicting IDs discovered by the worker
 produce SSE error codes `insufficient_credits` and `credit_request_conflict`.
 Other failures retain the generic redacted inference error. A crash or database
-outage can still leave a durable reservation pending reconciliation; automatic
-recovery is not implemented yet. A real loopback HTTP test closes after receiving
+outage can leave a durable reservation pending expiry and lazy reconciliation. A real loopback HTTP test closes after receiving
 a generated delta and verifies that the worker refunds its reservation.
 
 
@@ -183,3 +181,24 @@ client validates the reported charge and request ID and displays credits consume
 in the completion status. A receipt mismatch is reported as an error, not an
 automatic refund. The balance/transaction view remains authoritative after a
 lost response or cancellation that raced with completed computation.
+
+
+### Expiry and recovery after interrupted processes
+
+Migration 0008 records a deadline on each reservation. Configure
+`AI_HOME_FOUNDATION_RESERVATION_SECONDS` (30–3600, default 600). After expiry,
+settlement is fenced by a conditional database update; a late worker cannot
+charge a reservation already refunded. This is a hard billing deadline, not an
+inference timeout or renewable worker lease. Long-running inference may waste
+compute and fail to return a successful billed response after this deadline.
+
+`GET /api/v1/credits` and admission of a new priced request reconcile up to 100
+expired reservations belonging to that authenticated user, in a transaction.
+Repeated balance queries drain larger backlogs. Live unexpired reservations and
+other accounts are untouched. There is no background global sweeper: recovery
+occurs when the user next queries the balance or requests paid work. Database
+unavailability postpones recovery without discarding the durable reservation.
+A settlement already in progress may win the race; completed charges are never
+refunded by this recovery path. Existing deadline-less reservations from 0007
+are migrated with their creation time as expiry, making pending legacy records
+immediately recoverable. Deploy migrations with inference workers stopped.

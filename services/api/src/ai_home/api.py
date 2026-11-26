@@ -34,7 +34,7 @@ from ai_home.auth import (
 )
 from ai_home.config import Settings
 from ai_home.credits import Account, InsufficientCredits, LedgerTransaction, Posting, IdempotencyConflict
-from ai_home.inference_credits import InferenceFunding, reserve_inference, resolve_inference
+from ai_home.inference_credits import InferenceFunding, reserve_inference, resolve_inference, refund_expired_inference
 from ai_home.job_credits import JobFunding, refund_job, user_account_id
 from ai_home.database import build_engine
 from ai_home.inference import chat_completion
@@ -506,10 +506,13 @@ def create_app(
             return None
         if payload.credit_request_id is None or payload.credit_limit < price:
             raise HTTPException(status_code=402, detail="Explicit credit request ID and sufficient credit limit required.")
+        with request.app.state.session_factory() as session, session.begin():
+            refund_expired_inference(session, user.user_id)
         digest = hashlib.sha256(payload.model_dump_json().encode()).hexdigest()
         try:
             with request.app.state.session_factory() as session, session.begin():
-                funding, created = reserve_inference(session, user.user_id, str(payload.credit_request_id), digest, price)
+                funding, created = reserve_inference(session, user.user_id, str(payload.credit_request_id), digest, price,
+                                                      lifetime_seconds=request.app.state.settings.foundation_reservation_seconds)
                 if not created:
                     raise HTTPException(status_code=409, detail="Credit request already processed or in progress; inference was not repeated.")
                 return funding.request_id
@@ -1351,6 +1354,8 @@ def create_app(
     @app.get("/api/v1/credits")
     def get_own_credits(current_user: AuthenticatedUser = Depends(get_current_user),
                         session: Session = Depends(get_db)) -> dict[str, int]:
+        refund_expired_inference(session, current_user.user_id)
+        session.commit()
         account_id = user_account_id(current_user.user_id)
         account = session.get(Account, account_id)
         reserved = session.scalar(select(func.sum(JobFunding.amount)).where(
