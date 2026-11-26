@@ -1273,3 +1273,10 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   sin acumular eventos ni perder historial persistido.
 - 13 pruebas pasaron en 4.69s: cancelar después del paso 1 guarda y reanuda
   exactamente; callbacks no pueden mutar el historial. Tk cuatro pasos también OK.
+
+## 2026-11-26 — Entrenamiento/cancelación con worker Tk real
+
+- Script de integración ejecutó modelo y worker real, esperó métrica en pantalla,
+  canceló desde el botón y validó informe/checkpoint con paso coincidente.
+- Pasó localmente; artefactos visual-training-async-v1. Gate instalado/Xvfb añadido
+  a CI y reporte conservado; resultado remoto de la adición pendiente.

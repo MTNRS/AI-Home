@@ -409,3 +409,17 @@ Modificar el diccionario del callback no altera el historial guardado. Prueba Tk
 de cuatro pasos repetida, con salida artifacts/visual-training-ui-v2, también pasó.
 La prueba Tk síncrona comprueba el resultado final, no la cadencia visual de los
 updates; inspección visual de este formulario sigue pendiente.
+
+## Entrenamiento asíncrono real desde Tk
+
+`scripts/verify_visual_training.py` usa la aplicación real, su worker _background,
+cola de eventos, formulario y bucle Tk. Con manifiesto procedimental propio y
+horizonte de 200 pasos, espera una métrica real mostrada, invoca Cancelar y comprueba
+que el informe declara cancelación antes del final, que el checkpoint carga y que
+su paso coincide con la última métrica y el nombre mostrado en pantalla.
+
+Ejecución Windows real pasó, artefactos en artifacts/visual-training-async-v1.
+Esto supera la limitación del harness síncrono anterior para actualización y
+cancelación; no inspecciona visualmente el layout. CI añade el mismo script con
+paquete instalado, Xvfb y Python -I, y conserva el informe. Resultado remoto de
+esta adición pendiente de comprobar.
