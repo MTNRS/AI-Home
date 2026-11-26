@@ -91,3 +91,25 @@ def test_invalid_resume_rejected_before_output(dataset, tmp_path, change):
         train_visual(*args, destination, prompt="Q", resume=partial,
                      stop_after=1 if change == "stop" else None)
     assert not destination.exists()
+
+
+def test_progress_cancel_saves_exact_step_and_resumes(dataset, tmp_path):
+    manifest, _ = dataset
+    config = FoundationConfig(vocab_size=262, width=16, layers=1, heads=2, kv_heads=1, hidden=32, context=16)
+    training = TrainingConfig(steps=3, batch_size=1, warmup=1, objective="sft", checkpoint_every=3)
+    args = (manifest, ByteBPE(), config, VisionConfig(8, 4), training)
+    cancel = threading.Event()
+    observed = []
+    def progress(metric):
+        observed.append(dict(metric))
+        metric["step"] = 999  # Display callbacks cannot corrupt the saved history.
+        cancel.set()
+    _, history, checkpoint = train_visual(*args, tmp_path / "cancel", prompt="Q", cancel=cancel, on_metric=progress)
+    assert [m["step"] for m in observed] == [1]
+    assert history[0]["step"] == 1
+    _, _, payload = load_vision_weights(checkpoint)
+    assert payload["training_state"]["step"] == 1
+    resumed, _, _ = train_visual(*args, tmp_path / "resume", prompt="Q", resume=checkpoint)
+    whole, _, _ = train_visual(*args, tmp_path / "whole", prompt="Q")
+    for key, value in whole.state_dict().items():
+        torch.testing.assert_close(value, resumed.state_dict()[key], rtol=0, atol=0)

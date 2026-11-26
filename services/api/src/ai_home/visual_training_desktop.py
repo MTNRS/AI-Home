@@ -1,5 +1,6 @@
 """Local visual training form using the same configuration workflow as the CLI."""
 import threading
+import queue
 import tkinter as tk
 from tkinter import ttk, filedialog
 from tkinter.scrolledtext import ScrolledText
@@ -72,11 +73,40 @@ def open_visual_training_dialog(app):
         cancel.clear()
         start.configure(state="disabled")
         status.set("Entrenando localmente…")
+        metrics = queue.Queue(maxsize=1)
+        done = threading.Event()
+        session = app.session_token
+        def record(metric):
+            # Keep only the most recent display update; complete history is saved.
+            try:
+                metrics.get_nowait()
+            except queue.Empty:
+                pass
+            metrics.put_nowait(metric)
+        def poll():
+            if done.is_set():
+                return
+            if not window.winfo_exists() or app.session_token != session:
+                cancel.set()
+                return
+            try:
+                metric = metrics.get_nowait()
+                status.set(f"Paso {metric['step']} · pérdida {metric['train_loss']:.4f} · validación {metric['validation_loss']:.4f} · {metric['supervised_tokens_per_second']:.1f} tokens/s")
+            except queue.Empty:
+                pass
+            window.after(100, poll)
+        def finished(report):
+            done.set()
+            success(report)
+        def failed():
+            done.set()
+            failure()
+        window.after(100, poll)
         def operation():
             from .foundation.vision_train_cli import train_from_config
             return train_from_config(values["dataset"], values["config"], values["output"],
-                device=selected_device, resume=values["resume"] or None, cancel=cancel)
-        app._background(operation, success, failure, is_current=lambda: bool(window.winfo_exists()))
+                device=selected_device, resume=values["resume"] or None, cancel=cancel, on_metric=record)
+        app._background(operation, finished, failed, is_current=lambda: bool(window.winfo_exists()))
     start = ttk.Button(controls, text="Entrenar", command=execute)
     start.pack(side="left", padx=8)
     ttk.Button(controls, text="Cancelar", command=cancel.set).pack(side="left")

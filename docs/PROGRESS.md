@@ -1266,3 +1266,10 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - Tk real entrenó cuatro pasos y mostró checkpoint/pérdidas, artefactos conservados.
   CLI regresión 1 passed in 2.51s y navegación de diez secciones OK.
 - Revisión visual del nuevo formulario y métricas en vivo pendientes.
+
+## 2026-11-26 — Progreso visual y cancelación reanudable
+
+- Métricas por paso conectadas a formulario con cola de última actualización,
+  sin acumular eventos ni perder historial persistido.
+- 13 pruebas pasaron en 4.69s: cancelar después del paso 1 guarda y reanuda
+  exactamente; callbacks no pueden mutar el historial. Tk cuatro pasos también OK.

@@ -17,7 +17,7 @@ from .vision_checkpoint import load_vision_weights, vision_weights_payload
 
 
 def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
-                 device="cpu", prompt="Describe the image.", resume=None, stop_after=None, cancel=None):
+                 device="cpu", prompt="Describe the image.", resume=None, stop_after=None, cancel=None, on_metric=None):
     if training.objective != "sft":
         raise ValueError("Visual training requires SFT")
     if stop_after is not None and (type(stop_after) is not int or not 1 <= stop_after <= training.steps):
@@ -138,6 +138,8 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
                         "validation_loss": validation_loss / validation_tokens,
                         "supervised_tokens": tokens, "seconds": elapsed,
                         "supervised_tokens_per_second": tokens / elapsed})
+        if on_metric is not None:
+            on_metric(dict(history[-1]))
         stopping = step == stop_after or (cancel is not None and cancel.is_set())
         if step % training.checkpoint_every == 0 or step == training.steps or stopping:
             last = save(step)

@@ -395,3 +395,17 @@ rellenó e invocó el formulario y comprobó paso 4 y métricas mostradas; artef
 verificar el resultado; producto usa _background. CLI regresión: 1 passed in 2.51s;
 navegación de diez secciones también pasó. Revisión visual/DPI de este formulario
 nuevo y prueba específica de cancelación durante entrenamiento desde UI pendientes.
+
+## Métricas en vivo y parada en un paso verificado
+
+El trainer emite una copia de cada métrica después de validar el paso. El formulario
+consume el último progreso cada 100 ms y muestra paso, pérdidas y tokens/s. La
+cola tiene capacidad uno; descartar actualizaciones de pantalla atrasadas no borra
+el historial completo del checkpoint/informe. El poll verifica ventana y sesión.
+
+13 pruebas entrenamiento/CLI pasaron en 4.69s: una cancelación solicitada desde la
+primera métrica guarda paso 1; reanudar coincide exactamente con la corrida continua.
+Modificar el diccionario del callback no altera el historial guardado. Prueba Tk
+de cuatro pasos repetida, con salida artifacts/visual-training-ui-v2, también pasó.
+La prueba Tk síncrona comprueba el resultado final, no la cadencia visual de los
+updates; inspección visual de este formulario sigue pendiente.

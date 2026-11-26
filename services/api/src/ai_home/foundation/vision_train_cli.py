@@ -35,7 +35,7 @@ def main():
     print(json.dumps(report, ensure_ascii=True))
 
 
-def train_from_config(dataset, config_path, output_dir, *, device="cpu", resume=None, stop_after=None, cancel=None):
+def train_from_config(dataset, config_path, output_dir, *, device="cpu", resume=None, stop_after=None, cancel=None, on_metric=None):
     config_path, output_dir = Path(config_path), Path(output_dir)
     cancel = cancel if cancel is not None else threading.Event()
     with config_path.open("rb") as source:
@@ -61,7 +61,7 @@ def train_from_config(dataset, config_path, output_dir, *, device="cpu", resume=
     output_dir.mkdir(parents=True, exist_ok=False)
     _, history, checkpoint = train_visual(dataset, tokenizer, config, vision, training,
         output_dir, device=device, prompt=data["prompt"], resume=resume,
-        stop_after=stop_after, cancel=cancel)
+        stop_after=stop_after, cancel=cancel, on_metric=on_metric)
     report = {"format": "ai-home-visual-training-report-v1", "dataset_sha256": dataset_hash,
         "model": asdict(config), "vision": asdict(vision), "training": asdict(training),
         "tokenizer_sha256": tokenizer.fingerprint, "prompt": data["prompt"],
