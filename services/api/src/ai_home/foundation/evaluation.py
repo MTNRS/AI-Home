@@ -100,7 +100,7 @@ def evaluate_checkpoint(path, suite, *, device="auto", max_new_tokens=64, max_by
         rows = [r for r in results if r["category"] == category]
         passed = sum(r["passed"] for r in rows)
         categories[category] = {"passed": passed, "total": len(rows), "accuracy": passed / len(rows)}
-    return {"format": "ai-home-evaluation-v1", "checkpoint_sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+    return {"format": "ai-home-evaluation-v1", "checkpoint_sha256": model.checkpoint_sha256,
             "suite_sha256": canonical_hash(suite.model_dump()), "suite_version": suite.version,
             "tokenizer_sha256": tokenizer.fingerprint, "device": device,
             "torch_version": str(torch.__version__), "generation": {"temperature": 0, "max_new_tokens": max_new_tokens},

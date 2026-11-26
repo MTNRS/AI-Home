@@ -156,3 +156,22 @@ def test_evaluation_job_progress_cancellation_and_exclusive_report(tmp_path):
     assert not cancelled.exists()
     with pytest.raises(EvaluationCancelled):
         run_evaluation(checkpoint, suite, cancelled, cancel=cancellation)
+
+
+def test_evaluation_identity_tracks_loaded_weights_not_replaced_path(tmp_path):
+    import hashlib
+    from ai_home.foundation.checkpoint import load_checkpoint
+    checkpoint = tmp_path / "original.pt"
+    config = FoundationConfig(vocab_size=280, width=16, layers=1, heads=2, kv_heads=1, hidden=32, context=64)
+    train(records("identity"), checkpoint, config, TrainingConfig(steps=1, warmup=0), "cpu")
+    original_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    assert load_checkpoint(checkpoint)[0].checkpoint_sha256 == original_hash
+    suite = {"version":"identity-v1", "source":"authored test", "license":"Apache-2.0",
+             "cases":[{"id":"one", "category":"mathematics", "prompt":"1+1?", "answers":["2"]},
+                      {"id":"two", "category":"mathematics", "prompt":"2+2?", "answers":["4"]}]}
+    def replace_path(_):
+        checkpoint.write_bytes(b"Different bytes after model loading")
+    report = evaluate_checkpoint(checkpoint, suite, device="cpu", max_new_tokens=2, on_probe=replace_path)
+    assert report["checkpoint_sha256"] == original_hash
+    assert hashlib.sha256(checkpoint.read_bytes()).hexdigest() != original_hash
+    assert len(report["results"]) == 2

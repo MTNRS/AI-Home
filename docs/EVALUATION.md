@@ -73,3 +73,15 @@ cancellation is checked between generated tokens/probes and before publication.
 Incomplete evaluations are not published. Complete reports are flushed and
 exclusively linked into place, never overwriting an existing file. Cancellation
 after publication does not remove the completed report. No model is activated.
+
+
+## Identity of evaluated weights
+
+Checkpoint loading hashes the same opened file handle before and after safe
+weights loading, with bounded streaming reads. In-place modification during
+loading is rejected. The resulting model carries a runtime-only
+`checkpoint_sha256`; this attribute is not a model weight or checkpoint field.
+Evaluation reports use that identity, not a later read of the pathname. If the
+path is replaced after loading, the report still identifies the bytes actually
+loaded. Tests change the path between probes and mutate a file during loading.
+This is content identity checking, not signature-based publisher authentication.

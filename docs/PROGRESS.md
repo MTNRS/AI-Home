@@ -687,3 +687,15 @@ worker success/failure behavior with an actual renewal thread. Full suite:
 262 passed, 5 PostgreSQL skips (portable server stopped). Renewal alone grants
 no credit and does not freshen resource snapshots. Handler/kernel interruption
 and multi-host long-duration validation remain outside this completed increment.
+
+
+### Evaluation checkpoint identity binding
+
+Fixed a report provenance race: evaluation previously hashed the path after
+generation, which could identify different bytes than those loaded. Safe loading
+now hashes one open handle before/after deserialization and exposes the verified
+source identity on the runtime model. Evaluation reports use that identity.
+Tests modify a loaded path between real probes and modify file bytes during
+loading, verifying correct attribution and rejection respectively. Full suite:
+264 passed, 5 PostgreSQL skips (server stopped). This adds no signature or
+publisher-authentication claim.

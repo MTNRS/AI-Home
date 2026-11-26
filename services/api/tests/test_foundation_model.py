@@ -242,3 +242,21 @@ def test_local_training_job_retains_configuration_and_resumes(tmp_path):
         torch.testing.assert_close(left[key], right[key], atol=1e-6, rtol=1e-5)
     with pytest.raises(FileExistsError):
         run_training(dataset, architecture, settings, tmp_path / "paused")
+
+
+def test_checkpoint_loader_rejects_in_place_modification_during_read(tmp_path, monkeypatch):
+    path = tmp_path / "changing.pt"
+    train(records(), path, config(), TrainingConfig(steps=1, warmup=0), "cpu")
+    original = torch.load
+    def changed(source, *args, **kwargs):
+        payload = original(source, *args, **kwargs)
+        with path.open("r+b") as target:
+            target.seek(-1, 2)
+            byte = target.read(1)
+            target.seek(-1, 2)
+            target.write(bytes([byte[0] ^ 1]))
+            target.flush()
+        return payload
+    monkeypatch.setattr(torch, "load", changed)
+    with pytest.raises(ValueError, match="changed while loading"):
+        load_checkpoint(path)

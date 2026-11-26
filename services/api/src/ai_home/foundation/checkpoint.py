@@ -1,4 +1,5 @@
 import os
+import hashlib
 from pathlib import Path
 import tempfile
 
@@ -27,9 +28,25 @@ def atomic_save(payload, path):
 
 def load_checkpoint(path, device="cpu", max_bytes=2_000_000_000):
     path = Path(path)
-    if path.stat().st_size > max_bytes:
-        raise ValueError("Checkpoint exceeds configured file budget")
-    payload = torch.load(path, map_location="cpu", weights_only=True)
+    if type(max_bytes) is not int or max_bytes < 1:
+        raise ValueError("Invalid checkpoint file budget")
+    def digest(source):
+        source.seek(0)
+        total, result = 0, hashlib.sha256()
+        while block := source.read(min(1024 * 1024, max_bytes + 1 - total)):
+            total += len(block)
+            if total > max_bytes:
+                raise ValueError("Checkpoint exceeds configured file budget")
+            result.update(block)
+        return result.hexdigest()
+    with path.open("rb") as source:
+        if os.fstat(source.fileno()).st_size > max_bytes:
+            raise ValueError("Checkpoint exceeds configured file budget")
+        source_sha256 = digest(source)
+        source.seek(0)
+        payload = torch.load(source, map_location="cpu", weights_only=True)
+        if digest(source) != source_sha256:
+            raise ValueError("Checkpoint changed while loading")
     if not isinstance(payload, dict) or payload.get("format") != FORMAT:
         raise ValueError("Not an AI@Home Foundation checkpoint")
     tokenizer = ByteBPE.from_dict(payload["tokenizer"])
@@ -56,4 +73,5 @@ def load_checkpoint(path, device="cpu", max_bytes=2_000_000_000):
         if not torch.equal(state["output.weight"], state["embedding.weight"]):
             raise ValueError("Inconsistent tied embeddings")
     model.load_state_dict(state, strict=True)
+    model.checkpoint_sha256 = source_sha256
     return model.to(device), tokenizer, payload
