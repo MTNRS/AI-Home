@@ -18,6 +18,7 @@ def method(name):
 def test_late_answer_cannot_enter_another_conversation():
     app = SimpleNamespace(
         chat_request_active=False, prompt_is_placeholder=False,
+        stream_enabled_var=Mock(), chat_preview_var=Mock(),
         prompt=Mock(), messages=[], memory_notes=[],
         pinned_server_version=None, server_version_var=Mock(),
         use_server_ai_var=Mock(), use_knowledge_var=Mock(return_value=False), session_token="private-token",
@@ -29,6 +30,7 @@ def test_late_answer_cannot_enter_another_conversation():
     app.prompt.get.return_value = "Private question"
     app.use_server_ai_var.get.return_value = True
     app.use_knowledge_var.get.return_value = False
+    app.stream_enabled_var.get.return_value = False
     method("_send_message")(app)
     operation, success, failure = app._background.call_args.args
     assert len(app.messages) == 1
@@ -51,7 +53,7 @@ def test_profile_switch_clears_chat_and_closes_old_memory_dialogs(tmp_path, monk
     app = SimpleNamespace(
         private_windows=[window], memory_notes=["old secret"],
         prompt=Mock(), api_key_var=Mock(), use_knowledge_var=Mock(), prompt_is_placeholder=True,
-        _clear_chat=Mock(), server_version_combo=Mock(),
+        _clear_chat=Mock(), server_version_combo=Mock(), stream_enabled_var=Mock(),
     )
     method("_switch_memory_profile")(app, "https://one.example", str(uuid4()))
     assert app.memory_notes == []
@@ -88,6 +90,7 @@ def test_server_response_pins_next_turn_and_records_version_provenance():
     version = str(uuid4())
     app = SimpleNamespace(
         chat_request_active=False, prompt_is_placeholder=False,
+        stream_enabled_var=Mock(), chat_preview_var=Mock(),
         prompt=Mock(), messages=[], memory_notes=[], use_server_ai_var=Mock(),
         use_knowledge_var=Mock(), pinned_server_version=None, server_version_var=Mock(),
         session_token="token", session_server_url="https://example.org", conversation_source=None,
@@ -97,6 +100,7 @@ def test_server_response_pins_next_turn_and_records_version_provenance():
     app.prompt.get.return_value = "Hi"
     app.use_server_ai_var.get.return_value = True
     app.use_knowledge_var.get.return_value = False
+    app.stream_enabled_var.get.return_value = False
     app.server_version_var.get.return_value = desktop.DEFAULT_SERVER_VERSION
     send = method("_send_message")
     send(app)
@@ -109,3 +113,29 @@ def test_server_response_pins_next_turn_and_records_version_provenance():
     send(app)
     app._background.call_args.args[0]()
     assert completion.call_args.kwargs["model_version"] == version
+
+
+def test_stop_sets_cancellation_and_clears_preview():
+    import threading
+    cancel = threading.Event()
+    app = SimpleNamespace(chat_cancel=cancel, chat_preview_var=Mock(), status_var=Mock())
+    method("_stop_generation")(app)
+    assert cancel.is_set()
+    app.chat_preview_var.set.assert_called_with("")
+
+
+def test_late_stream_fragments_are_discarded_after_stop_or_conversation_change():
+    import queue
+    import threading
+    current, stopped = threading.Event(), threading.Event()
+    stopped.set()
+    events = queue.Queue()
+    events.put(("chat_delta", ("old-chat", current, "old private text")))
+    events.put(("chat_delta", ("current-chat", stopped, "cancelled text")))
+    events.put(("chat_delta", ("current-chat", current, "accepted")))
+    preview = Mock()
+    preview.get.return_value = ""
+    app = SimpleNamespace(events=events, conversation_id="current-chat", chat_cancel=current,
+                          chat_preview_var=preview, after=Mock(), _drain_events=Mock())
+    method("_drain_events")(app)
+    preview.set.assert_called_once_with("accepted")

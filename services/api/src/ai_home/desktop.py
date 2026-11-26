@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 import httpx
 import keyring
 
+from ai_home.chat_stream import GenerationCancelled, stream_server_chat
 from ai_home.inference import chat_completion, extract_chat_content
 from ai_home.memory import (
     MemoryNote,
@@ -362,6 +363,12 @@ class ServerChatResult:
     model_version: str | None = None
 
 
+def server_stream_result(server_url, user_token, messages, **options):
+    result = stream_server_chat(server_url, user_token, messages, **options)
+    return ServerChatResult(result["answer"], tuple(KnowledgeReference.model_validate(r)
+                            for r in result["references"]), result["model_version"])
+
+
 def server_chat_completion(server_url, user_token, messages, **options) -> str:
     return server_chat_result(server_url, user_token, messages, **options).answer
 
@@ -552,6 +559,7 @@ def main() -> None:
             self.pinned_server_version = None
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
+            self.chat_cancel = None
             self.chat_request_active = False
             self.training_submission_active = False
             self.training_candidate_submitted = False
@@ -1265,6 +1273,12 @@ def main() -> None:
             ).pack(side="left", padx=(8, 0))
             ttk.Button(memory_controls, text="Fuentes recuperadas",
                        command=self._show_knowledge_references).pack(side="right")
+            self.chat_preview_var = tk.StringVar(value="")
+            self.chat_preview = tk.Text(parent, height=4, wrap="word", state="disabled")
+            self.chat_preview.pack(fill="x", padx=28, pady=(0, 4))
+            self.chat_preview_var.trace_add("write", lambda *_: self._render_stream_preview())
+            ttk.Button(memory_controls, text="Detener generación",
+                       command=self._stop_generation).pack(side="right", padx=6)
             conversation = ttk.Frame(parent)
             conversation.pack(fill="both", expand=True, padx=24, pady=(0, 8))
             self.chat_messages_canvas = tk.Canvas(
@@ -1506,6 +1520,9 @@ def main() -> None:
             self.server_version_combo.pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Actualizar versiones aprobadas",
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
+            self.stream_enabled_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(routing, text="Texto progresivo (servidor Foundation)",
+                            variable=self.stream_enabled_var).pack(anchor="w", pady=(6, 0))
             self.use_knowledge_var = tk.BooleanVar(value=False)
             self.use_server_ai_var = tk.BooleanVar(value=False)
             ttk.Checkbutton(
@@ -1713,8 +1730,15 @@ def main() -> None:
                         continue
                     if on_failure is not None:
                         on_failure()
-                    self.status_var.set("Error")
-                    messagebox.showerror("AI@Home", str(error), parent=self)
+                    if isinstance(error, GenerationCancelled):
+                        self.status_var.set("Generación cancelada; respuesta parcial descartada.")
+                    else:
+                        self.status_var.set("Error")
+                        messagebox.showerror("AI@Home", str(error), parent=self)
+                elif kind == "chat_delta":
+                    conversation_id, cancellation, content = payload
+                    if self.conversation_id == conversation_id and self.chat_cancel is cancellation and not cancellation.is_set():
+                        self.chat_preview_var.set((self.chat_preview_var.get() + content)[-2000:])
                 elif kind == "success":
                     callback, result, valid = payload
                     if not valid():
@@ -1870,6 +1894,8 @@ def main() -> None:
                 *self.messages,
                 {"role": "user", "content": prompt},
             ]
+            request_cancel = threading.Event()
+            request_conversation_id = self.conversation_id
             selected_memories = retrieve_memories(prompt, self.memory_notes)
             request_messages = messages_with_memory_context(
                 messages,
@@ -1877,6 +1903,9 @@ def main() -> None:
             )
             try:
                 use_server = self.use_server_ai_var.get()
+                use_stream = self.stream_enabled_var.get()
+                if use_stream and not use_server:
+                    raise ValueError("El texto progresivo requiere activar el servidor Foundation.")
                 use_knowledge = self.use_knowledge_var.get()
                 if use_knowledge and not use_server:
                     raise ValueError("La recuperación de fuentes requiere activar el servidor AI@Home.")
@@ -1908,13 +1937,19 @@ def main() -> None:
                             "conversación, o límpiala antes de cambiar."
                         )
                     self.api_key_var.set("")
-                    operation = lambda: server_chat_result(
-                        server_url,
-                        user_token,
-                        request_messages,
-                        use_knowledge=use_knowledge,
-                        model_version=requested_version,
-                    )
+                    if use_stream:
+                        operation = lambda: server_stream_result(
+                            server_url, user_token, request_messages,
+                            use_knowledge=use_knowledge, model_version=requested_version,
+                            cancel=request_cancel,
+                            on_delta=lambda content: self.events.put(("chat_delta", (
+                                request_conversation_id, request_cancel, content))),
+                        )
+                    else:
+                        operation = lambda: server_chat_result(
+                            server_url, user_token, request_messages,
+                            use_knowledge=use_knowledge, model_version=requested_version,
+                        )
                 else:
                     provider_id, provider_url = self._selected_provider()
                     model = self.model_var.get().strip()
@@ -1962,15 +1997,26 @@ def main() -> None:
                 self.conversation_source = selected_source
             self.prompt.delete("1.0", "end")
             self.chat_request_active = True
+            self.chat_cancel = request_cancel if use_stream else None
+            self.chat_preview_var.set("")
             self.messages.append({"role": "user", "content": prompt})
             self._append_chat("Tú", prompt)
             messages = list(self.messages)
 
-            request_conversation_id = self.conversation_id
+            def on_failure():
+                if self.conversation_id == request_conversation_id:
+                    self.chat_request_active = False
+                    self.chat_cancel = None
+                    self.chat_preview_var.set("")
 
             def on_success(result: str | ServerChatResult) -> None:
                 if self.conversation_id != request_conversation_id:
                     return
+                if request_cancel.is_set():
+                    on_failure()
+                    self.status_var.set("Generación cancelada; respuesta parcial descartada.")
+                    return
+                on_failure()
                 answer = result.answer if isinstance(result, ServerChatResult) else result
                 if isinstance(result, ServerChatResult) and result.model_version is not None:
                     self.pinned_server_version = result.model_version
@@ -1994,7 +2040,7 @@ def main() -> None:
             self._background(
                 operation,
                 on_success,
-                lambda: setattr(self, "chat_request_active", False) if self.conversation_id == request_conversation_id else None,
+                on_failure,
                 is_current=lambda: self.conversation_id == request_conversation_id,
             )
 
@@ -2016,6 +2062,7 @@ def main() -> None:
             self.prompt_is_placeholder = False
             self.api_key_var.set("")
             self.use_knowledge_var.set(False)
+            self.stream_enabled_var.set(False)
             self.server_version_combo.configure(values=[DEFAULT_SERVER_VERSION])
 
         def _show_knowledge_references(self) -> None:
@@ -2028,7 +2075,23 @@ def main() -> None:
             content.insert("end", format_knowledge_references(self.knowledge_references))
             content.configure(state="disabled")
 
+        def _render_stream_preview(self) -> None:
+            self.chat_preview.configure(state="normal")
+            self.chat_preview.delete("1.0", "end")
+            self.chat_preview.insert("end", self.chat_preview_var.get())
+            self.chat_preview.configure(state="disabled")
+            self.chat_preview.yview_moveto(1.0)
+
+        def _stop_generation(self) -> None:
+            if self.chat_cancel is not None:
+                self.chat_cancel.set()
+                self.chat_preview_var.set("")
+                self.status_var.set("Cancelando generación…")
+
         def _clear_chat(self) -> None:
+            self._stop_generation()
+            self.chat_cancel = None
+            self.chat_preview_var.set("")
             self.pinned_server_version = None
             self.server_version_var.set(DEFAULT_SERVER_VERSION)
             self.knowledge_references.clear()
@@ -2454,6 +2517,7 @@ def main() -> None:
             self._background(revoke, on_success)
 
         def _close(self) -> None:
+            self._stop_generation()
             if self.node_stop is not None:
                 self.node_stop.set()
             self.destroy()

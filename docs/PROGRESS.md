@@ -355,3 +355,13 @@ server stop and succeeds on the next inference. The test controls pacing after
 an actual generated chunk. Desktop widget wiring remains pending.
 
 Validation: 210 passed, 4 PostgreSQL tests skipped; no warnings.
+
+
+### Desktop progressive generation (2026-11-26)
+
+Wired the cancellable SSE client to optional server-Foundation desktop mode.
+A bounded preview is updated only through Tk's event queue; stop/clear/profile/
+close cancel the stream. Only complete answers enter history or contribution data;
+late fragments and completion-after-stop are discarded. Existing version pinning
+and retrieval provenance remain intact. Validation: 212 passed, 4 skipped; hidden
+real Windows Tk preview/stop-race/reset check passed with isolated UI fixtures.
