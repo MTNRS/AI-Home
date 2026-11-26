@@ -183,6 +183,7 @@ class NodeAgent:
         self.lease_renew_interval = lease_renew_interval
         self.foundation_device = foundation_device
         self.last_run_metrics = None
+        self.last_measurement_uploaded = False
         self.allow_foundation_training = allow_foundation_training
         server_url = normalize_base_url(server_url)
         self._client = httpx.Client(
@@ -196,6 +197,7 @@ class NodeAgent:
         # Only publish a sample after the server accepts a result; never reuse it
         # after an idle/failed attempt. Timings include service processing.
         self.last_run_metrics = None
+        self.last_measurement_uploaded = False
         resources = {"ram_available_bytes": psutil.virtual_memory().available,
                      "foundation_device": self.foundation_device}
         if self.foundation_device == "cuda":
@@ -263,6 +265,15 @@ class NodeAgent:
         }
         if job.job_type == "foundation.gradient.v1":
             self.last_run_metrics["gradient_tokens_per_second"] = result["token_count"] / max(execution_seconds, 1e-9)
+        from ai_home.schemas import WorkerServiceMeasurement
+        sample = {key: self.last_run_metrics[key] for key in WorkerServiceMeasurement.model_fields}
+        try:
+            telemetry = self._client.post(f"/api/v1/node/jobs/{job.job_id}/measurement", json=sample)
+            self.last_measurement_uploaded = telemetry.is_success
+        except httpx.TransportError:
+            # The result and credits are already committed. Telemetry loss must
+            # not report useful work as failed or cause a second submission.
+            pass
         return True
 
     def close(self) -> None:

@@ -351,13 +351,16 @@ def test_expired_lease_result_is_rejected(client: TestClient, monkeypatch):
     assert expired.status_code == 409
 
 
-def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient):
+@pytest.mark.parametrize("telemetry_unavailable", [False, True])
+def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient, telemetry_unavailable):
     register(client, "alice@example.com")
     token = login(client, "alice@example.com")
     node = create_node(client, token)
     create_job(client, token, values=[6, 8])
 
     def forward(request: httpx.Request) -> httpx.Response:
+        if telemetry_unavailable and request.url.path.endswith('/measurement'):
+            raise httpx.ReadTimeout('Telemetry response lost')
         response = client.request(
             request.method,
             request.url.path,
@@ -384,6 +387,7 @@ def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient):
     )
     try:
         did_work = agent.run_once()
+        assert agent.last_measurement_uploaded is not telemetry_unavailable
         measurement = agent.last_run_metrics
         assert measurement["job_type"] == "math.sum.v1"
         assert measurement["execution_seconds"] > 0
@@ -564,10 +568,42 @@ def test_worker_renews_during_work_and_discards_result_after_lost_lease(monkeypa
     try:
         if renew_status == 200:
             assert agent.run_once()
-            assert submitted == ["/api/v1/node/jobs/test-job/result"]
+            assert submitted == ["/api/v1/node/jobs/test-job/result", "/api/v1/node/jobs/test-job/measurement"]
         else:
             with pytest.raises(RuntimeError, match="not submitted"):
                 agent.run_once()
             assert not submitted
     finally:
         agent.close()
+
+def test_measurement_bound_to_verified_node_completion_and_expiry(client, monkeypatch):
+    register(client, 'measure@example.com')
+    token = login(client, 'measure@example.com')
+    node = create_node(client, token)
+    other = create_node(client, token, name='other')
+    create_job(client, token, values=[6, 8])
+    headers = user_headers(node['node_token'])
+    claim = client.post('/api/v1/node/jobs/claim', headers=headers).json()
+    url = f"/api/v1/node/jobs/{claim['job_id']}/measurement"
+    sample = {'format': 'ai-home-worker-service-measurement-v1', 'job_type': 'math.sum.v1',
+              'device': 'cpu', 'heartbeat_service_seconds': 0.01, 'claim_service_seconds': 0.02,
+              'execution_seconds': 0.001, 'submit_service_seconds': 0.03,
+              'claim_response_bytes': 1000, 'submit_request_bytes': 100}
+    assert client.post(url, headers=headers, json=sample).status_code == 404
+    response = client.post(f"/api/v1/node/jobs/{claim['job_id']}/result", headers=headers,
+        json={'lease_token': claim['lease_token'], 'result': {'sum': 14}})
+    assert response.status_code == 200
+    assert client.post(url, headers=user_headers(other['node_token']), json=sample).status_code == 404
+    assert client.post(url, headers=headers, json={**sample, 'device': 'cuda'}).status_code == 422
+    assert client.post(url, headers=headers, json={**sample, 'execution_seconds': 0.0}).status_code == 422
+    assert client.post(url, headers=headers, json={**sample, 'submit_request_bytes': True}).status_code == 422
+    first = client.post(url, headers=headers, json=sample)
+    assert first.status_code == 200
+    assert client.post(url, headers=headers, json=sample).json() == first.json()
+    assert client.post(url, headers=headers, json={**sample, 'execution_seconds': 0.002}).status_code == 409
+    with client.app.state.session_factory() as session:
+        saved = session.get(ComputeNode, node['node_id']).hardware['service_measurement']
+        assert saved['claim_service_bytes_per_second'] == 50000
+        assert saved['sample'] == sample
+    monkeypatch.setattr(job_service.time, 'time', lambda: first.json()['completed_epoch'] + 121)
+    assert client.post(url, headers=headers, json=sample).status_code == 404

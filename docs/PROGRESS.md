@@ -980,3 +980,18 @@ ancho de banda físico ni benchmark general. Suite: 293 correctas, 5 omitidas,
 41,49 s. CI anterior f509371 pasó, incluido distribuido desde wheel (45821316226).
 Falta transportar/validar muestras frescas y aplicar restricciones explícitas
 antes de afirmar selección por rendimiento/ancho de banda/latencia.
+
+### Recepción vinculada de mediciones de workers
+
+Servidor emite recibo en metadata del nodo tras validar/liquidar resultado; endpoint
+measurement exige mismo nodo/trabajo/tipo/dispositivo y ventana de 120 s basada en
+finalización del servidor. Esquema estricto acotado, tasas derivadas en servidor,
+reintento idéntico sin refrescar edad y conflicto si cambia. Solo última muestra
+por nodo. El tiempo/hardware sigue declarado por worker, no atestado ni usado para
+recompensas. Fallo de telemetría no repite ni invalida resultado aceptado.
+Pruebas acceso cruzado, antes de completar, datos inválidos, duplicado/conflicto,
+caducidad y pérdida de respuesta. Smoke CPU/CUDA real: 4 envíos aceptados y 2
+muestras finales comprobadas en DB con recibos concordantes; reporte
+WORKER_RECEIPTS_SMOKE.json. Suite: 295 correctas, 5 PostgreSQL omitidas, 39,66 s.
+CI previa e07f454 pasó. Scheduler todavía FIFO; falta aplicar muestras comparables
+y frescas con restricciones explícitas en el momento de asignación.

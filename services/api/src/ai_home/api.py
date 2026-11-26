@@ -59,6 +59,7 @@ from ai_home.jobs import (
     revoke_node,
     submit_job_result,
     renew_job_lease,
+    record_worker_measurement,
 )
 from ai_home.models import (
     AuthSession,
@@ -88,6 +89,7 @@ from ai_home.schemas import (
     SessionResponse,
     SubmitJobResultRequest,
     RenewJobLeaseRequest,
+    WorkerServiceMeasurement,
     TrainingContributionExportResponse,
     TrainingContributionReviewResponse,
     TrainingContributionRequest,
@@ -1526,6 +1528,24 @@ def create_app(
                 detail="Job result failed validation.",
             ) from None
         return job
+
+    @app.post("/api/v1/node/jobs/{job_id}/measurement")
+    def submit_node_measurement(job_id: str, payload: WorkerServiceMeasurement,
+                                current_node: ComputeNode = Depends(get_current_node),
+                                session: Session = Depends(get_db)):
+        try:
+            stored = record_worker_measurement(session, node=current_node, job_id=job_id, measurement=payload)
+            session.commit()
+            return {"accepted": True, "completed_epoch": stored["completed_epoch"]}
+        except JobNotFound:
+            session.rollback()
+            raise HTTPException(status_code=404, detail="Recent verified completion not found.") from None
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Completion already has a different measurement.") from None
+        except ValueError:
+            session.rollback()
+            raise HTTPException(status_code=422, detail="Measurement does not match completed work.") from None
 
     return app
 

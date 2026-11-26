@@ -33,7 +33,8 @@ def main():
                           foundation_device=config.get("foundation_device", "cpu"))
         try:
             completed = agent.run_once()
-            print(json.dumps({"pid": os.getpid(), "completed": completed, "measurement": agent.last_run_metrics}))
+            print(json.dumps({"pid": os.getpid(), "completed": completed, "measurement": agent.last_run_metrics,
+                              "measurement_uploaded": agent.last_measurement_uploaded}))
         finally:
             agent.close()
         return

@@ -359,6 +359,15 @@ def submit_job_result(
         raise InvalidJobResult
 
     settle_job(session, job, node.owner_user_id)
+    # Bind later optional telemetry to this authenticated, verified completion.
+    session.refresh(node, with_for_update=True)
+    node.hardware = {**node.hardware, "measurement_receipt": {
+        "job_id": job.job_id, "job_type": job.job_type,
+        "completed_epoch": int(time.time()),
+        "payload_sha256": _request_hash(job.job_type, job.payload),
+        "token_count": result.get("token_count"),
+        "device": (node.hardware.get("resources") or {}).get("foundation_device", "cpu"),
+    }}
     job.status = "completed"
     job.result = result
     job.assigned_node_id = None
@@ -366,6 +375,33 @@ def submit_job_result(
     job.lease_expires_epoch = None
     session.flush()
     return job
+
+
+def record_worker_measurement(session, *, node, job_id, measurement):
+    session.refresh(node, with_for_update=True)
+    receipt = node.hardware.get("measurement_receipt") or {}
+    now = int(time.time())
+    if (receipt.get("job_id") != job_id or node.revoked_at is not None
+            or not 0 <= now - receipt.get("completed_epoch", 0) <= 120):
+        raise JobNotFound
+    data = measurement.model_dump()
+    if data["job_type"] != receipt["job_type"] or data["device"] != receipt["device"]:
+        raise ValueError("Measurement differs from completed job")
+    previous = node.hardware.get("service_measurement")
+    if previous and previous["job_id"] == job_id:
+        if previous["sample"] != data:
+            raise IdempotencyConflict
+        return previous
+    stored = {"job_id": job_id, "completed_epoch": receipt["completed_epoch"],
+              "received_epoch": now, "payload_sha256": receipt["payload_sha256"],
+              "sample": data, "trust": "worker-reported-service-observation",
+              "claim_service_bytes_per_second": data["claim_response_bytes"] / max(data["claim_service_seconds"], 1e-9),
+              "submit_service_bytes_per_second": data["submit_request_bytes"] / max(data["submit_service_seconds"], 1e-9)}
+    if receipt["job_type"] == GRADIENT_JOB_TYPE:
+        stored["gradient_tokens_per_second"] = receipt["token_count"] / max(data["execution_seconds"], 1e-9)
+    node.hardware = {**node.hardware, "service_measurement": stored}
+    session.flush()
+    return stored
 
 
 def create_tokenize_job(session: Session, *, owner_user_id: str, idempotency_key: str,

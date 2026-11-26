@@ -1,0 +1,201 @@
+{
+  "format": "ai-home-distributed-smoke-v1",
+  "torch_version": "2.14.1+cu130",
+  "transport": "loopback HTTP",
+  "device": "cpu",
+  "workers": [
+    {
+      "round": 1,
+      "node_id": "26b357cc-80ef-4e10-ad75-1997eae9bcd7",
+      "device": "cpu",
+      "pid": 3144,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.03288559999782592,
+        "claim_service_seconds": 0.011778499989304692,
+        "execution_seconds": 2.507097399997292,
+        "submit_service_seconds": 0.09267230000114068,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 12989599.706153397,
+        "submit_service_bytes_per_second": 1643090.7617284318,
+        "gradient_tokens_per_second": 12.763764184045886
+      },
+      "measurement_uploaded": true
+    },
+    {
+      "round": 1,
+      "node_id": "2afc0c4b-602f-4337-98dd-e1a56053d330",
+      "device": "cuda",
+      "pid": 27784,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.00747399999818299,
+        "claim_service_seconds": 0.007502499996917322,
+        "execution_seconds": 1.2975334999937331,
+        "submit_service_seconds": 0.048150900009204634,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152268,
+        "claim_service_bytes_per_second": 20392935.696483154,
+        "submit_service_bytes_per_second": 3162308.4920716356,
+        "gradient_tokens_per_second": 24.66217635240597
+      },
+      "measurement_uploaded": true
+    },
+    {
+      "round": 2,
+      "node_id": "26b357cc-80ef-4e10-ad75-1997eae9bcd7",
+      "device": "cpu",
+      "pid": 47864,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.007604500002344139,
+        "claim_service_seconds": 0.007986399999936111,
+        "execution_seconds": 2.4451848000026075,
+        "submit_service_seconds": 0.046457100004772656,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152268,
+        "claim_service_bytes_per_second": 19157317.439800654,
+        "submit_service_bytes_per_second": 3277604.4992984305,
+        "gradient_tokens_per_second": 13.086945412046514
+      },
+      "measurement_uploaded": true
+    },
+    {
+      "round": 2,
+      "node_id": "2afc0c4b-602f-4337-98dd-e1a56053d330",
+      "device": "cuda",
+      "pid": 32128,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.0072570999909657985,
+        "claim_service_seconds": 0.007025500002782792,
+        "execution_seconds": 1.1451355000026524,
+        "submit_service_seconds": 0.04436159999750089,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 21777524.722709797,
+        "submit_service_bytes_per_second": 3432450.588089205,
+        "gradient_tokens_per_second": 27.94429130869306
+      },
+      "measurement_uploaded": true
+    }
+  ],
+  "metrics": [
+    {
+      "round": 1,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.7676215171813965,
+      "validation": {
+        "loss": 5.679264545440674,
+        "tokens": 32,
+        "perplexity": 292.73405813645076
+      }
+    },
+    {
+      "round": 2,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.677713632583618,
+      "validation": {
+        "loss": 5.602051734924316,
+        "tokens": 32,
+        "perplexity": 270.98182031589835
+      }
+    }
+  ],
+  "baseline_validation": {
+    "loss": 5.765335559844971,
+    "tokens": 32,
+    "perplexity": 319.04608513076136
+  },
+  "embedding_delta_l2": 0.1838996857404709,
+  "generated_text": "\ufffd\u065f\u0666\ufffd\ufffdZ\ufffd96D%J\ufffd\ufffd",
+  "checkpoint_sha256": "031f976df31617160d5b28be04a6598a86ff39d87929eafb05ef3e347814ffe3",
+  "elapsed_seconds": 32.595996999996714,
+  "parameter_count": 28192,
+  "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim",
+  "coordinator_process_runs": [
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "2e2a0cb4-0aa7-4d18-9b08-fa42f7fa9632",
+          "status": "queued"
+        },
+        {
+          "id": "26ba305d-1b38-44c5-98e4-74dad2e36326",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "2e2a0cb4-0aa7-4d18-9b08-fa42f7fa9632",
+          "status": "queued"
+        },
+        {
+          "id": "26ba305d-1b38-44c5-98e4-74dad2e36326",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "6aa58d38e597365a941c377f302810efe61ad03863383f5de4fad25939c04a5d"
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "6aa58d38e597365a941c377f302810efe61ad03863383f5de4fad25939c04a5d"
+    }
+  ],
+  "isolated_python": false,
+  "database_setup": "packaged Alembic upgrade and schema check",
+  "credits": {
+    "reward_per_job": 3,
+    "requester": {
+      "available": 0,
+      "reserved": 0,
+      "earned": 0
+    },
+    "workers": [
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      },
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      }
+    ],
+    "issuance": "Synthetic initial balance in disposable demo database; no money or cryptocurrency"
+  },
+  "receipt_verification": {
+    "worker_uploads": 4,
+    "persisted_node_samples": 2,
+    "server_completion_binding": true
+  }
+}

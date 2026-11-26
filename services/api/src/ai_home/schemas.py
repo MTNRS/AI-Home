@@ -458,6 +458,19 @@ class RenewJobLeaseRequest(BaseModel):
     lease_token: SecretStr = Field(min_length=32, max_length=128)
 
 
+class WorkerServiceMeasurement(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    format: Literal["ai-home-worker-service-measurement-v1"]
+    job_type: Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1"]
+    device: Literal["cpu", "cuda"]
+    heartbeat_service_seconds: float = Field(gt=0, le=600, allow_inf_nan=False)
+    claim_service_seconds: float = Field(gt=0, le=600, allow_inf_nan=False)
+    execution_seconds: float = Field(gt=0, le=3600, allow_inf_nan=False)
+    submit_service_seconds: float = Field(gt=0, le=600, allow_inf_nan=False)
+    claim_response_bytes: StrictInt = Field(gt=0, le=2_000_000)
+    submit_request_bytes: StrictInt = Field(gt=0, le=2_000_000)
+
+
 class SubmitJobResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
