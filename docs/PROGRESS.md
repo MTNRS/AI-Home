@@ -965,3 +965,18 @@ host, sin afirmar red multihost ni calidad. Reporte INSTALLED_DISTRIBUTED_SMOKE.
 Suite: 293 correctas, 5 PostgreSQL omitidas (38,50 s). Nueva etapa CI para este
 smoke y reportes; pendiente resultado. CI anterior 9b126d9 pasó, incluida API
 instalada (run 45820882944), y PostgreSQL Python 3.11/3.12.
+
+### Mediciones reales previas a selección por rendimiento/red
+
+NodeAgent registra una muestra solo tras resultado aceptado: duración monotónica
+de heartbeat/claim/ejecución/submit, bytes de cuerpos HTTP y tasas de servicio;
+gradientes incluyen tokens/s. Limpia muestras al iniciar cada intento, también
+si queda ocioso/falla. Sin contenidos ni credenciales. Node smoke/distribuido
+persisten muestras en reportes. No altera todavía FIFO, créditos ni validación.
+Experimento CPU/CUDA real de dos rondas y reinicio: 14,53–14,92 tokens/s CPU y
+27,23–27,52 CUDA, incluyendo preparación de tareas diminutas. Reporte y límites
+en WORKER_MEASUREMENTS.md/WORKER_MEASUREMENTS_SMOKE.json; no se presenta como
+ancho de banda físico ni benchmark general. Suite: 293 correctas, 5 omitidas,
+41,49 s. CI anterior f509371 pasó, incluido distribuido desde wheel (45821316226).
+Falta transportar/validar muestras frescas y aplicar restricciones explícitas
+antes de afirmar selección por rendimiento/ancho de banda/latencia.

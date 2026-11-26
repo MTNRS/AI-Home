@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from csv import Error as CsvError
 from csv import reader
 from pathlib import Path
@@ -181,6 +182,7 @@ class NodeAgent:
             raise ValueError("Lease renewal interval must be between 1 and 60 seconds")
         self.lease_renew_interval = lease_renew_interval
         self.foundation_device = foundation_device
+        self.last_run_metrics = None
         self.allow_foundation_training = allow_foundation_training
         server_url = normalize_base_url(server_url)
         self._client = httpx.Client(
@@ -191,6 +193,9 @@ class NodeAgent:
         )
 
     def run_once(self) -> bool:
+        # Only publish a sample after the server accepts a result; never reuse it
+        # after an idle/failed attempt. Timings include service processing.
+        self.last_run_metrics = None
         resources = {"ram_available_bytes": psutil.virtual_memory().available,
                      "foundation_device": self.foundation_device}
         if self.foundation_device == "cuda":
@@ -198,10 +203,14 @@ class NodeAgent:
             if not torch.cuda.is_available():
                 raise ValueError("CUDA worker requested but CUDA is unavailable")
             resources["cuda_free_bytes"] = torch.cuda.mem_get_info()[0]
+        started = time.perf_counter()
         heartbeat = self._client.post("/api/v1/node/heartbeat", json=resources)
         heartbeat.raise_for_status()
+        heartbeat_seconds = time.perf_counter() - started
 
+        started = time.perf_counter()
         response = self._client.post("/api/v1/node/jobs/claim")
+        claim_seconds = time.perf_counter() - started
         if response.status_code == 204:
             return False
         response.raise_for_status()
@@ -219,14 +228,17 @@ class NodeAgent:
                     return
         renewer = threading.Thread(target=renew, daemon=True)
         renewer.start()
+        started = time.perf_counter()
         try:
             result = execute_job(job.job_type, job.payload, allow_foundation_training=self.allow_foundation_training,
                                  foundation_device=self.foundation_device)
+            execution_seconds = time.perf_counter() - started
         finally:
             stop_renewal.set()
             renewer.join()
         if renewal_failed.is_set():
             raise RuntimeError("Job lease renewal failed; result was not submitted")
+        started = time.perf_counter()
         submitted = self._client.post(
             f"/api/v1/node/jobs/{job.job_id}/result",
             json={
@@ -235,6 +247,22 @@ class NodeAgent:
             },
         )
         submitted.raise_for_status()
+        submit_seconds = time.perf_counter() - started
+        self.last_run_metrics = {
+            "format": "ai-home-worker-service-measurement-v1",
+            "job_type": job.job_type,
+            "device": self.foundation_device,
+            "heartbeat_service_seconds": heartbeat_seconds,
+            "claim_service_seconds": claim_seconds,
+            "execution_seconds": execution_seconds,
+            "submit_service_seconds": submit_seconds,
+            "claim_response_bytes": len(response.content),
+            "submit_request_bytes": len(submitted.request.content),
+            "claim_service_bytes_per_second": len(response.content) / max(claim_seconds, 1e-9),
+            "submit_service_bytes_per_second": len(submitted.request.content) / max(submit_seconds, 1e-9),
+        }
+        if job.job_type == "foundation.gradient.v1":
+            self.last_run_metrics["gradient_tokens_per_second"] = result["token_count"] / max(execution_seconds, 1e-9)
         return True
 
     def close(self) -> None:

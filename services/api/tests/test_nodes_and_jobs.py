@@ -384,7 +384,14 @@ def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient):
     )
     try:
         did_work = agent.run_once()
+        measurement = agent.last_run_metrics
+        assert measurement["job_type"] == "math.sum.v1"
+        assert measurement["execution_seconds"] > 0
+        assert measurement["claim_response_bytes"] > 0
+        assert measurement["submit_request_bytes"] > 0
+        assert "token" not in str(measurement)
         no_work = agent.run_once()
+        assert agent.last_run_metrics is None
     finally:
         agent.close()
 
