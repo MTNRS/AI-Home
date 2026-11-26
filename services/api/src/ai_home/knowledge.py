@@ -140,8 +140,12 @@ class KnowledgeIndex:
         return sorted(ranked, key=lambda item: (-item["score"], item["id"]))[:limit]
 
 
-def inspect_knowledge(path, query=""):
-    index = KnowledgeIndex(path)
+def inspect_knowledge(path, query="", *, embedding_checkpoint=None, device="cpu"):
+    embedder = None
+    if embedding_checkpoint:
+        from ai_home.foundation.embeddings import FoundationEmbedder
+        embedder = FoundationEmbedder(embedding_checkpoint, device=device)
+    index = KnowledgeIndex(path, embedder=embedder)
     return {"summary": index.summary(), "results": index.search(query) if query.strip() else []}
 
 

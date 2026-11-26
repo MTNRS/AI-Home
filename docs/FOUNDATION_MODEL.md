@@ -87,3 +87,13 @@ Neural search ranks all chunks by cosine, including nonpositive similarities;
 it has no calibrated relevance threshold. Exact-text self-retrieval tests verify
 the mechanism, not semantic generalization. Independent relevance benchmarks
 are still required before recommending this backend over TF-IDF.
+
+### Desktop neural knowledge inspection
+
+The local knowledge explorer now accepts an optional own-model checkpoint and an
+explicit CPU/CUDA device. Select the exact checkpoint used to build a neural index,
+then press Buscar / actualizar; TF-IDF needs no checkpoint. Neural indexes without
+the matching checkpoint report an error instead of silently switching retrieval.
+Queries are limited to 32,000 UTF-8 bytes. Checkpoint/device controls are frozen
+while the background inspection runs. This explorer remains local and does not
+change the server's configured chat index or selected model.

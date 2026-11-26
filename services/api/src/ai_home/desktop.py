@@ -1625,6 +1625,26 @@ def main() -> None:
             self.private_windows.append(window)
             window.title("Conocimiento: índice local y fuentes")
             window.geometry("820x580")
+            embedding_controls = ttk.Frame(window, padding=12)
+            embedding_controls.pack(fill="x")
+            ttk.Label(embedding_controls, text="Checkpoint para índice neuronal (opcional)").grid(row=0, column=0, columnspan=3, sticky="w")
+            embedding_path = tk.StringVar()
+            embedding_entry = ttk.Entry(embedding_controls, textvariable=embedding_path)
+            embedding_entry.grid(row=1, column=0, sticky="ew")
+            embedding_controls.columnconfigure(0, weight=1)
+            def choose_embedding():
+                selected = filedialog.askopenfilename(parent=window, title="Checkpoint de embeddings",
+                                                      filetypes=[("Foundation", "*.pt")])
+                if selected:
+                    embedding_path.set(selected)
+            embedding_button = ttk.Button(embedding_controls, text="Elegir checkpoint", command=choose_embedding)
+            embedding_button.grid(row=1, column=1, padx=6)
+            embedding_device = tk.StringVar(value="cpu")
+            device_box = ttk.Combobox(embedding_controls, textvariable=embedding_device,
+                                     values=("cpu", "cuda"), state="readonly", width=8)
+            device_box.grid(row=1, column=2)
+            ttk.Label(embedding_controls, text="TF-IDF no requiere checkpoint. El índice neuronal exige el usado al crearlo.",
+                      wraplength=760).grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
             controls = ttk.Frame(window, padding=12)
             controls.pack(fill="x")
             query = ttk.Entry(controls)
@@ -1641,20 +1661,27 @@ def main() -> None:
                 if busy:
                     return
                 text = query.get().strip()
-                if len(text) > 32000:
-                    messagebox.showerror("Conocimiento", "La consulta supera el límite de 32.000 caracteres.", parent=window)
+                if len(text.encode("utf-8")) > 32000:
+                    messagebox.showerror("Conocimiento", "La consulta supera el límite de 32.000 bytes UTF-8.", parent=window)
                     return
+                checkpoint_path = embedding_path.get().strip() or None
+                device = embedding_device.get()
                 busy = True
                 button.configure(state="disabled")
+                for widget in (embedding_entry, embedding_button, device_box):
+                    widget.configure(state="disabled")
 
                 def inspect():
                     from ai_home.knowledge import inspect_knowledge
-                    return inspect_knowledge(path, text)
+                    return inspect_knowledge(path, text, embedding_checkpoint=checkpoint_path, device=device)
 
                 def finish():
                     nonlocal busy
                     busy = False
                     button.configure(state="normal")
+                    embedding_entry.configure(state="normal")
+                    embedding_button.configure(state="normal")
+                    device_box.configure(state="readonly")
 
                 def display(report):
                     content.configure(state="normal")

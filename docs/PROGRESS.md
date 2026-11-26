@@ -729,3 +729,13 @@ hit 5/8 at k=3; MRR 0.5000 versus 0.5417. This small diagnostic does not demonst
 a general semantic gain. Reports and reproduction are in RETRIEVAL_COMPARISON.json
 and RETRIEVAL_EVALUATION.md. Full suite: 267 passed, 5 PostgreSQL skips. The final
 fixture wrapper change passed its focused test and both documented CLI paths.
+
+### Desktop access to neural knowledge indexes
+
+Added checkpoint/device controls to the local knowledge explorer and optional
+checkpoint-backed inspection API. Full suite: 267 passed, 5 PostgreSQL skips;
+additional CPU/CUDA inspection assertions: 2 passed. A real Tk widget smoke used
+the existing neural index/checkpoint, entered a query, invoked the search button,
+verified returned neural identity/provenance, and checked controls re-enabled.
+That smoke used a synchronous callback harness; it does not prove background
+thread behavior or visual layout quality. No semantic-quality claim is added.

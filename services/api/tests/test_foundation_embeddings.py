@@ -60,6 +60,10 @@ def test_embeddings_cover_all_tokens_and_preserve_logits(tmp_path, device):
     assert matches[0]["index_version"] == version
     assert matches[0]["url"] == common["url"]
     assert index.summary()["embedding"] == embedder.identity
+    from ai_home.knowledge import inspect_knowledge
+    inspected = inspect_knowledge(index_path, text, embedding_checkpoint=path, device=device)
+    assert inspected["summary"]["embedding"] == embedder.identity
+    assert inspected["results"][0]["text"] == text
     from ai_home.knowledge import prepare_knowledge_context
     with pytest.raises(ValueError, match="too small for retrieved evidence"):
         prepare_knowledge_context([{"role": "user", "content": "Q"}],
