@@ -121,6 +121,13 @@ def test_gradient_jobs_run_through_scheduler_and_verify_results(client):
     # Claim's liveness heartbeat cannot silently freshen an old resource snapshot.
     assert client.post("/api/v1/node/jobs/claim", headers=node_headers).status_code == 204
     assert client.post(heartbeat, headers=node_headers, json=healthy).status_code == 200
+    capabilities = "/api/v1/node/capabilities"
+    assert client.put(capabilities, headers=node_headers,
+                      json={"supported_job_types": ["math.sum.v1"]}).status_code == 200
+    assert client.post("/api/v1/node/jobs/claim", headers=node_headers).status_code == 204
+    assert client.put(capabilities, headers=node_headers, json={
+        "supported_job_types": ["foundation.gradient.v1"],
+        "foundation_torch_version": str(torch.__version__)}).status_code == 200
     claim = client.post("/api/v1/node/jobs/claim", headers=node_headers).json()
     result = execute_gradient(claim["payload"])
     submit = f"/api/v1/node/jobs/{claim['job_id']}/result"

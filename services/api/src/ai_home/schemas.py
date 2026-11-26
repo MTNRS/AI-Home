@@ -364,11 +364,8 @@ class HardwareReport(BaseModel):
         return self
 
 
-class RegisterNodeRequest(BaseModel):
+class NodeCapabilities(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1, max_length=120)
-    hardware: HardwareReport
     supported_job_types: list[Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1"]] = Field(
         default_factory=lambda: ["math.sum.v1"], min_length=1, max_length=3)
     foundation_torch_version: StrictStr | None = Field(default=None, max_length=80)
@@ -378,6 +375,11 @@ class RegisterNodeRequest(BaseModel):
         if "foundation.gradient.v1" in self.supported_job_types and not self.foundation_torch_version:
             raise ValueError("Gradient workers must declare their PyTorch runtime")
         return self
+
+
+class RegisterNodeRequest(NodeCapabilities):
+    name: str = Field(min_length=1, max_length=120)
+    hardware: HardwareReport
 
     @field_validator("name")
     @classmethod

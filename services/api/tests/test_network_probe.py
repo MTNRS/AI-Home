@@ -5,6 +5,32 @@ from test_nodes_and_jobs import client, register, login, create_node, user_heade
 from ai_home.network_probe import measure_transfer
 
 
+def test_node_capabilities_are_scoped_and_can_disable_training(client):
+    from sqlalchemy import select
+    from ai_home.models import ComputeNode
+    register(client, "capabilities@example.com")
+    token = login(client, "capabilities@example.com")
+    first = create_node(client, token, "first")
+    second = create_node(client, token, "second")
+    path = "/api/v1/node/capabilities"
+    payload = {"supported_job_types": ["foundation.gradient.v1"], "foundation_torch_version": "test-runtime"}
+    assert client.put(path, json=payload).status_code == 401
+    headers = user_headers(first["node_token"])
+    assert client.put(path, json={"supported_job_types": ["foundation.gradient.v1"]}, headers=headers).status_code == 422
+    assert client.put(path, json={**payload, "node_id": second["node_id"]}, headers=headers).status_code == 422
+    assert client.put(path, json=payload, headers=headers).status_code == 200
+    with client.app.state.session_factory() as session:
+        nodes = {n.node_id: n for n in session.scalars(select(ComputeNode))}
+        assert nodes[first["node_id"]].supported_job_types == ["foundation.gradient.v1"]
+        assert nodes[first["node_id"]].hardware["foundation_torch_version"] == "test-runtime"
+        assert nodes[second["node_id"]].supported_job_types == ["math.sum.v1"]
+    assert client.put(path, json={"supported_job_types": ["math.sum.v1"]}, headers=headers).status_code == 200
+    with client.app.state.session_factory() as session:
+        node = session.get(ComputeNode, first["node_id"])
+        assert node.supported_job_types == ["math.sum.v1"]
+        assert "foundation_torch_version" not in node.hardware
+
+
 def test_worker_periodic_transfer_probe_and_failure_backoff(monkeypatch):
     from ai_home.node_worker import NodeAgent
     now, requests, failing = [0.], [], [False]

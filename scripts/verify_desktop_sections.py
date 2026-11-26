@@ -30,6 +30,14 @@ def run(self,*args):
         assert self.page_stack.select()==str(self.control_sections[name])
         assert self.control_section_var.get()==name
     assert self.transfer_probe_var.get() is False
+    assert self.node_training_var.get() is False
+    assert self.node_device_var.get() == 'cpu'
+    training = next(w for w in descendants(self.control_sections['DISTRIBUTED COMPUTE'])
+                    if isinstance(w, ttk.Checkbutton) and 'Permitir entrenamiento' in w.cget('text'))
+    training.invoke()
+    assert self.node_training_var.get() is True
+    training.invoke()
+    assert self.node_training_var.get() is False
     probe = next(w for w in descendants(self.control_sections['DISTRIBUTED COMPUTE'])
                  if isinstance(w, ttk.Checkbutton) and 'rendimiento HTTP' in w.cget('text'))
     probe.invoke()

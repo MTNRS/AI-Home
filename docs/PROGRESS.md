@@ -1361,3 +1361,13 @@ permanece desactivada por defecto. Tk real verificó navegación y conmutación;
 36 pruebas de escritorio y privacidad aprobadas. CI Foundation y PostgreSQL
 para 694e949 completaron correctamente; incluye el smoke distribuido con filtros
 de transferencia. Revisión visual de la nueva casilla pendiente.
+
+### Entrenamiento voluntario desde escritorio
+
+Añadidos consentimiento específico para gradientes Foundation y selector
+CPU/CUDA. El nodo comunica sus capacidades efectivas con autenticación propia
+antes de reclamar; quitar el consentimiento impide nuevas asignaciones de
+gradientes. Conserva el interruptor del servidor y la verificación de resultados.
+La ruta requiere servidor actualizado. Pruebas locales: 37 de nodos/sondas/
+gradientes y 42 de gradientes/escritorio/privacidad (solapan); Tk real comprobó
+controles. Pendientes revisión visual y smoke del flujo completo de escritorio.

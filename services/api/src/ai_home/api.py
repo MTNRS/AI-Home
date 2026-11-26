@@ -87,6 +87,7 @@ from ai_home.schemas import (
     NodeCredentialResponse,
     NodeResponse,
     NodeResources,
+    NodeCapabilities,
     RegisterNodeRequest,
     RegisterRequest,
     SessionResponse,
@@ -1333,6 +1334,25 @@ def create_app(
                 raise HTTPException(status_code=413, detail="Probe exceeds 1 MiB.")
             digest.update(chunk)
         return {"bytes": total, "sha256": digest.hexdigest()}
+
+    @app.put("/api/v1/node/capabilities")
+    def node_capabilities(
+        payload: NodeCapabilities,
+        current_node: ComputeNode = Depends(get_current_node),
+        session: Session = Depends(get_db),
+    ):
+        session.refresh(current_node, with_for_update=True)
+        if current_node.revoked_at is not None:
+            raise HTTPException(status_code=401, detail="Node revoked")
+        current_node.supported_job_types = sorted(set(payload.supported_job_types))
+        hardware = dict(current_node.hardware)
+        hardware.pop("foundation_torch_version", None)
+        hardware.pop("service_measurement", None)
+        if "foundation.gradient.v1" in payload.supported_job_types:
+            hardware["foundation_torch_version"] = payload.foundation_torch_version
+        current_node.hardware = hardware
+        session.commit()
+        return payload.model_dump()
 
     @app.post("/api/v1/node/heartbeat")
     def node_heartbeat(

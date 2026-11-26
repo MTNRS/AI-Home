@@ -299,3 +299,30 @@ Optional per-job performance/service constraints can now be supplied with
 The file is bounded to 64 KiB, constraints are part of the immutable plan hash,
 and retry sends the same requirements. Planning remains local and does not
 reserve credits; `advance` performs authenticated idempotent submission.
+
+## Participación Foundation desde escritorio
+
+DISTRIBUTED COMPUTE permite habilitar expresamente entrenamiento Foundation
+experimental y elegir CPU o CUDA. Ambos controles se capturan al iniciar el
+nodo; entrenamiento está desactivado por defecto y no se persiste. CUDA no
+retrocede automáticamente a CPU. Se mantienen los límites de memoria, tamaño,
+procedencia pública y verificación independiente del protocolo de gradientes.
+
+Al iniciar, el escritorio llama a `PUT /api/v1/node/capabilities` autenticado con
+la credencial del propio nodo. Actualiza los tipos permitidos y la versión real
+de PyTorch; al desactivar elimina la capacidad de gradientes y su versión.
+El servidor conserva su interruptor global de autorización. La actualización
+no admite seleccionar otro nodo y descarta la muestra anterior de rendimiento
+computacional. Los trabajos con filtros de rendimiento requieren una nueva
+muestra obtenida tras trabajo compatible sin esos filtros.
+
+Se requiere cliente y servidor actualizados; un servidor sin esta ruta produce
+un error real y el escritorio no inicia reclamaciones. Cambiar controles requiere
+detener y reiniciar el nodo. Detener espera al trabajo en curso; no revoca una
+asignación ya entregada. Esta integración no prueba entrenamiento multihost ni
+calidad lingüística generalista.
+
+Pruebas locales: 37 aprobadas de sondas/nodos/gradientes antes de ampliar la
+comprobación de opt-out; después, 42 de gradientes/escritorio/privacidad,
+incluida desactivación/reactivación efectiva en el scheduler. Tk real verificó
+los controles por defecto y su conmutación. Revisión visual pendiente.

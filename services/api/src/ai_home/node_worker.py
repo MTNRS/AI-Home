@@ -202,6 +202,18 @@ class NodeAgent:
             transport=transport,
         )
 
+    def configure_capabilities(self):
+        """Replace this node's capabilities from the current explicit opt-in."""
+        capabilities = {"supported_job_types": ["math.sum.v1", "foundation.tokenize.v1"]}
+        if self.allow_foundation_training:
+            import torch
+            if self.foundation_device == "cuda" and not torch.cuda.is_available():
+                raise ValueError("CUDA worker requested but CUDA is unavailable")
+            capabilities["supported_job_types"].append("foundation.gradient.v1")
+            capabilities["foundation_torch_version"] = str(torch.__version__)
+        response = self._client.put("/api/v1/node/capabilities", json=capabilities)
+        response.raise_for_status()
+
     def measure_transfer(self, size=65536, *, publish=False):
         """Explicit HTTP transfer probe; does not claim jobs or change credits."""
         from ai_home.network_probe import measure_transfer
