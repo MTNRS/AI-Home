@@ -1172,3 +1172,12 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - Informes VISUAL_SMOKE_CPU.json / VISUAL_SMOKE_CUDA.json. Tiempo CUDA sincronizado.
 - CI configurado para repetir smoke CPU del paquete instalado y guardar artefactos;
   resultado remoto aún pendiente de comprobación.
+
+## 2026-11-26 — CI visual y carga Linux → Windows verificados
+
+- Código 2f382a4: Foundation run 45830549581 success, 329 passed/18 skipped;
+  smoke visual instalado exact_resume=true, artefactos publicados. Tk/API/nodos OK.
+- Tests run 45830549637 success, 336 passed/11 skipped en Python 3.11 y 3.12
+  con PostgreSQL. Sin CUDA remota.
+- Checkpoint visual Linux descargado y cargado realmente en Windows, paso 4,
+  28.544 parámetros. Evidencia y hash en VISION_PREFIX.md; sin calidad demostrada.

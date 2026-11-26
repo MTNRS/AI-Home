@@ -202,3 +202,21 @@ versionado. Las tasas de esta prueba diminuta no comparan rendimiento de hardwar
 
 CI incorpora el ensayo CPU con paquete instalado y Python -I, y publica sus
 artefactos; su resultado remoto debe verificarse después de este commit.
+
+## Verificación remota y carga entre plataformas
+
+Commit de código `2f382a4`, [Foundation CI 45830549581](https://github.com/MTNRS/AI-Home/actions/runs/45830549581):
+terminado correctamente. Suite **329 passed, 18 skipped**; ensayo visual del
+paquete instalado con Python -I completado, exact_resume=true, delta visual
+0.0005627162754535675, salida KKKKKKKK. También pasaron empaquetado textual, Tk,
+API y dos nodos CPU con reinicio de coordinador. Artefacto `visual-smoke` publicado.
+
+[Tests 45830549637](https://github.com/MTNRS/AI-Home/actions/runs/45830549637):
+Python 3.11 y 3.12 con PostgreSQL, **336 passed, 11 skipped** en cada versión.
+Los skips corresponden a condiciones opcionales; este runner no prueba CUDA.
+
+El artefacto Linux se descargó a `artifacts/visual-linux-ci-v1` y su checkpoint
+`resumed/visual-step-4.pt` se cargó con el validador real en Windows:
+SHA256 `bfb455e3a035e85aec507e2228626e8d2e120fe954569fc529460493cdb2a811`,
+paso 4, 28.544 parámetros. Esto verifica carga de pesos entre estos entornos,
+no reanudación bit-exact entre sistemas ni calidad visual.
