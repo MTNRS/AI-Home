@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .checkpoint import load_checkpoint
 from .data import load_records
-from .training import TrainingConfig, _sequences, evaluate, select_device, train
+from .training import TrainingCancelled, TrainingConfig, _sequences, evaluate, select_device, train
 
 
 def compare_checkpoint(path, records, objective, device, max_bytes):
@@ -18,7 +18,12 @@ def compare_checkpoint(path, records, objective, device, max_bytes):
 
 
 def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_path=None,
-                  reviewed_export=None, training=None, device="auto", max_loss_increase=0.0):
+                  reviewed_export=None, training=None, device="auto", max_loss_increase=0.0,
+                  cancel=None, on_step=None):
+    def check_cancel():
+        if cancel is not None and cancel.is_set():
+            raise TrainingCancelled("Candidate comparison cancelled; retained checkpoints are not approved")
+    check_cancel()
     if (dataset_path is None) == (reviewed_export is None):
         raise ValueError("Choose exactly one incremental dataset source")
     if not math.isfinite(max_loss_increase) or max_loss_increase < 0:
@@ -36,11 +41,14 @@ def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_p
     candidate = output_dir / "candidate.pt"
     payload = train(records, candidate, training=training, device=device,
                     initial_checkpoint=parent, validation_records=validation,
-                    replay_records=replay, reviewed_export=reviewed_export)
+                    replay_records=replay, reviewed_export=reviewed_export, cancel=cancel, on_step=on_step)
+    check_cancel()
     if hashlib.sha256(parent.read_bytes()).hexdigest() != parent_hash:
         raise RuntimeError("Parent changed during experiment")
     baseline = compare_checkpoint(parent, validation, training.objective, device, training.memory_budget_bytes)
+    check_cancel()
     result = compare_checkpoint(candidate, validation, training.objective, device, training.memory_budget_bytes)
+    check_cancel()
     delta = result["loss"] - baseline["loss"]
     report = {"format": "ai-home-continual-v1", "status": "candidate",
               "parent_sha256": parent_hash, "candidate_sha256": hashlib.sha256(candidate.read_bytes()).hexdigest(),

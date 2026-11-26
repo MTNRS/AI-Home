@@ -32,6 +32,32 @@ def test_evolution_trains_two_real_candidates_and_reports_evidence(tmp_path):
     suite = json.loads((Path(__file__).resolve().parents[3] / "docs/evaluation-probes-v1.json").read_text(encoding="utf-8"))
     report = run_experiment(parent, tmp_path / "experiment", suite, paths["holdout"], paths["old"],
                             dataset=paths["new"], training=settings, device="cpu", max_new_tokens=4)
+    import threading
+    from ai_home.foundation.training import TrainingCancelled
+    from ai_home.foundation.checkpoint import load_checkpoint
+    cancellation = threading.Event()
+    stages = []
+    def progress(item):
+        stages.append(item["stage"])
+        if item["stage"] == "control_training" and item.get("step") == 1:
+            cancellation.set()
+    interrupted = tmp_path / "interrupted"
+    with pytest.raises(TrainingCancelled):
+        run_experiment(parent, interrupted, suite, paths["holdout"], paths["old"],
+                       dataset=paths["new"], training=settings, device="cpu", max_new_tokens=2,
+                       cancel=cancellation, on_progress=progress)
+    assert "baseline_evaluation" in stages and "control_training" in stages
+    checkpoint = load_checkpoint(interrupted / "control" / "candidate.pt")[2]
+    assert checkpoint["step"] == 1 and checkpoint["stop_reason"] == "cancelled"
+    assert not (interrupted / "result.json").exists()
+    assert not (interrupted / "control" / "report.json").exists()
+    assert not (interrupted / "experiment").exists()
+    state = json.loads((interrupted / "interrupted.json").read_text())
+    assert state["stage"] == "control_training" and state["promoted"] is False
+    with pytest.raises(TrainingCancelled):
+        run_experiment(parent, tmp_path / "never", suite, paths["holdout"], paths["old"],
+                       dataset=paths["new"], training=settings, cancel=cancellation)
+    assert not (tmp_path / "never").exists()
     assert report["promoted"] is False
     assert report["decision"] == "reject"
     assert report["control"]["embedding_delta_l2"] > 0

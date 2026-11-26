@@ -62,3 +62,24 @@ This check applies against both the control and the parent baseline. Result
 reports record `control_probe_regressions` and `parent_probe_regressions`. Both
 control and experimental held-out losses must be finite. Independent review
 remains required; no experimental decision activates a model.
+
+
+## Controlled experiment interruption
+
+`run_experiment` accepts `cancel` (threading-compatible event) and `on_progress`.
+Progress identifies baseline evaluation, control training/evaluation and experiment
+training/evaluation, with actual step or probe metrics. The evolution CLI prints
+these events. First Ctrl+C requests a controlled stop; second Ctrl+C interrupts
+immediately and may prevent checkpoint/report persistence.
+
+Training stops after a complete optimizer update and retains its resumable
+checkpoint. Inference checks cancellation between tokens/probes. Held-out loss
+comparison checks before/after each comparison; it cannot interrupt an active
+comparison/kernel or checkpoint load. An interrupted evolution run records its
+phase in `interrupted.json`, leaves completed artifacts intact and does not write
+`result.json` or proceed to the next experiment. Cancellation before starting
+creates no run directory. The CLI exits 130 on cooperative cancellation.
+
+The complete experiment is not automatically resumable as an orchestrated job;
+retained training checkpoints can be resumed with the existing Python training
+API using matching data/replay settings. Partial work is not an acceptance decision.

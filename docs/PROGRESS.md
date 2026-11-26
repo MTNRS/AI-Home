@@ -620,3 +620,16 @@ now determines admission, terminal transitions and account lock existence. Also
 bound migration execution to the explicit test database URL. Final full suite:
 263 passed, zero skipped. The test server was stopped afterward. Details and
 reproduction are in POSTGRES_VALIDATION.md; no production database was touched.
+
+
+### Cancellable evolution stages
+
+Connected cancellation/progress through baseline probes, continual candidate
+training, holdout comparison and candidate probes. Interrupted runs retain
+checkpoints and an explicit phase record, omit the final decision and do not
+start the remaining arm. The CLI handles first Ctrl+C cooperatively. Real-model
+tests stop control training at step 1, reload its resumable checkpoint and
+verify absence of comparison/final/experiment artifacts. Final suite: 258 passed,
+5 PostgreSQL tests skipped because the portable server is stopped; prior full
+PostgreSQL verification remains documented separately. Interactive CLI signal
+entry has not been manually demonstrated.
