@@ -113,7 +113,12 @@ def _parse_nvidia_smi(output: str) -> list[dict[str, int | str]]:
     return devices
 
 
-def execute_job(job_type: str, payload: dict) -> dict[str, int]:
+def execute_job(job_type: str, payload: dict) -> dict[str, int | str]:
+    if job_type == "foundation.tokenize.v1":
+        from ai_home.foundation.tasks import execute_tokenize
+        if psutil.virtual_memory().available < 256 * 1024**2:
+            raise ValueError("Insufficient available RAM for tokenization")
+        return execute_tokenize(payload)
     if job_type != "math.sum.v1":
         raise ValueError(f"Unsupported job type: {job_type}")
     validated = MathSumJobPayload.model_validate(payload)
@@ -141,6 +146,7 @@ def register_node_with_server(
             json={
                 "name": name,
                 "hardware": hardware.model_dump(mode="json"),
+                "supported_job_types": ["math.sum.v1", "foundation.tokenize.v1"],
             },
         )
         response.raise_for_status()

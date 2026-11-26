@@ -16,6 +16,8 @@ from ai_home.models import ComputeJob, ComputeNode
 from ai_home.schemas import HardwareReport
 
 SUPPORTED_JOB_TYPES = ("math.sum.v1",)
+FOUNDATION_JOB_TYPE = "foundation.tokenize.v1"
+TOKENIZE_MIN_RAM_BYTES = 256 * 1024**2
 MAX_JOB_ATTEMPTS = 3
 NODE_HEARTBEAT_TIMEOUT_SECONDS = 120
 JOB_LEASE_SECONDS = 120
@@ -64,17 +66,21 @@ def register_node(
     owner_user_id: str,
     name: str,
     hardware: HardwareReport,
+    supported_job_types: list[str] | None = None,
 ) -> RegisteredNode:
     if not name.strip():
         raise ValueError("Node name cannot be empty.")
     node_token = secrets.token_urlsafe(32)
+    supported_job_types = supported_job_types if supported_job_types is not None else list(SUPPORTED_JOB_TYPES)
+    if not supported_job_types or set(supported_job_types) - {*SUPPORTED_JOB_TYPES, FOUNDATION_JOB_TYPE}:
+        raise ValueError("Unsupported node capabilities")
     node = ComputeNode(
         node_id=str(uuid4()),
         owner_user_id=owner_user_id,
         name=name.strip(),
         credential_hash=_token_hash(node_token),
         hardware=hardware.model_dump(mode="json"),
-        supported_job_types=list(SUPPORTED_JOB_TYPES),
+        supported_job_types=sorted(set(supported_job_types)),
         last_heartbeat_epoch=int(time.time()),
     )
     session.add(node)
@@ -252,11 +258,14 @@ def claim_job(session: Session, node: ComputeNode) -> ClaimedJob | None:
         )
     )
 
+    compatible = list(node.supported_job_types)
+    if node.hardware.get("ram_total_bytes", 0) < TOKENIZE_MIN_RAM_BYTES:
+        compatible = [name for name in compatible if name != FOUNDATION_JOB_TYPE]
     job = session.scalar(
         select(ComputeJob)
         .where(
             ComputeJob.status == "queued",
-            ComputeJob.job_type.in_(node.supported_job_types),
+            ComputeJob.job_type.in_(compatible),
         )
         .order_by(ComputeJob.created_at, ComputeJob.job_id)
         .with_for_update(skip_locked=True)
@@ -282,23 +291,27 @@ def submit_job_result(
     node: ComputeNode,
     job_id: str,
     lease_token: str,
-    result: dict[str, int],
+    result: dict[str, int | str],
 ) -> ComputeJob:
     job = session.scalar(
         select(ComputeJob).where(
             ComputeJob.job_id == job_id,
             ComputeJob.assigned_node_id == node.node_id,
             ComputeJob.status == "leased",
-        )
+        ).with_for_update()
     )
     if job is None or job.lease_token_hash != _token_hash(lease_token):
         raise JobNotFound
     if job.lease_expires_epoch is None or job.lease_expires_epoch <= int(time.time()):
         raise LeaseExpired
-    if job.job_type != "math.sum.v1" or set(result) != {"sum"}:
+    if job.job_type == "math.sum.v1":
+        expected = {"sum": sum(job.payload["values"])}
+    elif job.job_type == FOUNDATION_JOB_TYPE:
+        from ai_home.foundation.tasks import execute_tokenize
+        expected = execute_tokenize(job.payload)
+    else:
         raise InvalidJobResult
-    expected = sum(job.payload["values"])
-    if result["sum"] != expected:
+    if result != expected:
         raise InvalidJobResult
 
     job.status = "completed"
@@ -306,6 +319,29 @@ def submit_job_result(
     job.assigned_node_id = None
     job.lease_token_hash = None
     job.lease_expires_epoch = None
+    session.flush()
+    return job
+
+
+def create_tokenize_job(session: Session, *, owner_user_id: str, idempotency_key: str,
+                        payload: dict, allow_public_node_processing: bool) -> ComputeJob:
+    from ai_home.foundation.tasks import TokenizePayload
+    if allow_public_node_processing is not True:
+        raise ValueError("Public node processing requires explicit consent")
+    payload = TokenizePayload.model_validate(payload).model_dump()
+    request_hash = _request_hash(FOUNDATION_JOB_TYPE, payload)
+    existing = session.scalar(select(ComputeJob).where(ComputeJob.owner_user_id == owner_user_id,
+                                                       ComputeJob.idempotency_key == idempotency_key))
+    if existing is not None:
+        if existing.request_hash != request_hash:
+            raise IdempotencyConflict
+        return existing
+    job = ComputeJob(job_id=str(uuid4()), owner_user_id=owner_user_id,
+                     job_type=FOUNDATION_JOB_TYPE, payload=payload, status="queued",
+                     idempotency_key=idempotency_key, request_hash=request_hash,
+                     public_node_consent_at_epoch=int(time.time()),
+                     public_node_consent_version=PUBLIC_NODE_CONSENT_VERSION)
+    session.add(job)
     session.flush()
     return job
 

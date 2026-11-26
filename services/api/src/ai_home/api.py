@@ -44,6 +44,7 @@ from ai_home.jobs import (
     authenticate_node,
     claim_job,
     create_math_sum_job,
+    create_tokenize_job,
     find_existing_math_sum_job,
     heartbeat_node,
     is_job_idempotency_violation,
@@ -67,6 +68,7 @@ from ai_home.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     CreateMathSumJobRequest,
+    CreateTokenizeJobRequest,
     JobResponse,
     LoginRequest,
     NodeCredentialResponse,
@@ -997,6 +999,7 @@ def create_app(
             owner_user_id=current_user.user_id,
             name=payload.name,
             hardware=payload.hardware,
+            supported_job_types=payload.supported_job_types,
         )
         session.commit()
         response.headers["Cache-Control"] = "no-store"
@@ -1100,6 +1103,29 @@ def create_app(
                 raise
         return job
 
+    @app.post("/api/v1/jobs/foundation/tokenize", response_model=JobResponse, status_code=201)
+    def create_foundation_tokenize_job(
+        payload: CreateTokenizeJobRequest,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeJob:
+        arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing)
+        try:
+            try:
+                job = create_tokenize_job(session, **arguments)
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                if not is_job_idempotency_violation(error):
+                    raise
+                job = create_tokenize_job(session, **arguments)
+                session.commit()
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
+        return job
+
     @app.get("/api/v1/jobs", response_model=list[JobResponse])
     def get_jobs(
         current_user: AuthenticatedUser = Depends(get_current_user),
@@ -1189,7 +1215,7 @@ def _is_email_unique_violation(error: IntegrityError) -> bool:
 def _claimed_job_response(claim: ClaimedJob) -> ClaimedJobResponse:
     return ClaimedJobResponse(
         job_id=claim.job.job_id,
-        job_type="math.sum.v1",
+        job_type=claim.job.job_type,
         payload=claim.job.payload,
         lease_token=claim.lease_token,
         lease_expires_epoch=claim.job.lease_expires_epoch or 0,

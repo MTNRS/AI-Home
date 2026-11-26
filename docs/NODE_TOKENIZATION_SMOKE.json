@@ -1,0 +1,26 @@
+{
+  "format": "ai-home-node-tokenization-smoke-v1",
+  "transport": "loopback HTTP",
+  "controller_pid": 37908,
+  "workers": [
+    {
+      "node_id": "bb8eee3d-4b9f-4a9d-b688-b6288b183909",
+      "pid": 42652,
+      "completed": true
+    },
+    {
+      "node_id": "81bc453c-0eed-468b-be44-c275ddcf5af2",
+      "pid": 42268,
+      "completed": true
+    }
+  ],
+  "job_type": "foundation.tokenize.v1",
+  "completed_jobs": 2,
+  "tokenizer_sha256": "23b035fc41188be3516ce2b63a43566f75669952e5c5c2895ac076f72f8198fa",
+  "artifact_sha256": [
+    "24a244cbdbc99fdc58084933864514c5d8ab30ecf0ef0fac8ee6072b9cd2aa95",
+    "805625c7f1f8abf777bb11e9a60df0a10497cecfea488f112de17d09a07a3604"
+  ],
+  "tokens": 56,
+  "claim": "Two worker processes on one computer; data preparation, not distributed neural training"
+}

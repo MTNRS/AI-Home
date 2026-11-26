@@ -36,3 +36,7 @@ Suite completa tras integrar exportaciones revisadas: `python -m pytest -q` — 
 ## Validación CUDA posterior
 
 Entorno `.venv-cuda` con PyTorch 2.14.1+cu130: `python -m pytest -q` obtiene 139 aprobadas, 4 omitidas, 17,36 segundos. Las omisiones CUDA de entradas anteriores corresponden a la distribución CPU; ahora se ejecutaron todas las pruebas CUDA, incluidas FP32/FP16/BF16, gradientes, caché y reanudación. Ver CUDA_VALIDATION.md para comandos exactos y evidencia persistente.
+
+## Nodos Foundation
+
+Suite completa en entorno CUDA: 146 aprobadas, 4 omitidas (PostgreSQL), 18,63 segundos. Tras endurecer booleanos de consentimiento: 7 pruebas Foundation nodes aprobadas en 1,21 segundos. Se verifican dos nodos, compatibilidad/RAM, idempotencia, manipulación de resultados, aislamiento de listado, rechazo de datos restringidos/secretos y límites de expansión BPE. Smoke adicional real: dos procesos worker, HTTP loopback, 2 shards y 56 tokens; reporte en NODE_TOKENIZATION_SMOKE.json.

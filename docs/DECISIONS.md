@@ -77,3 +77,7 @@ Resume restaura el optimizador y exige datos/configuración idénticos. Iniciali
 ## 2026-11-26: experimento rechazado también es evidencia
 
 El primer ciclo compara tasa de aprendizaje con un control del mismo presupuesto. Requiere ganancia de acierto y ausencia de regresiones; una pérdida menor aislada no basta. El resultado real fue rechazo y se conserva. Diez probes autorados no se presentan como benchmark general ni prueba de capacidades adquiridas.
+
+## 2026-11-26: capacidad declarada y artefactos verificados en nodos
+
+Clientes antiguos conservan solo suma. Los nuevos anuncian tokenización explícitamente; el servidor no asigna tareas por suponer que todo nodo soporta Foundation. Se reejecuta el trabajo acotado para verificar integridad, aceptando su coste duplicado hasta disponer de un protocolo independiente más escalable. No se remuneran tareas autodeclaradas ni se reinterpretan permisos de conversaciones.

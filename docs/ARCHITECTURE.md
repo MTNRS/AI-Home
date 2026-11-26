@@ -230,3 +230,7 @@ siguen pendientes (el generador neuronal ya soporta ambos localmente).
 ## Motores de evaluación y evolución
 
 `foundation.evaluation` carga un checkpoint propio y ejecuta probes declarativos sin ejecutar código generado ni llamar a jueces externos. `foundation.evolution` conserva una propuesta previa, crea dos candidatos mediante continual y compara evidencia del mismo protocolo. Solo emite propuesta; no tiene rutas de escritura al modelo activo, permisos, créditos o infraestructura.
+
+## Trabajo Foundation tipado
+
+foundation.tasks define el contrato acotado de tokenización pública. API, jobs y NodeAgent reutilizan autenticación, idempotencia y leases. El servidor reejecuta para verificar; no se añade un intérprete remoto ni se distribuyen exportaciones restringidas. La asignación exige capacidad declarada y un mínimo conservador de RAM.

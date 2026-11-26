@@ -285,6 +285,8 @@ class RegisterNodeRequest(BaseModel):
 
     name: str = Field(min_length=1, max_length=120)
     hardware: HardwareReport
+    supported_job_types: list[Literal["math.sum.v1", "foundation.tokenize.v1"]] = Field(
+        default_factory=lambda: ["math.sum.v1"], min_length=1, max_length=2)
 
     @field_validator("name")
     @classmethod
@@ -353,8 +355,8 @@ class JobResponse(BaseModel):
 
 class ClaimedJobResponse(BaseModel):
     job_id: str
-    job_type: Literal["math.sum.v1"]
-    payload: dict[str, list[int]]
+    job_type: Literal["math.sum.v1", "foundation.tokenize.v1"]
+    payload: dict
     lease_token: str
     lease_expires_epoch: int
 
@@ -363,5 +365,28 @@ class SubmitJobResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     lease_token: SecretStr = Field(min_length=32, max_length=128)
-    result: dict[str, StrictInt]
+    result: dict[str, StrictInt | StrictStr] = Field(max_length=3)
+
+    @model_validator(mode="after")
+    def bounded_result(self):
+        if any(isinstance(v, str) and len(v) > 600_000 for v in self.result.values()):
+            raise ValueError("Result exceeds artifact budget")
+        if "sum" in self.result and type(self.result["sum"]) is not int:
+            raise ValueError("Sum must be an integer")
+        return self
+
+
+class CreateTokenizeJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    payload: dict
+    allow_public_node_processing: StrictBool
+    idempotency_key: str = Field(min_length=1, max_length=160)
+
+    @model_validator(mode="after")
+    def validate_public_payload(self):
+        from ai_home.foundation.tasks import TokenizePayload
+        if not self.allow_public_node_processing:
+            raise ValueError("Public node processing requires explicit consent")
+        self.payload = TokenizePayload.model_validate(self.payload).model_dump()
+        return self
 

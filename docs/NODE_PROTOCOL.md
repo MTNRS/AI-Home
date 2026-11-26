@@ -1,7 +1,7 @@
 # Protocolo inicial de nodos voluntarios
 
-Este protocolo todavía es experimental. En esta versión solo está habilitado
-el trabajo tipado `math.sum.v1`; no hay ejecución de código arbitrario ni
+Este protocolo todavía es experimental. Están habilitados
+`math.sum.v1` y `foundation.tokenize.v1`; no hay ejecución de código arbitrario ni
 integración de créditos. Los trabajos compartidos con nodos de terceros pueden
 revelar sus entradas: el creador debe otorgar consentimiento explícito y no
 enviar datos personales, secretos ni valores confidenciales.
@@ -61,3 +61,19 @@ independientes, después de seleccionar dependencias/modelos y revisar sus
 licencias. No se consideran disponibles mientras no existan y pasen pruebas
 reales.
 
+
+## Extensión Foundation — 2026-11-26
+
+RegisterNodeRequest acepta supported_job_types (allowlist). Si se omite, conserva
+math.sum.v1. El worker actual anuncia también foundation.tokenize.v1. El tipo
+real se incluye al asignar el lease; no se envían trabajos nuevos a clientes
+antiguos. Los resultados permiten enteros o cadenas acotadas; sum sigue
+exigiendo entero estricto. El servidor valida exactamente según el tipo.
+
+Los trabajos de tokenización se crean en /api/v1/jobs/foundation/tokenize,
+con consentimiento explícito, corpus público revisado y BPE acotado.
+Idempotencia por propietario/clave conserva el trabajo o rechaza payloads
+contradictorios. La finalización bloquea la fila en PostgreSQL y verifica lease,
+nodo y artefacto antes de marcar completado. Los resultados solo aparecen en
+la lista del propietario. No hay recompensas todavía. Detalles y demo real en
+DISTRIBUTED_TRAINING.md.

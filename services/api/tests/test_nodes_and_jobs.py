@@ -435,7 +435,7 @@ def test_node_onboarding_reports_detected_hardware(
 
     assert registration.node_id
     assert registration.node_token
-    assert registration.supported_job_types == ["math.sum.v1"]
+    assert registration.supported_job_types == ["foundation.tokenize.v1", "math.sum.v1"]
 
 
 def test_account_deletion_removes_owned_nodes_and_jobs(client: TestClient):
