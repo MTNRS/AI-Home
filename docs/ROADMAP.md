@@ -9,6 +9,15 @@ detallados se conservan en el plan de implementación.
 
 ## Fase 1 — Base ejecutable y preparación comunitaria
 
+Actualización local del aprendizaje por preferencias: importación revisada,
+entrenador DPO, CLI, formulario y visor funcionan con pruebas sintéticas reales.
+Cancelación, reanudación exacta y cambio de perfil se comprobaron también desde
+un paquete instalado. Esto cierra la conexión técnica local; siguen pendientes
+preferencias humanas autorizadas representativas, evaluación independiente de
+utilidad/regresiones y revisión visual de la interfaz. No habilita distribución
+de exportaciones restringidas ni promoción automática. Véase
+[PREFERENCE_LEARNING.md](PREFERENCE_LEARNING.md).
+
 - Monorepo, configuración, migraciones, CI, Compose y documentación operativa.
 - Revisar secretos, dependencias, licencias y privacidad antes de abrir el
   repositorio; preparar contribuciones y reporte privado de vulnerabilidades.

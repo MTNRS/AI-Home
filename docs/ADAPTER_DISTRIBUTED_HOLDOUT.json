@@ -1,0 +1,25 @@
+{
+  "format": "ai-home-adapter-distributed-holdout-v1",
+  "torch_version": "2.14.1+cu130",
+  "device": "cpu",
+  "holdout_sha256": "637b77f57da12d12d838f3fc28af0048b157e59675ae4e8802b12c94a1f91105",
+  "documents": 2,
+  "metrics": {
+    "parent": {
+      "checkpoint_sha256": "e3c27501b12a9038b53811fcee645b42a2a26b2a2da736d6b792c89842032116",
+      "tokenizer_sha256": "e73a09e4e3cd6d2a21fed25cc32c9f96e5a6ea1369e83ddea238f2889c4c5e12",
+      "loss": 5.649996439615886,
+      "tokens": 72,
+      "perplexity": 284.29045363890395
+    },
+    "candidate": {
+      "checkpoint_sha256": "446d7a7d7c4b49c256ee4e89a7197481e94829db914940b81994c41abe67d78d",
+      "tokenizer_sha256": "e73a09e4e3cd6d2a21fed25cc32c9f96e5a6ea1369e83ddea238f2889c4c5e12",
+      "loss": 5.649986902872722,
+      "tokens": 72,
+      "perplexity": 284.28774244679164
+    }
+  },
+  "promoted": false,
+  "claim": "Two authored fixture documents; loss comparison only, not general language quality"
+}

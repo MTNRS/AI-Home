@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     foundation_memory_budget_bytes: int = Field(default=2_000_000_000, ge=1)
     foundation_distributed_training_enabled: bool = False
     foundation_distributed_evaluation_enabled: bool = False
+    foundation_distributed_adapters_enabled: bool = False
     chat_provider_url: str | None = None
     chat_provider_model: str | None = None
     chat_provider_api_key: SecretStr = SecretStr("")

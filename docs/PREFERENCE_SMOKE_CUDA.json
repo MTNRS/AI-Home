@@ -1,0 +1,48 @@
+{
+  "format": "ai-home-preference-smoke-v1",
+  "device": "cuda",
+  "torch_version": "2.14.1+cu130",
+  "synthetic_fixture": true,
+  "human_feedback": false,
+  "training": {
+    "format": "ai-home-preference-training-v1",
+    "identity": {
+      "parent_sha256": "9b611289dafe66729d43821c85fa6ca686165b5a97da246f787833bb81e1aee8",
+      "pairs_sha256": "1dec78f2bce32d8b4df8a288b7825e7baea9f03c28661ce9766f53b1694b4f13",
+      "training_sha256": "9ade50450d74096b41dbe81efc9251f9d07bb57adaada5a0610607f86949ca51",
+      "validation_sha256": "2e4e57310a74f2870204961e0e2eef72e5d5303a833e7f544e3af30f2845b57f",
+      "settings": {
+        "steps": 20,
+        "learning_rate": 0.003,
+        "beta": 0.1,
+        "seed": 42,
+        "validation_fraction": 0.5,
+        "device": "cuda",
+        "checkpoint_every": 5
+      },
+      "torch_version": "2.14.1+cu130"
+    },
+    "step": 20,
+    "candidate_checkpoint_sha256": "ce0c22e340eb9379259d1787b775c9ac5582627f8a5db7f2d324fd3fff831929",
+    "cancelled": false,
+    "training_complete": true,
+    "baseline": {
+      "pairs": 4,
+      "mean_margin": -0.04369497299194336,
+      "preferred_fraction": 0.0,
+      "mean_dpo_loss": 0.6931471824645996
+    },
+    "candidate": {
+      "pairs": 4,
+      "mean_margin": 5.3904194831848145,
+      "preferred_fraction": 1.0,
+      "mean_dpo_loss": 0.4579080492258072
+    },
+    "training_pairs": 8,
+    "data_visibility": "reviewed-training-only",
+    "promoted": false,
+    "scope": "Reviewed pair likelihood comparison; not a language capability evaluation"
+  },
+  "generated_text_unscored": "A",
+  "scope": "Authored A-versus-B pairs with novel numeric prompts; not language quality or human alignment"
+}

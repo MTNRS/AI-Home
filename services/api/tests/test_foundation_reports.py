@@ -1,4 +1,5 @@
 import json
+import copy
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,62 @@ from ai_home.foundation.reports import read_report
 
 
 DOCS = Path(__file__).parents[3] / "docs"
+
+
+def test_adapter_report_metrics_lifecycle_and_resources(tmp_path):
+    report = read_report(DOCS / "ADAPTER_RESOURCES_CUDA.json")["report"]
+    assert report["step"] == 20 and report["trainable_parameters"] == 448
+    target = tmp_path / "adapter.json"
+    for field, value in (("step", True), ("checkpoint", "../other"),
+                         ("promoted", True), ("cancelled", True),
+                         ("training_complete", False), ("candidate", None), ("objective", "sft")):
+        changed = {**report, field: value}
+        target.write_text(json.dumps(changed), encoding="utf-8")
+        with pytest.raises(ValueError):
+            read_report(target)
+    for group, field, value in (("candidate", "tokens", 1), ("baseline", "loss", -1),
+            ("run_resources", "new_steps", 21), ("run_resources", "tokens_per_second", True),
+            ("run_resources", "cuda_peak_allocated_bytes", -1)):
+        changed = copy.deepcopy(report)
+        changed[group][field] = value
+        target.write_text(json.dumps(changed), encoding="utf-8")
+        with pytest.raises(ValueError):
+            read_report(target)
+    cancelled = {**report, "cancelled": True, "candidate": None}
+    target.write_text(json.dumps(cancelled), encoding="utf-8")
+    assert read_report(target)["report"]["candidate"] is None
+
+
+def test_preference_reports_and_cancelled_final_evaluation(tmp_path):
+    report = json.loads((DOCS / "PREFERENCE_SMOKE_CPU.json").read_text(encoding="utf-8"))["training"]
+    path = tmp_path / "report.json"
+    for cancelled in (False, True):
+        report["cancelled"] = cancelled
+        if cancelled:
+            report["candidate"] = None
+        path.write_text(json.dumps(report), encoding="utf-8")
+        assert read_report(path)["report"] == report
+
+
+@pytest.mark.parametrize("mutation", ["pairs", "fraction", "promotion", "missing", "step", "visibility"])
+def test_reject_inconsistent_preference_reports(tmp_path, mutation):
+    report = json.loads((DOCS / "PREFERENCE_SMOKE_CPU.json").read_text(encoding="utf-8"))["training"]
+    if mutation == "pairs":
+        report["candidate"]["pairs"] += 1
+    elif mutation == "fraction":
+        report["candidate"]["preferred_fraction"] = 1.1
+    elif mutation == "promotion":
+        report["promoted"] = True
+    elif mutation == "missing":
+        report["candidate"] = None
+    elif mutation == "step":
+        report["step"] += 1
+    else:
+        report["data_visibility"] = "public"
+    path = tmp_path / "report.json"
+    path.write_text(json.dumps(report), encoding="utf-8")
+    with pytest.raises(ValueError):
+        read_report(path)
 
 
 @pytest.mark.parametrize("filename", ["EVALUATION_BASELINE_CPU.json", "EVALUATION_CONTROL_CPU.json",

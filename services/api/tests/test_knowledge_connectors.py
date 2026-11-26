@@ -1,4 +1,5 @@
 import json
+import threading
 
 import httpx
 import pytest
@@ -6,6 +7,51 @@ import pytest
 from ai_home.knowledge_connectors import acquire
 from ai_home.knowledge_ingest import create_review_template, approve_records
 from ai_home.foundation.data import load_records
+
+
+@pytest.mark.parametrize("connector", ["github", "wikipedia"])
+def test_cancellation_closes_download_without_publishing(tmp_path, connector):
+    from ai_home.knowledge_connectors import AcquisitionCancelled
+    cancel = threading.Event()
+    closed = []
+    class Stream(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b"first block"
+            cancel.set()
+            yield b"second block"
+        def close(self):
+            closed.append(True)
+    source = spec() if connector == "github" else dict(connector="wikipedia-revision-v1",
+        language="es", revision=123, license="declared fixture license")
+    output = tmp_path / "pending.jsonl"
+    with pytest.raises(AcquisitionCancelled):
+        acquire([source], output, cancel=cancel,
+                transport=httpx.MockTransport(lambda r: httpx.Response(200, stream=Stream())))
+    assert closed and not output.exists()
+    assert not list(tmp_path.glob("*.artifact.tmp"))
+
+
+def test_cancelled_batch_does_not_request_or_publish_after_flush(tmp_path, monkeypatch):
+    from ai_home import knowledge_connectors as connectors
+    cancel = threading.Event()
+    cancel.set()
+    def forbidden(request):
+        pytest.fail("Cancelled acquisition made a request")
+    output = tmp_path / "pending.jsonl"
+    with pytest.raises(connectors.AcquisitionCancelled):
+        acquire([spec()], output, cancel=cancel, transport=httpx.MockTransport(forbidden))
+    cancel.clear()
+    original = connectors.publish_bytes
+    def delayed(path, raw, *, before_publish):
+        def after_flush():
+            cancel.set()
+            before_publish()
+        return original(path, raw, before_publish=after_flush)
+    monkeypatch.setattr(connectors, "publish_bytes", delayed)
+    with pytest.raises(connectors.AcquisitionCancelled):
+        acquire([spec()], output, cancel=cancel,
+                transport=httpx.MockTransport(lambda r: httpx.Response(200, text="Public fixture text")))
+    assert not output.exists() and not list(tmp_path.glob("*.artifact.tmp"))
 
 
 def spec(path="README.md"):

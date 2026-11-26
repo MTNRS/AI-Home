@@ -26,6 +26,11 @@ jobs:
       - run: python -m ai_home.foundation.smoke_package build artifacts/foundation-smoke artifacts/foundation-nano-smoke.zip --revision "$GITHUB_SHA"
       - run: python -m ai_home.foundation.smoke_package verify artifacts/foundation-nano-smoke.zip
       - run: python -m pip install . --no-deps --force-reinstall
+      - run: python -I -m ai_home.foundation.preference_smoke --output-dir artifacts/installed-preferences --device cpu
+      - run: python -I -m ai_home.foundation.adapter_smoke --output-dir artifacts/installed-adapters --device cpu
+      - run: python -I -m ai_home.foundation.adapter_distributed_smoke --output-dir artifacts/installed-adapter-distributed --worker-devices cpu cpu --parallel
+      - run: python -I -m ai_home.foundation.adapter_training --parent artifacts/installed-adapters/parent.pt --dataset artifacts/installed-adapters/dataset.json --output-dir artifacts/installed-adapter-partial --steps 4 --stop-after 2 --checkpoint-every 2 --device cpu
+      - run: python -I -m ai_home.foundation.adapter_training --parent artifacts/installed-adapters/parent.pt --dataset artifacts/installed-adapters/dataset.json --output-dir artifacts/installed-adapter-resumed --steps 4 --resume artifacts/installed-adapter-partial/step-2 --checkpoint-every 2 --device cpu
       - run: python -I -m ai_home.foundation.evaluation_smoke --output-dir artifacts/installed-evaluation --worker-devices cpu cpu
       - run: python -I -m ai_home.network_probe_smoke --output-dir artifacts/installed-transfer-probe
       - run: python -I -m ai_home.foundation.vision_smoke --output-dir artifacts/installed-visual --device cpu
@@ -35,6 +40,18 @@ jobs:
         run: xvfb-run -a python -I scripts/verify_desktop_evaluation_plan.py --require-installed --checkpoint artifacts/installed-evaluation/model.pt --dataset artifacts/installed-evaluation/holdout.json --output artifacts/installed-evaluation/desktop-plan.json
       - name: Verify installed desktop control sections
         run: xvfb-run -a python -I scripts/verify_desktop_sections.py --require-installed
+      - name: Verify desktop preference report inspection
+        run: xvfb-run -a python -I scripts/verify_preference_report_desktop.py --require-installed --report artifacts/installed-preferences/resumed/report.json
+      - name: Verify desktop adapter report inspection
+        run: xvfb-run -a python -I scripts/verify_preference_report_desktop.py --require-installed --report artifacts/installed-adapter-resumed/report.json
+      - name: Verify desktop adapter training cancellation and resume
+        run: xvfb-run -a python -I scripts/verify_adapter_training_desktop.py --require-installed --fixture-dir artifacts/installed-adapters --output-dir artifacts/installed-adapter-ui
+      - name: Verify desktop SFT adapter training
+        run: xvfb-run -a python -I scripts/verify_adapter_training_desktop.py --require-installed --fixture-dir artifacts/installed-adapters --output-dir artifacts/installed-adapter-sft-ui --objective sft
+      - name: Verify desktop preference training cancellation and resume
+        run: xvfb-run -a python -I scripts/verify_preference_training_desktop.py --require-installed --fixture-dir artifacts/installed-preferences --output-dir artifacts/installed-preference-ui
+      - name: Verify desktop source acquisition with controlled HTTP
+        run: xvfb-run -a python -I scripts/verify_knowledge_acquisition.py --require-installed --output-dir artifacts/installed-knowledge-ui
       - name: Verify visual stream isolation on profile switch
         run: xvfb-run -a python -I scripts/verify_visual_profile.py --require-installed
       - name: Verify real desktop visual training and cancellation
@@ -43,6 +60,8 @@ jobs:
         run: xvfb-run -a python -I scripts/verify_desktop_node.py --require-installed --output-dir artifacts/installed-desktop-node --device cpu
       - name: Verify desktop node evaluation consent and real loss work
         run: xvfb-run -a python -I scripts/verify_desktop_node.py --require-installed --output-dir artifacts/installed-desktop-evaluation --device cpu --task evaluate
+      - name: Verify desktop adapter consent and real gradient work
+        run: xvfb-run -a python -I scripts/verify_desktop_node.py --require-installed --output-dir artifacts/installed-desktop-adapters --device cpu --task adapter-gradient
       - name: Verify desktop training with disk sequence cache
         run: xvfb-run -a python -I scripts/verify_desktop_training.py --require-installed --output-dir artifacts/installed-desktop-training
       - run: python -I scripts/verify_installed_api.py --output-dir artifacts/installed-api --checkpoint artifacts/foundation-smoke/foundation-nano.pt
@@ -51,12 +70,17 @@ jobs:
         with:
           name: installed-runtime-reports
           path: |
+            artifacts/installed-preferences/report.json
+            artifacts/installed-adapters/report.json
+            artifacts/installed-adapter-distributed/report.json
+            artifacts/installed-adapter-resumed/report.json
             artifacts/installed-evaluation/report.json
             artifacts/installed-api/report.json
             artifacts/installed-distributed/report.json
             artifacts/installed-transfer-probe/report.json
             artifacts/installed-desktop-node/report.json
             artifacts/installed-desktop-evaluation/report.json
+            artifacts/installed-desktop-adapters/report.json
             artifacts/installed-desktop-training/run/result.json
             artifacts/installed-desktop-training/run/configuration.json
             artifacts/installed-visual-ui/training/training-report.json

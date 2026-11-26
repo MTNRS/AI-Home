@@ -117,3 +117,18 @@ actúa como punto de entrada al alcance vigente y sus pruebas. Los resultados
 locales CPU/CUDA, PostgreSQL y CI no son intercambiables: cada informe identifica
 entorno, revisión y omisiones. Una PR borrador publicada no implica aceptación ni
 finalización; no se fusiona automáticamente por pasar la suite técnica.
+
+### Preferencias revisadas y candidatos restringidos
+
+Se implementa DPO sobre el modelo propio con referencia congelada del padre.
+No se infiere preferencia a partir de una corrección: un archivo de revisión
+explícito vincula pares a la exportación consentida mediante su hash. Las familias
+de conversación y de prompt conectadas permanecen en una misma partición.
+Reanudar exige identidad de datos, configuración, arquitectura y runtime, además
+de restaurar optimizador y muestreador. La UI usa exactamente ese motor local.
+
+Los checkpoints DPO siguen restringidos y no se promueven por mejorar el margen.
+La evidencia actual usa preferencias sintéticas A/B; demuestra actualizaciones
+y recuperación, no alineamiento humano. Cancelar conserva los checkpoints
+completos y no revierte actualizaciones ya guardadas. El cambio de perfil cierra
+la UI privada y descarta callbacks, pero no borra archivos elegidos por el operador.

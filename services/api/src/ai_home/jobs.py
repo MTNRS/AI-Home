@@ -20,7 +20,8 @@ SUPPORTED_JOB_TYPES = ("math.sum.v1",)
 FOUNDATION_JOB_TYPE = "foundation.tokenize.v1"
 GRADIENT_JOB_TYPE = "foundation.gradient.v1"
 EVALUATION_JOB_TYPE = "foundation.evaluate.v1"
-NEURAL_JOB_TYPES = (GRADIENT_JOB_TYPE, EVALUATION_JOB_TYPE)
+ADAPTER_JOB_TYPE = "foundation.adapter-gradient.v1"
+NEURAL_JOB_TYPES = (GRADIENT_JOB_TYPE, EVALUATION_JOB_TYPE, ADAPTER_JOB_TYPE)
 TOKENIZE_MIN_RAM_BYTES = 256 * 1024**2
 MAX_JOB_ATTEMPTS = 3
 NODE_HEARTBEAT_TIMEOUT_SECONDS = 120
@@ -231,7 +232,7 @@ def list_owner_jobs(session: Session, owner_user_id: str) -> list[ComputeJob]:
     )
 
 
-def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=False, allow_foundation_evaluation=False) -> ClaimedJob | None:
+def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=False, allow_foundation_evaluation=False, allow_foundation_adapters=False) -> ClaimedJob | None:
     now = int(time.time())
     if node.revoked_at is not None or (
         node.last_heartbeat_epoch < now - NODE_HEARTBEAT_TIMEOUT_SECONDS
@@ -283,6 +284,8 @@ def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=
         compatible = [name for name in compatible if name != GRADIENT_JOB_TYPE]
     if not allow_foundation_evaluation or available_ram < 1024**3:
         compatible = [name for name in compatible if name != EVALUATION_JOB_TYPE]
+    if not allow_foundation_adapters or available_ram < 1024**3:
+        compatible = [name for name in compatible if name != ADAPTER_JOB_TYPE]
     job = session.scalar(
         select(ComputeJob)
         .where(
@@ -290,7 +293,10 @@ def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=
             ComputeJob.job_type.in_(compatible),
             _measurement_eligibility(node, now),
             or_(ComputeJob.job_type.notin_(NEURAL_JOB_TYPES),
-                ComputeJob.payload["torch_version"].as_string() == node.hardware.get("foundation_torch_version")),
+                and_(ComputeJob.job_type != ADAPTER_JOB_TYPE,
+                     ComputeJob.payload["torch_version"].as_string() == node.hardware.get("foundation_torch_version")),
+                and_(ComputeJob.job_type == ADAPTER_JOB_TYPE,
+                     ComputeJob.payload["base"]["torch_version"].as_string() == node.hardware.get("foundation_torch_version"))),
         )
         .order_by(ComputeJob.created_at, ComputeJob.job_id)
         .with_for_update(skip_locked=True)
@@ -361,6 +367,11 @@ def submit_job_result(
     elif job.job_type == GRADIENT_JOB_TYPE:
         from ai_home.foundation.distributed import verified_gradient_result
         if not verified_gradient_result(job.payload, result):
+            raise InvalidJobResult
+        expected = result
+    elif job.job_type == ADAPTER_JOB_TYPE:
+        from ai_home.foundation.adapter_tasks import verified_adapter_gradient
+        if not verified_adapter_gradient(job.payload, result):
             raise InvalidJobResult
         expected = result
     else:
@@ -446,6 +457,16 @@ def create_evaluation_job(session: Session, *, owner_user_id: str, idempotency_k
     payload = GradientPayload.model_validate(payload).model_dump()
     return _create_foundation_job(session, owner_user_id, idempotency_key, payload,
                                   EVALUATION_JOB_TYPE, reward_credits)
+
+
+def create_adapter_job(session: Session, *, owner_user_id: str, idempotency_key: str,
+                       payload: dict, allow_public_node_processing: bool, reward_credits=0):
+    from ai_home.foundation.adapter_tasks import validate_payload
+    if allow_public_node_processing is not True:
+        raise ValueError("Public node processing requires explicit consent")
+    checked, _ = validate_payload(payload)
+    return _create_foundation_job(session, owner_user_id, idempotency_key, checked.model_dump(),
+                                  ADAPTER_JOB_TYPE, reward_credits)
 
 
 def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job_type, reward_credits, scheduling=None):

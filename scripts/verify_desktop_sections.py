@@ -33,6 +33,14 @@ def run(self,*args):
     assert self.node_training_var.get() is False
     assert self.node_device_var.get() == 'cpu'
     assert self.node_evaluation_var.get() is False
+    assert self.node_adapters_var.get() is False
+    adapters = next(w for w in descendants(self.control_sections['DISTRIBUTED COMPUTE'])
+                    if isinstance(w, ttk.Checkbutton) and 'entrenamiento de adaptadores' in w.cget('text'))
+    adapters.invoke()
+    assert self.node_adapters_var.get() is True
+    assert not self.node_training_var.get() and not self.node_evaluation_var.get()
+    adapters.invoke()
+    assert self.node_adapters_var.get() is False
     evaluation = next(w for w in descendants(self.control_sections['DISTRIBUTED COMPUTE'])
                       if isinstance(w, ttk.Checkbutton) and 'Permitir evaluación' in w.cget('text'))
     evaluation.invoke()

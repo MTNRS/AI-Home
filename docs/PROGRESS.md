@@ -1854,3 +1854,271 @@ tras cambio de perfil, cargando el checkpoint del experimento CPU/CUDA anterior.
 Importacion confirmada desde site-packages, torch 2.15.0+cpu, pip check correcto.
 Hash del wheel y comando guardados en CLEAN_REPRODUCTION.md. CI remota aun
 en ejecucion; no se atribuye exito remoto a esta evidencia local instalada.
+
+### Trabajo local posterior a 2724cf7: conocimiento y preferencias
+
+Cambios aun sin commit/publicacion. La publicacion quedo pendiente tras un rechazo
+automatico del comando de documentacion/commit; se solicito autorizacion para
+reintentar. La CI de 2724cf7 termino correctamente (Tests 45857108936, Foundation
+45857109828); no cubre este trabajo local.
+
+Conector Wikipedia por revision fija: descarga real de 58,951 bytes de texto,
+hashes/procedencia conservados y permisos desactivados. Una repeticion posterior
+desde el wheel recibio HTTP 403 sin producir archivo. Formulario KNOWLEDGE
+verificado con Tk y HTTP controlado, tambien desde wheel antes de agregar
+cancelacion. Cancelacion posterior probada entre bloques y antes de publicar;
+25 pruebas de conectores y smoke Tk activo correctos. Detalle y evidencia en
+KNOWLEDGE_CONNECTORS.md y WIKIPEDIA_CONNECTOR_SMOKE.json.
+
+Experimento con cuatro extractos tecnicos propios fijados a commit: Nano de
+803,968 parametros, 200 pasos CUDA, perdida reservada 6.2561 a 5.2084; ambos
+checkpoints obtienen 0/10 en probes generativos. BPE reduce tokens 53.34% en train
+y 48.60% en validacion, sin demostrar comprension. Preparacion reproducida sin
+entrenar y configuracion tambien fijada al commit. Checkpoints locales y
+resultados en REPOSITORY_DOCUMENT_EXPERIMENT.md y sus JSON asociados.
+
+DPO local: objetivo numerico, importacion de pares explicitamente revisados sobre
+exportaciones consentidas, particion por familias conectadas, candidatos
+restringidos, CLI, checkpoints periodicos y reanudacion exacta. Pruebas reales
+CPU/CUDA, cancelacion y recuperacion de fallo controlado aprobadas. Smoke
+sintetico de ocho pares train/cuatro reservados paso de 0/4 a 4/4 preferencias
+A frente a B, con reanudacion 10 a 20 pasos. No representa feedback humano ni
+mejora linguistica. PREFERENCE_LEARNING.md detalla alcance y pendientes.
+
+Regresion integral posterior a estos cambios locales: 445 pruebas aprobadas y
+7 PostgreSQL omitidas, en 158.62 segundos. Incluye entrenamiento/reanudacion DPO,
+exportaciones y correcciones existentes, conectores, nodos, creditos y escritorio.
+No equivale a aprobacion remota ni auditoria final del objetivo.
+
+Reproduccion adicional desde el paquete instalado con Python aislado (-I):
+smoke DPO completo en PyTorch 2.15.0+cpu, reanudacion 10 a 20 pasos, 0/4 a 4/4
+en preferencias sinteticas reservadas, sin promocion. Import confirmado desde
+site-packages y pip check sin dependencias rotas. Evidencia conservada en
+artifacts/installed-preferences-v1. Tambien paso la prueba Tk instalada de
+adquisicion con HTTP controlado, cancelacion activa sin publicar archivo y
+cierre al cambiar perfil (artifacts/installed-knowledge-cancel-v1). Esta prueba
+no consulta Wikipedia ni demuestra disponibilidad de su servicio. Ambos procesos
+terminaron con codigo cero; los cambios siguen locales, pendientes de publicacion.
+
+El visor de informes admite ahora resultados del entrenador DPO y tiene acceso
+desde TRAINING. Valida coherencia de pasos, cancelacion, pares reservados,
+metricas y visibilidad restringida; no autentica ejecucion ni promueve modelos.
+13 pruebas del lector aprobadas, incluida cancelacion durante evaluacion final.
+Pendiente comprobacion visual del nuevo acceso y lanzamiento DPO desde interfaz.
+
+Comprobacion funcional Tk del acceso DPO completada con ventana oculta: boton,
+lector asincrono, JSON exacto, resumen y cierre por cambio de perfil. Detecto y
+corrigio la perdida de StringVar al finalizar el callback; la ventana conserva
+ahora el resumen. Repeticion correcta y 13 pruebas de informes aprobadas. El
+verificador queda agregado a CI instalada, todavia sin ejecucion remota. No es
+una revision visual del layout ni implementa lanzamiento del entrenamiento.
+
+Implementado posteriormente lanzamiento DPO desde TRAINING con padre, exportacion
+consentida, revision de pares, ajustes CPU/CUDA y reanudacion opcional. Usa el
+entrenador real y cancelacion cooperativa al cerrar/cambiar perfil. Verificador
+Tk ejecuto dos pasos CPU, guardo candidato restringido e informe y comprobo estado
+final/cierre de ventana. Artefactos: artifacts/desktop-preference-training-v1.
+Quedan pruebas GUI de cancelacion activa, reanudacion y revision visual.
+
+Cancelacion activa y reanudacion GUI verificadas posteriormente: boton Cancelar
+tras una actualizacion AdamW real guarda paso uno; reanudar desde el formulario
+produce tensores exactamente iguales a dos pasos ininterrumpidos. Proceso Tk
+terminado con codigo cero; evidencia en artifacts/desktop-preference-resume-v1.
+Verificador agregado a CI instalada, pendiente de ejecucion remota. Revision
+visual y cancelacion en otras fases siguen pendientes.
+
+Cambio de perfil durante entrenamiento DPO activo comprobado con actualizacion
+real: cancela en paso uno, conserva candidato restringido y descarta callbacks
+tardios sin reabrir ventanas. Reproduccion completa desde wheel instalado con
+Python -I y PyTorch CPU aprobada, incluyendo entrenamiento, cancelacion,
+reanudacion exacta y visor del informe. Procesos terminados con codigo cero;
+artefactos en artifacts/installed-preference-profile-v1. Archivos locales elegidos
+por el operador permanecen en disco; esto no demuestra aislamiento entre usuarios
+del sistema operativo. Detalles y hash del wheel en PREFERENCE_LEARNING.md.
+
+Regresion completa tras integrar DPO en escritorio e informes: 452 aprobadas,
+7 PostgreSQL omitidas, 111.57 segundos, codigo cero. Actualizados ARCHITECTURE,
+DECISIONS, ROADMAP y TESTING con el flujo local real, comandos de reproduccion,
+restricciones y separacion entre pruebas locales y CI publicada. Objetivo completo
+y publicacion de estos cambios siguen pendientes.
+
+Progreso DPO en vivo implementado: paso y perdida reales mediante cola acotada,
+sin acceso Tk desde worker. Copias de metricas impiden que la visualizacion altere
+el historial. Verificador Tk confirma paso uno visible durante actualizacion dos,
+y vuelve a comprobar cancelacion/reanudacion/cambio de perfil; codigo cero.
+Siete pruebas del entrenador CPU/CUDA aprobadas en 19.85 segundos. Artefactos en
+artifacts/desktop-preference-progress-v1. Esta adicion es posterior a la regresion
+integral de 452 pruebas y al ultimo wheel verificado.
+
+Preparacion de revision DPO: nuevo comando preference_data crea plantilla ligada
+al hash de una exportacion ya consentida/revisada. Agrupa historiales iguales,
+omite respuestas identicas, limita a 1000 pares y no sobrescribe archivos.
+Identidad vacia, fecha cero y confirmaciones falsas impiden entrenamiento directo;
+orden de IDs no significa preferencia. Once pruebas de datos aprobadas y CLI real
+con doce pares sinteticos pendientes en artifacts/preference-review-template-v1.json.
+
+Plantilla conectada al formulario mediante Preparar revision. La prueba Tk real
+genera doce pares pendientes y confirma su rechazo por el importador; despues
+verifica entrenamiento, progreso, cancelacion, reanudacion exacta y cambio de
+perfil. Proceso terminado con codigo cero, artifacts/desktop-preference-template-v1.
+La revision sigue siendo externa/explicita; no se selecciona ni aprueba la
+plantilla automaticamente. Cerrar puede conservar el archivo preparado en disco.
+
+Wheel actualizado instalado y verificador Tk completo con Python aislado aprobado:
+plantilla pendiente, rechazo sin revision, perdida en vivo, entrenamiento,
+cancelacion, reanudacion exacta y cambio de perfil. Evidencia en
+artifacts/installed-preference-template-v1; instalacion y prueba con codigo cero.
+Intento de revision visual inconcluso: captura nativa devolvio pixeles de otra
+aplicacion pese a seleccionar/reseleccionar Tk. Instancia de preview cerrada y
+proceso terminado verificado; no se afirma aprobacion visual.
+
+Evaluacion independiente del DPO instalado: padre y candidato de veinte pasos
+obtienen 0/10 en evaluation-probes-v1, greedy y 64 tokens, todos los prompts caben.
+Ambos procesos CPU aislados terminaron con codigo cero. Informes conservados en
+PREFERENCE_PARENT_GENERAL_EVALUATION.json y PREFERENCE_CANDIDATE_GENERAL_EVALUATION.json;
+esquema, hashes de checkpoints cargados y huella comun de suite verificados.
+La mejora sintetica A/B no demuestra mejora linguistica; igualdad a cero tampoco
+demuestra ausencia general de regresiones. No hay promocion del candidato.
+
+Primera primitiva de adaptadores para arquitectura propia: factores de bajo rango
+en q/v, base congelada, copias independientes y fusion a modelo Foundation normal.
+Tres pruebas CPU/CUDA con doce actualizaciones AdamW reales verifican cambio de
+salida, 112 parametros entrenables, base intacta y equivalencia de fusion/KV cache.
+Es una primitiva local: faltan serializacion ligada al padre, datasets/linaje,
+reanudacion, mediciones y protocolo de nodos. Ver ADAPTERS.md.
+
+Serializacion restringida de factores implementada: comprueba toda la base
+congelada, vincula SHA256 del checkpoint padre y tokenizador, escritura exclusiva
+y carga weights_only acotada con forma/dtype/finitud. Cuatro pruebas aprobadas
+en 7.54 segundos: roundtrip exacto, padre distinto, no sobrescritura y rechazo de
+base alterada, ademas de optimizacion CPU/CUDA. Todavia no preserva optimizador
+ni linaje de datos; no es un artefacto publicable o distribuible.
+
+Ensayo reproducible de adaptadores ejecutado CPU/CUDA con corpus sintetico propio
+y validadores/particiones/secuencias existentes. Padre de 18.528 parametros;
+448 factores entrenables, cuarenta pasos AdamW, archivo de 4.381 bytes. Perdida
+reservada 5.634474 a 5.585938 sobre 788 tokens; generacion repetitiva, sin calidad
+linguistica demostrada. Recarga exacta y padre intacto verificados. Ambos procesos
+codigo cero; informes ADAPTER_SMOKE_CPU.json y ADAPTER_SMOKE_CUDA.json.
+
+Adaptadores con linaje opcional acumulativo: particiones publicas validadas,
+huella de dataset y union de hashes/familias del padre; rechaza contaminacion y
+omision de historia al cargar. Smoke CPU de cuarenta pasos con guardado/recarga
+exacta terminado, artifacts/adapter-lineage-cpu-v1 (5.213 bytes con metadatos).
+Artefactos numericos antiguos sin linaje siguen legibles sin afirmar datos
+validados; entrenador general, reanudacion y exportacion fusionada pendientes.
+
+Exportacion fusionada implementada: checkpoint Foundation ordinario con linaje,
+padre/adaptador, visibilidad restringida y estado candidato. Exige linaje y salida
+nueva; no incorpora optimizador ni activa modelo. Artefacto CPU de cuarenta pasos
+exportado y recargado verificando todos los tensores y campos de linaje.
+Seis pruebas aprobadas en 5.35 segundos, incluida deteccion de un documento de
+entrenamiento usado como probe. Entrenador general y reanudacion siguen pendientes.
+
+Entrenador local de adaptadores incorporado: dataset publico autorizado, particion
+y linaje reutilizados, FP32 causal, AdamW/clipping, checkpoints de factores mas
+optimizador/muestreador, CLI y reanudacion ligada a identidad/runtime. Dos pruebas
+CPU/CUDA aprobadas en 9.14 s: cuatro pasos completos equivalen exactamente a dos
+mas dos reanudados; padre intacto y ajustes cambiados rechazados. CLI de dos pasos
+con guardados periodicos terminada, artifacts/adapter-trainer-cli-v1. Pendientes
+pruebas de cancelacion/fallos, memoria medida, GUI y protocolo de nodos.
+
+Recuperacion de adaptadores probada: cancelar tras una actualizacion CPU real
+guarda paso uno sin evaluacion final; fallo inyectado antes del paso dos conserva
+el checkpoint previo y no publica informe de finalizacion. Reanudar cualquiera
+produce todos los tensores iguales a cuatro pasos completos. Cuatro pruebas del
+entrenador aprobadas en 13.01 segundos, incluidas las de reanudacion CPU/CUDA.
+No cubre corte de corriente ni fallo durante publicacion del checkpoint.
+
+Fallo de publicacion probado posteriormente: excepcion tras guardar factores del
+paso dos y antes del estado de entrenamiento deja carpeta incompleta; reanudar
+la rechaza antes de crear salida. Mezclar factores del paso dos con estado del
+paso uno tambien se rechaza por hash. El checkpoint completo previo reanuda a
+tensores identicos. Cinco pruebas del entrenador aprobadas en 15.79 segundos;
+no equivale a probar durabilidad ante un corte de corriente real.
+
+Metricas reales de adaptadores: tiempos sincronizados por paso, tokens supervisados,
+throughput de actualizaciones, tiempo con guardados/evaluacion, RSS final y picos
+del allocator CUDA. Totales de reanudacion cuentan solo pasos nuevos. Cinco
+pruebas aprobadas en 18.17 s. Ensayo CUDA veinte pasos: 1.190 tokens, 0.8623 s de
+actualizaciones, 17.529.344 bytes CUDA asignados de pico; informe
+ADAPTER_RESOURCES_CUDA.json. Sin comparacion controlada no se afirma ahorro.
+
+Reproduccion instalada de adaptadores completada con Python -I y PyTorch CPU:
+smoke cuarenta pasos, CLI dos de cuatro pasos y nuevo proceso reanudado a cuatro;
+todos codigo cero. Artefactos installed-adapter-smoke-v1, partial-v1 y resumed-v1.
+Workflow Foundation ampliado para ejecutar este flujo y conservar informes;
+todavia sin publicar ni validar remotamente. Hash del wheel en ADAPTERS.md.
+
+Kernel tipado de gradientes de adaptadores implementado reutilizando contrato
+publico y codec FP32 existentes. Requiere permisos de redistribucion separados
+para base y factores; valida rango/nombres/formas antes de asignar modelo. Ejecuta
+gradientes reales de factores y verificacion independiente CPU. Dos pruebas
+CPU/CUDA aprobadas, incluyendo manipulacion de conteo y factores restringidos.
+Todavia sin registro API/scheduler/NodeAgent, agregacion ni creditos; no se afirma
+ejecucion distribuida de adaptadores.
+
+Agregacion local de adaptadores: dos a ocho shards verificados antes de actualizar,
+identidad de base/factores/tokenizador/ajustes, rechazo de solapamiento y propiedad
+exacta del optimizador. Gradiente ponderado por tokens equivale a lote completo
+en tolerancia FP32; resultados alterados/duplicados no cambian modelo ni optimizador,
+y replay se rechaza. Tres pruebas aprobadas en 9.18 s. Sin ejecucion por red todavia.
+
+Despachador de worker reconoce adapter-gradient solo con permiso separado y
+booleano verdadero; training/evaluation existentes no lo autorizan. NodeAgent
+conserva opcion por defecto falsa y la pasa al ejecutor. No anuncia todavia la
+capacidad ni hay creacion API/scheduler: no se amplian trabajos remotos existentes.
+Pruebas de despacho real y rechazo de permisos incluidas junto a regresion de nodos.
+
+Negociacion de capacidad adapter-gradient registrada en esquemas/API y NodeAgent,
+con runtime obligatorio y opt-in separado. Scheduler la excluye explicitamente
+hasta integrar creacion/verificacion/habilitacion de trabajos. Prueba de JSON de
+negociacion mediante cliente HTTP controlado y regresion existente: 36 aprobadas
+en 18.75 segundos. No hay aun ejecucion de adaptadores por API/red.
+
+API/scheduler de adaptadores conectados posteriormente: flag separado falso por
+defecto, creacion consentida/idempotente, recursos/runtime, verificacion de
+gradientes y camino transaccional de reservas/liquidacion existente. Seis pruebas
+aprobadas en 10.20 s; integracion FastAPI en proceso completa trabajo real y
+rechaza permiso ausente, runtime incompatible y resultado manipulado. Ensayo con
+recompensa cero; creditos financiados y procesos TCP de adaptadores pendientes.
+
+Creditos financiados de adaptadores verificados en prueba SQLite: cien creditos
+sinteticos iniciales, reserva unica de nueve, resultado invalido sin pago,
+liquidacion verificada de nueve y rechazo de reenvio duplicado. Cancelacion de
+segundo trabajo devuelve reserva una vez; otro usuario no puede cancelarlo.
+Saldo insuficiente rechazado y balance global conservado. Dieciseis pruebas de
+adaptadores/creditos aprobadas en 14.67 s; TCP y concurrencia PostgreSQL pendientes.
+
+Ensayo TCP de adaptadores completado posteriormente: dos procesos independientes
+CPU/CUDA en este ordenador, dos trabajos verificados, 144 tokens supervisados y
+actualizacion real de factores (norma L2 0.006795629506006286). Cada trabajador
+recibio tres creditos sinteticos y el propietario termino sin saldo ni reservas.
+Artefactos candidato/adaptador conservados, sin promocion. Evidencia en
+`ADAPTER_DISTRIBUTED_SMOKE.json`; reproduccion en `ADAPTERS.md`. Los trabajadores
+se ejecutaron secuencialmente: multihost, aceleracion paralela y concurrencia
+PostgreSQL de adaptadores siguen sin demostrar. CI tiene ahora una variante CPU
+del paquete instalado, aun sin ejecucion remota de estos cambios locales.
+
+Reproduccion local posterior del paquete instalado: Python 3.11.9 aislado (`-I`),
+importacion comprobada desde site-packages y PyTorch 2.15.0+cpu. Dos trabajadores
+CPU completaron ambos trabajos HTTP, agregaron 144 tokens y cobraron tres creditos
+cada uno. Delta de factores 0.00679562816765376, sin promocion. Informe
+`ADAPTER_INSTALLED_DISTRIBUTED_SMOKE.json`; hash del wheel y comandos en
+`ADAPTERS.md`. No demuestra multihost ni sustituye la CI remota pendiente.
+
+Nodo de escritorio: permiso separado de adaptadores, falso por defecto y borrado
+al cambiar de cuenta; trabajo CUDA real, verificacion HTTP y tres creditos
+completados. Navegacion Tk y quince pruebas focalizadas aprobadas. Posteriormente
+se corrigio el rechazo de JSON interno excesivamente anidado en resultados:
+HTTP 422 sin pago ni perdida de reserva, seguido de liquidacion valida. Dieciseis
+pruebas adaptadores/creditos aprobadas; suite ampliada de ocho adaptadores tambien
+aprobada, con tipos invalidos y perdidas no finitas rechazados antes del calculo.
+
+Integracion local de adaptadores consolidada en escritorio: formulario TRAINING,
+metricas por paso, cancelacion, reanudacion exacta, aislamiento de perfil activo
+y visor de informes. Reproduccion con wheel instalado y Python aislado: formulario
+y visor aprobados; nodo CPU completo trabajo verificado y cobro tres creditos.
+Hash del wheel y rutas de artefactos en ADAPTERS.md. Evaluacion independiente del
+ensayo distribuido con contexto 64: padre/candidato 0/10 con todas las preguntas
+completas, sin evidencia de mejora general ni promocion.

@@ -756,13 +756,17 @@ def main() -> None:
                   ("Probar imagen local (experimental)", self._visual_inference_dialog)]),
                 ("TRAINING", "Selecciona datasets autorizados, configuración y checkpoints. El entrenamiento produce un candidato; no lo publica automáticamente.",
                  [("Entrenar o reanudar", self._run_training_dialog), ("Entrenamiento visual (experimental)", self._visual_training_dialog), ("Inspeccionar entrenamiento", self._inspect_checkpoint_dialog),
-                  ("Mis aportaciones consentidas", self._manage_training_candidates)]),
+                  ("Mis aportaciones consentidas", self._manage_training_candidates),
+                  ("Abrir resultado de preferencias", self._experiment_report_dialog),
+                  ("Entrenar preferencias", self._preference_training_dialog),
+                  ("Entrenar adaptadores", self._adapter_training_dialog)]),
                 ("EVALUATION", "Ejecuta una suite reproducible o consulta sus resultados. Una prueba ejecutable no demuestra una capacidad adquirida.",
                  [("Ejecutar evaluación", self._run_evaluation_dialog), ("Planificar evaluación distribuida", self._evaluation_plan_dialog), ("Abrir informe", self._experiment_report_dialog)]),
                 ("EVOLUTION", "Ejecuta un experimento controlado y consulta su comparación y decisión. No activa modelos automáticamente.",
                  [("Nuevo experimento", self._run_evolution_dialog), ("Abrir resultado", self._experiment_report_dialog)]),
                 ("KNOWLEDGE", "Consulta fuentes y fragmentos de índices revisados o crea una versión nueva. La recuperación no modifica los pesos.",
-                 [("Explorar conocimiento", self._knowledge_dialog), ("Crear índice", self._build_knowledge_dialog)]),
+                 [("Explorar conocimiento", self._knowledge_dialog), ("Crear índice", self._build_knowledge_dialog),
+                  ("Adquirir fuentes públicas", self._knowledge_acquisition_dialog)]),
                 ("MODELS", "Selecciona versiones del modelo propio o revisa el registro local, sus aprobaciones y activaciones.",
                  [("Selección y conexión", lambda: self._show_page(provider_tab)),
                   ("Registro, aprobación y rollback", self._model_registry_dialog), ("Inspeccionar checkpoint", self._inspect_checkpoint_dialog)]),
@@ -805,9 +809,21 @@ def main() -> None:
             from ai_home.evaluation_plan_desktop import open_evaluation_plan_dialog
             open_evaluation_plan_dialog(self)
 
+        def _adapter_training_dialog(self):
+            from ai_home.adapter_training_desktop import open_adapter_training_dialog
+            open_adapter_training_dialog(self)
+
+        def _knowledge_acquisition_dialog(self):
+            from ai_home.knowledge_acquisition_desktop import open_acquisition_dialog
+            open_acquisition_dialog(self)
+
         def _visual_training_dialog(self):
             from ai_home.visual_training_desktop import open_visual_training_dialog
             open_visual_training_dialog(self)
+
+        def _preference_training_dialog(self):
+            from ai_home.preference_training_desktop import open_preference_training_dialog
+            open_preference_training_dialog(self)
 
         def _scrollable_page(self, parent):
             canvas = tk.Canvas(parent, highlightthickness=0, background="#eeeeee", height=400)
@@ -2268,17 +2284,18 @@ def main() -> None:
             poll()
 
         def _experiment_report_dialog(self) -> None:
-            path = filedialog.askopenfilename(parent=self, title="Informe de evaluación o evolución",
+            path = filedialog.askopenfilename(parent=self, title="Informe de evaluación, preferencias o evolución",
                                              filetypes=[("Informe JSON", "*.json")])
             if not path:
                 return
             window = tk.Toplevel(self)
             self.private_windows.append(window)
-            window.title("Foundation: evaluación y evolución")
+            window.title("Foundation: informes de experimentos")
             window.geometry("820x580")
             ttk.Label(window, text="Informe local: no verifica por sí solo la ejecución, los pesos ni la aprobación.",
                       wraplength=760).pack(padx=12, pady=10)
             summary = tk.StringVar(value="Cargando informe…")
+            window.report_summary = summary
             ttk.Label(window, textvariable=summary, wraplength=760).pack(padx=12, pady=6)
             frame = ttk.Frame(window)
             frame.pack(fill="both", expand=True, padx=12, pady=12)
@@ -2300,6 +2317,21 @@ def main() -> None:
                     summary.set(f"Pérdida causal distribuida: {report['mean_loss']:.6f}. "
                                 f"{report['tokens']} tokens en {len(report['shards'])} fragmentos. "
                                 "No mide capacidad lingüística ni autoriza promoción.")
+                elif report["format"] == "ai-home-preference-training-v1":
+                    candidate = report["candidate"]
+                    result = (f"Margen reservado: {report['baseline']['mean_margin']:.4f} → "
+                              f"{candidate['mean_margin']:.4f}, {candidate['pairs']} pares."
+                              if candidate else "Cancelado; sin evaluación final.")
+                    summary.set(f"Preferencias: paso {report['step']}. {result} "
+                                "Candidato restringido; no mide calidad lingüística ni activa el modelo.")
+                elif report["format"] == "ai-home-adapter-training-v1":
+                    candidate = report["candidate"]
+                    result = (f"Pérdida reservada: {report['baseline']['loss']:.6f} → "
+                              f"{candidate['loss']:.6f}, {candidate['tokens']} tokens."
+                              if candidate else "Cancelado; sin evaluación final.")
+                    summary.set(f"Adaptadores ({report.get('objective', 'causal')}): paso {report['step']}/{report['identity']['settings']['steps']}. "
+                                f"{report['trainable_parameters']} parámetros entrenables. {result} "
+                                "Candidato restringido; no mide calidad lingüística ni activa el modelo.")
                 else:
                     summary.set(f"Evolución: {report['decision']}. {report['reason']} — Sin promoción automática.")
                 content.configure(state="normal")
@@ -2620,6 +2652,7 @@ def main() -> None:
             self.transfer_probe_var = tk.BooleanVar(value=False)
             self.node_training_var = tk.BooleanVar(value=False)
             self.node_evaluation_var = tk.BooleanVar(value=False)
+            self.node_adapters_var = tk.BooleanVar(value=False)
             self.node_device_var = tk.StringVar(value="cpu")
             ttk.Checkbutton(
                 parent,
@@ -2630,6 +2663,10 @@ def main() -> None:
                             variable=self.node_training_var).pack(anchor="w", pady=4)
             ttk.Checkbutton(parent, text="Permitir evaluación Foundation experimental con datos públicos.",
                             variable=self.node_evaluation_var).pack(anchor="w", pady=4)
+            ttk.Checkbutton(parent, text="Permitir entrenamiento de adaptadores con datos y pesos públicos.",
+                            variable=self.node_adapters_var).pack(anchor="w", pady=4)
+            ttk.Label(parent, text="Los permisos y el dispositivo se aplican al iniciar el nodo; detén y reinicia para cambiarlos.",
+                      wraplength=800).pack(anchor="w", pady=4)
             device_row = ttk.Frame(parent)
             device_row.pack(anchor="w", pady=4)
             ttk.Label(device_row, text="Dispositivo Foundation:").pack(side="left")
@@ -3040,6 +3077,7 @@ def main() -> None:
             self.consent_var.set(False)
             self.node_training_var.set(False)
             self.node_evaluation_var.set(False)
+            self.node_adapters_var.set(False)
             self.transfer_probe_var.set(False)
             for window in self.private_windows:
                 if window.winfo_exists():
@@ -3513,7 +3551,8 @@ def main() -> None:
             self.node_thread = threading.Thread(
                 target=self._node_loop,
                 args=(server_url, node_id, token, stop_event, self.transfer_probe_var.get(),
-                      self.node_training_var.get(), self.node_device_var.get(), self.node_evaluation_var.get()),
+                      self.node_training_var.get(), self.node_device_var.get(), self.node_evaluation_var.get(),
+                      self.node_adapters_var.get()),
                 daemon=True,
             )
             self.node_thread.start()
@@ -3529,11 +3568,13 @@ def main() -> None:
             allow_training: bool = False,
             foundation_device: str = "cpu",
             allow_evaluation: bool = False,
+            allow_adapters: bool = False,
         ) -> None:
             agent = NodeAgent(server_url=server_url, node_token=token,
                               allow_foundation_training=allow_training,
                               allow_foundation_evaluation=allow_evaluation,
-                              foundation_device=foundation_device if allow_training or allow_evaluation else "cpu",
+                              allow_foundation_adapters=allow_adapters,
+                              foundation_device=foundation_device if allow_training or allow_evaluation or allow_adapters else "cpu",
                               transfer_probe_interval=60 if measure_transfer else None)
             valid = lambda: self.node_stop is stop_event
             try:

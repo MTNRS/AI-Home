@@ -8,6 +8,33 @@ otros documentos describen el estado en que se escribieron, no el estado actual.
 
 ## Evidencia vigente de ejecución y entrega
 
+Trabajo incorporado en esta rama posterior a `2724cf7`: conector Wikipedia y
+adquisicion desde KNOWLEDGE con cancelacion; experimento Nano sobre cuatro
+extractos tecnicos propios (sin mejora en los diez probes); y entrenamiento DPO
+experimental con pares revisados, particion por familias, CLI, formulario de
+escritorio y visor. Cancelacion activa, reanudacion exacta y cambio de perfil
+probados desde fuente y paquete instalado con Python aislado.
+La demostracion DPO utiliza exclusivamente fixtures sinteticos, no preferencias
+humanas reales. Ver [conectores](KNOWLEDGE_CONNECTORS.md),
+[ensayo documental](REPOSITORY_DOCUMENT_EXPERIMENT.md) y
+[preferencias](PREFERENCE_LEARNING.md). Estos avances no eliminan los pendientes
+de corpus representativos, calidad general, integracion operativa y auditoria.
+CI confirmada de `2724cf7`: [Tests](https://github.com/MTNRS/AI-Home/actions/runs/45857108936)
+y [Foundation](https://github.com/MTNRS/AI-Home/actions/runs/45857109828).
+Los enlaces historicos de abajo conservan evidencia anterior, no de estos cambios.
+Suite local posterior a integrar formularios, progreso y validacion de adaptadores: 476 aprobadas y
+8 PostgreSQL omitidas en 87.07 segundos. Esta verificacion no convierte el
+validacion local en CI remota aprobada. Las ocho pruebas PostgreSQL pasaron por separado en 5.15 s.
+
+Adaptadores: entrenamiento local CPU/CUDA y reanudacion exacta; ensayo HTTP con
+dos procesos CPU/CUDA, agregacion real y tres creditos sinteticos por trabajador.
+Se verificaron lanzamientos secuenciales y concurrentes en un solo equipo, sin promocion del candidato.
+Ver [implementacion, evidencia y limites](ADAPTERS.md).
+Formulario, progreso, cancelacion, reanudacion exacta, aislamiento de perfil activo,
+visor y nodo CPU tambien comprobados con wheel instalado y Python aislado.
+Padre y candidato del ensayo de contexto 64 obtienen 0/10 con preguntas completas;
+no se ha demostrado mejora general ni aprobado promocion.
+
 - Rama: `codex/foundation-validation`; PR borrador [#1](https://github.com/MTNRS/AI-Home/pull/1).
 - Revisión validada remotamente: `ae2078d` (incluye observacion reanudable de evaluacion distribuida y permiso independiente del nodo de escritorio). FP16/BF16 CUDA se verificaron localmente, no en los runners CPU.
 - [Matriz Linux/PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45854301608): ejecución concluida correctamente.

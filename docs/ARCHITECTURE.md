@@ -4,6 +4,20 @@ Implementación actual y límites: [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md).
 
 ## Objetivo y límites
 
+El flujo local de preferencias conecta `foundation.contributions` (exportación
+consentida validada), `preference_data` (revisión explícita y partición por
+familias), `preference_objective` (DPO) y `preference_training` (AdamW, referencia
+congelada y checkpoints). CLI y `preference_training_desktop` llaman al mismo
+motor. El formulario captura valores Tk antes del trabajo en segundo plano y
+descarta callbacks cuando se destruye la ventana o cambia la sesión. Cerrar la
+ventana solicita cancelación cooperativa; los archivos ya guardados permanecen.
+
+El candidato conserva `reviewed-training-only`; este flujo no publica pesos ni
+envía pares a nodos. `foundation.reports` valida la coherencia del informe para
+mostrarlo, sin autenticar su ejecución. La comparación de preferencias reservadas
+no sustituye evaluación lingüística independiente. Contratos, comandos y evidencia:
+[PREFERENCE_LEARNING.md](PREFERENCE_LEARNING.md).
+
 AI@Home busca crecer hacia una plataforma de IA colaborativa, multimodal y
 distribuida. La arquitectura descrita aquí es una dirección incremental, no la
 afirmación de que esos subsistemas ya existan.
@@ -264,3 +278,17 @@ evaluation, explicit approval gates, transactional activation history and rollba
 Foundation API serving can select the active approved registry version. Direct
 checkpoint mode remains available and is not an approval claim. See
 [Model registry](MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.
+
+### Adapter training and worker integration
+
+`foundation.adapters` attaches trainable low-rank factors to the own model's q/v
+projections while freezing base weights. Artifacts bind the parent, tokenizer and
+data lineage; explicit export produces an ordinary restricted candidate.
+`adapter_training` supports local FP32 optimization and optimizer/RNG resume;
+`adapter_training_desktop` runs it in the existing private-window/background
+mechanism with bounded live metrics and cooperative cancellation.
+`adapter_tasks` defines public typed gradient payloads, CPU result recomputation
+and token-weighted aggregation. API, scheduler, NodeAgent and transactional
+credits use separate default-disabled server/worker adapter permissions.
+See [adapter implementation and evidence](ADAPTERS.md). Current network evidence
+is loopback on one host; it does not demonstrate multihost scaling.

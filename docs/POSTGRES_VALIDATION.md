@@ -52,3 +52,19 @@ single-server validation, not a multi-host or production load benchmark.
 
 Final result: **263 passed, zero skipped**, including all five PostgreSQL tests.
 The portable server was stopped and pg_ctl status confirmed no running server.
+
+## Adapter settlement concurrency
+
+The existing isolated cluster was restarted for the expanded integration suite:
+**8 passed in 5.15 s**. The new adapter case creates an own random-initialized
+model and public factor payload, reserves nine test credits, claims through the
+adapter scheduler and computes a real gradient. Two concurrent database sessions
+submit the same valid result and lease. Exactly one completes settlement; the
+other observes the terminal job. Worker balance is nine, owner balance zero,
+funding is settled and the job completed. This exercises the nested PyTorch
+runtime scheduling predicate and row locking with real PostgreSQL transactions.
+
+The test server was stopped afterward. This is duplicate-result contention on
+one database host, not a distributed load benchmark or exhaustive concurrency
+coverage. The full 474-test run reported elsewhere preceded this added test and
+did not enable PostgreSQL; these eight tests are a separate targeted execution.

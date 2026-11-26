@@ -1,5 +1,67 @@
 # Public knowledge connectors
 
+Installed-wheel verification before the subsequent cancellation change: wheel SHA256
+`dccd5d79ee379d9242c37a1644584ab4cba1d5ead1a02660f5b7a48131d3590b`;
+`python -I scripts/verify_knowledge_acquisition.py --require-installed` passed
+in the existing isolated CPU environment with controlled HTTP. `pip check`
+reported no broken requirements. A separate live CLI request for revision
+1385774090 returned HTTP 403; no pending file was created. The earlier live
+success remains valid evidence of that execution, not guaranteed availability.
+No alternate route, authentication or response bypass was attempted.
+
+Local regression after adding the Wikipedia connector and acquisition dialog:
+423 passed, 7 PostgreSQL tests skipped, in 134.71 seconds. This predates the
+cancellation change and is not a published revision. The live acquisition metadata in
+[WIKIPEDIA_CONNECTOR_SMOKE.json](WIKIPEDIA_CONNECTOR_SMOKE.json) was checked
+against the actual pending artifact: sizes, text/source hashes, revision identity
+and disabled permissions match.
+
+KNOWLEDGE now offers source acquisition from an explicit JSON manifest to a new
+pending JSONL file. It uses the same bounded manifest loader and connector registry
+as the CLI, runs in the background, and never approves rights or use permissions.
+Cancel, closing the dialog and switching profiles request cooperative cancellation.
+Checks run before requests, between decoded response blocks, after each document
+and immediately before exclusive publication. An HTTP wait or native parsing call
+must finish before cancellation is observed; this is not a hard real-time deadline.
+Cancellation after publication does not delete the completed file. Late UI results
+are discarded on profile changes. `scripts/verify_knowledge_acquisition.py` exercises
+real Tk and the actual connector through controlled HTTP; live Wikipedia access
+is separately described below. Visual layout/DPI review remains pending.
+
+Cancellation verification: 25 connector tests passed, including both download
+types and cancellation after temporary-file flush. No final or temporary file
+remained in those cases. Real Tk also cancelled an active controlled HTTP stream,
+restored its start button and published no pending batch.
+
+## Wikipedia revision acquisition
+
+`wikipedia-revision-v1` accepts `connector`, `language`, a positive integer
+`revision`, and a declared `license`. It requests that exact revision from the
+language Wikipedia API, checks its identity and article namespace, and converts
+visible wikitext using the existing parser. It does not expand templates or
+render the article. See the [MediaWiki revision API](https://www.mediawiki.org/wiki/API:Revisions).
+
+The existing download/batch limits and review workflow apply. Redirects, hidden
+content, API errors and oversized responses fail without publishing a batch.
+Records retain page/revision IDs, revision timestamp, pinned URL, response/text
+hashes, and page-family grouping compatible with the local dump importer.
+Permissions remain false and visibility is pending-review. A declared license
+does not establish permission or satisfy attribution obligations.
+
+Live network check: English Wikipedia page 18831, revision 1385774090, acquired
+successfully as 58,951 UTF-8 text bytes and a 60,206-byte pending JSONL. Text SHA256:
+`30b62e6f231995eecbf06b6d18b3a78d0946bb5c9ff2e2c99dc81528a45b16b1`.
+The pending file and unapproved template are retained under
+`artifacts/wikipedia-network-v1.*`; neither is admitted to training or retrieval.
+This is one source acquisition, not a representative corpus or quality result.
+
+An integration test imports an actual compressed XML fixture through the dump
+importer and another revision through the API connector. Different revision/text
+hashes retain the same page-family hash. The dataset splitter then refuses to
+use those two versions as independent training/validation partitions. This covers
+declared page identity across both import paths, not semantic duplication across
+different pages. The connector suites currently pass 22 tests.
+
 `ai_home.knowledge_connectors` downloads only explicitly listed source documents.
 The initial `github-text-v1` connector accepts public repository text at a full
 40-character commit SHA. It accesses the fixed `raw.githubusercontent.com` host,

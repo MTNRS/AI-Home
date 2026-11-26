@@ -21,6 +21,68 @@ from ai_home.models import ComputeNode, ComputeJob, User
 DATABASE_URL = os.getenv("AI_HOME_TEST_POSTGRES_URL")
 
 
+def test_postgres_adapter_duplicate_result_settles_once(postgres_engine):
+    import torch
+    from ai_home.credit_admin import grant_credits
+    from ai_home.jobs import register_node, create_adapter_job, submit_job_result, JobNotFound
+    from ai_home.foundation.adapters import attach_adapters
+    from ai_home.foundation.distributed import encode_tensors
+    from ai_home.foundation.adapter_tasks import execute_adapter_gradient
+    from ai_home.job_credits import JobFunding, user_account_id
+    from test_foundation_distributed import setup_shards
+    from test_nodes_and_jobs import hardware_report
+    base, _, _, bases = setup_shards()
+    model = attach_adapters(base, rank=2, alpha=2.)
+    payload = dict(base=bases[0], rank=2, alpha=2.,
+        factors=encode_tensors({k: v for k, v in model.named_parameters() if v.requires_grad}),
+        factors_public_and_redistributable=True)
+    owner, worker = str(uuid4()), str(uuid4())
+    with Session(postgres_engine) as session, session.begin():
+        session.add_all([User(user_id=value, email=f'{value}@example.com', password_hash='test-only')
+                         for value in (owner, worker)])
+        session.flush()
+        grant_credits(session, user_id=owner, amount=9, idempotency_key=str(uuid4()), reason='adapter test')
+        from ai_home.schemas import HardwareReport
+        node = register_node(session, owner_user_id=worker, name='adapter postgres',
+            hardware=HardwareReport.model_validate(hardware_report()), supported_job_types=['foundation.adapter-gradient.v1'],
+            foundation_torch_version=str(torch.__version__)).node
+        node.hardware = {**node.hardware, 'resources_epoch': 4_000_000_000,
+                        'resources': {'ram_available_bytes': 2**30, 'foundation_device': 'cpu'}}
+        node.last_heartbeat_epoch = 4_000_000_000
+        node_id = node.node_id
+        job = create_adapter_job(session, owner_user_id=owner, idempotency_key=str(uuid4()),
+            payload=payload, allow_public_node_processing=True, reward_credits=9)
+        job_id = job.job_id
+    try:
+        with Session(postgres_engine) as session, session.begin():
+            claimed = claim_job(session, session.get(ComputeNode, node_id), allow_foundation_adapters=True)
+            assert claimed is not None and claimed.job.job_id == job_id
+            lease = claimed.lease_token
+        result = execute_adapter_gradient(payload)
+        barrier = Barrier(2)
+        def submit(_):
+            with Session(postgres_engine) as session, session.begin():
+                node = session.get(ComputeNode, node_id)
+                barrier.wait(timeout=10)
+                try:
+                    submit_job_result(session, node=node, job_id=job_id, lease_token=lease, result=result)
+                    return 'settled'
+                except JobNotFound:
+                    return 'already-completed'
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            assert sorted(executor.map(submit, range(2))) == ['already-completed', 'settled']
+        assert CreditLedger(postgres_engine).balance(user_account_id(worker)) == 9
+        assert CreditLedger(postgres_engine).balance(user_account_id(owner)) == 0
+        with Session(postgres_engine) as session:
+            assert session.get(JobFunding, job_id).status == 'settled'
+            assert session.get(ComputeJob, job_id).status == 'completed'
+    finally:
+        with Session(postgres_engine) as session, session.begin():
+            session.execute(delete(ComputeJob).where(ComputeJob.owner_user_id == owner))
+            session.execute(delete(ComputeNode).where(ComputeNode.owner_user_id == worker))
+            session.execute(delete(User).where(User.user_id.in_([owner, worker])))
+
+
 @pytest.fixture(scope="module")
 def postgres_engine():
     if not DATABASE_URL:

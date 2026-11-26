@@ -1,0 +1,179 @@
+{
+  "format": "ai-home-evaluation-v1",
+  "checkpoint_sha256": "ce63c713a46a6e482eaec60e16b879a3475999a1be5b6245786c57ca581224ed",
+  "group_lineage_available": true,
+  "grouped_probe_count": 0,
+  "suite_sha256": "d4470b4bda92e5ff75b571680d9594f55e403c44786a9424c66849f6ebaeaa23",
+  "suite_version": "authored-probes-v1",
+  "tokenizer_sha256": "10a24308d9c0e0992e900aa75ecab9a958d4ac01aa2290ecea5aade25dadc6c6",
+  "device": "cuda",
+  "torch_version": "2.14.1+cu130",
+  "generation": {
+    "temperature": 0,
+    "max_new_tokens": 64
+  },
+  "categories": {
+    "consistency": {
+      "passed": 0,
+      "total": 2,
+      "accuracy": 0.0
+    },
+    "english": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "instructions": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "knowledge": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "mathematics": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "programming": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "reasoning": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "robustness": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "spanish": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    }
+  },
+  "results": [
+    {
+      "id": "es-plural",
+      "category": "spanish",
+      "generated": "si     meeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 22,
+      "generated_tokens": 64,
+      "generation_seconds": 3.004804199998034,
+      "tokens_per_second": 21.299224754824913
+    },
+    {
+      "id": "en-plural",
+      "category": "english",
+      "generated": "izi  meeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 24,
+      "generated_tokens": 64,
+      "generation_seconds": 2.3737294000020484,
+      "tokens_per_second": 26.961792696313562
+    },
+    {
+      "id": "instruction",
+      "category": "instructions",
+      "generated": "       meiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 19,
+      "generated_tokens": 64,
+      "generation_seconds": 2.4413616999954684,
+      "tokens_per_second": 26.214878360760224
+    },
+    {
+      "id": "python",
+      "category": "programming",
+      "generated": "a a ceeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 32,
+      "generated_tokens": 64,
+      "generation_seconds": 2.475938000003225,
+      "tokens_per_second": 25.84878942845767
+    },
+    {
+      "id": "sum",
+      "category": "mathematics",
+      "generated": "oooooeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 22,
+      "generated_tokens": 64,
+      "generation_seconds": 2.338770600006683,
+      "tokens_per_second": 27.3648043975827
+    },
+    {
+      "id": "water",
+      "category": "knowledge",
+      "generated": "si meeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 21,
+      "generated_tokens": 64,
+      "generation_seconds": 2.489179399999557,
+      "tokens_per_second": 25.711284610507136
+    },
+    {
+      "id": "order",
+      "category": "reasoning",
+      "generated": "sideeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 38,
+      "generated_tokens": 64,
+      "generation_seconds": 2.39339340000879,
+      "tokens_per_second": 26.74027596122098
+    },
+    {
+      "id": "consistent-a",
+      "category": "consistency",
+      "generated": "       meeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 19,
+      "generated_tokens": 64,
+      "generation_seconds": 2.299852899988764,
+      "tokens_per_second": 27.82786673022117
+    },
+    {
+      "id": "consistent-b",
+      "category": "consistency",
+      "generated": "sideeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 22,
+      "generated_tokens": 64,
+      "generation_seconds": 2.478493200003868,
+      "tokens_per_second": 25.822140645735935
+    },
+    {
+      "id": "robust-space",
+      "category": "robustness",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 28,
+      "generated_tokens": 64,
+      "generation_seconds": 2.532839799998328,
+      "tokens_per_second": 25.26808051580769
+    }
+  ],
+  "all_prompts_fit": true,
+  "training_lineage_available": true,
+  "cuda_peak_allocated_bytes": 12261888,
+  "process_rss_bytes_after": 1235845120,
+  "claim": "Authored exact-answer probes only; not a general capability certification"
+}

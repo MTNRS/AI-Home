@@ -30,7 +30,7 @@ from ai_home.foundation.tokenizer import ByteBPE
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output-dir', type=Path, required=True)
 parser.add_argument('--device', choices=('cpu', 'cuda'), default='cpu')
-parser.add_argument('--task', choices=('gradient', 'evaluate'), default='gradient')
+parser.add_argument('--task', choices=('gradient', 'evaluate', 'adapter-gradient'), default='gradient')
 parser.add_argument('--require-installed', action='store_true')
 args = parser.parse_args()
 if args.require_installed:
@@ -50,12 +50,19 @@ model = FoundationModel(config)
 payload = {'shard': {'records': records, 'tokenizer': tokenizer.to_dict()},
     'config': asdict(config), 'parameters': encode_tensors(dict(model.named_parameters())),
     'torch_version': str(torch.__version__), 'weights_public_and_redistributable': True}
+if args.task == 'adapter-gradient':
+    from ai_home.foundation.adapters import attach_adapters
+    adapted = attach_adapters(model, rank=2, alpha=2.)
+    payload = {'base': payload, 'rank': 2, 'alpha': 2.,
+        'factors': encode_tensors({k: v for k, v in adapted.named_parameters() if v.requires_grad}),
+        'factors_public_and_redistributable': True}
 (output / 'payload.json').write_text(json.dumps(payload), encoding='utf-8')
 settings = Settings(_env_file=None, environment='test',
     database_url=f"sqlite+pysqlite:///{(output / 'jobs.db').as_posix()}",
     supabase_url=None, supabase_publishable_key='', supabase_jwks_url=None,
     foundation_distributed_training_enabled=args.task == 'gradient',
-    foundation_distributed_evaluation_enabled=args.task == 'evaluate')
+    foundation_distributed_evaluation_enabled=args.task == 'evaluate',
+    foundation_distributed_adapters_enabled=args.task == 'adapter-gradient')
 command.upgrade(migration_config(settings), 'head')
 api = create_app(settings)
 sock = socket.socket()
@@ -111,8 +118,10 @@ try:
                 window.session_server_url = url
                 window.server_var.set(url)
                 window.consent_var.set(True)
+                assert not window.node_adapters_var.get(), 'Adapters must default to disabled'
                 window.node_training_var.set(args.task == 'gradient')
                 window.node_evaluation_var.set(args.task == 'evaluate')
+                window.node_adapters_var.set(args.task == 'adapter-gradient')
                 window.node_device_var.set(args.device)
                 window.transfer_probe_var.set(True)
                 window._start_contribution()
@@ -139,8 +148,8 @@ try:
                 with api.state.session_factory() as session:
                     node = session.get(ComputeNode, window.settings['node_id'])
                     assert 'foundation.' + args.task + '.v1' in node.supported_job_types
-                    other = 'gradient' if args.task == 'evaluate' else 'evaluate'
-                    assert 'foundation.' + other + '.v1' not in node.supported_job_types
+                    for other in {'gradient', 'evaluate', 'adapter-gradient'} - {args.task}:
+                        assert 'foundation.' + other + '.v1' not in node.supported_job_types
                     assert node.hardware['resources']['foundation_device'] == args.device
                     assert 'transfer_measurement' in node.hardware
                     hardware = dict(node.hardware)
@@ -153,6 +162,7 @@ try:
                 assert previous_stop.is_set() and window.node_stop is None
                 assert window.status_var.get() == 'NEW-PROFILE'
                 assert not window.consent_var.get() and not window.node_training_var.get() and not window.node_evaluation_var.get()
+                assert not window.node_adapters_var.get()
                 errors = []
                 messagebox.showerror = lambda *a, **kw: errors.append(a)
                 window.consent_var.set(True)

@@ -1,0 +1,61 @@
+{
+  "format": "ai-home-adapter-training-v1",
+  "identity": {
+    "parent_sha256": "9911ec67235035f26d052c5313831e6d2a198c056c7e0d2d6317e27daa049420",
+    "lineage": {
+      "dataset_sha256": "9927e47f4015250d3663f2d58a9ee093050215e8dc7eacc57cbcf19fcdb569ab",
+      "training_document_hashes": [
+        "caed4de421373615e5f9dd66c4a24fb8aac56de85b7bb54841104c06eb99d904",
+        "cc231e385674aa9a41cf013b2370b59929b88a2476de0b0c5ae1afaabb7dd443",
+        "e42b20658f005a02dd12837a522295f45d2e67cc3308f06d84a11a3773184474",
+        "e92d511e906c84c63835831681bd40d89360366d0f870a235fa41d1f35c778be",
+        "eadf0413120729e2ecb532249b461fa76d3ff2f07154c7c29a57535c0dd25f47",
+        "fe8bccbfe303ff1d563177352ce1c93147e57fe14532ad5014a75c8c97fc1803"
+      ],
+      "training_split_groups": [],
+      "validation_document_hashes": [
+        "c0ca2e51c8a302bf77bad6a0db92080d88a355270ed9187b70964b38ca3e8958",
+        "c528bc1234b6de7704310d155d6bbb5baf38bce269bb905fc4313ee1b015cd4c"
+      ],
+      "validation_split_groups": []
+    },
+    "settings": {
+      "device": "cuda",
+      "steps": 20,
+      "rank": 4,
+      "alpha": 4.0,
+      "learning_rate": 0.001,
+      "seed": 42,
+      "batch_size": 2,
+      "checkpoint_every": 10
+    },
+    "torch_version": "2.14.1+cu130"
+  },
+  "step": 20,
+  "checkpoint": "step-20",
+  "baseline": {
+    "loss": 5.63447390716088,
+    "tokens": 788,
+    "perplexity": 279.91161906914397
+  },
+  "candidate": {
+    "loss": 5.63265216653117,
+    "tokens": 788,
+    "perplexity": 279.4021568948268
+  },
+  "cancelled": false,
+  "training_complete": true,
+  "trainable_parameters": 448,
+  "run_resources": {
+    "new_steps": 20,
+    "supervised_tokens": 1190,
+    "update_seconds": 0.8623016000055941,
+    "tokens_per_second": 1380.0275912653763,
+    "training_save_evaluation_seconds": 1.1596674999891547,
+    "process_rss_bytes_after": 1450520576,
+    "cuda_peak_allocated_bytes": 17529344,
+    "cuda_peak_reserved_bytes": 23068672
+  },
+  "data_visibility": "reviewed-training-only",
+  "promoted": false
+}

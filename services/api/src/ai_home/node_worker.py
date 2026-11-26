@@ -115,7 +115,14 @@ def _parse_nvidia_smi(output: str) -> list[dict[str, int | str]]:
     return devices
 
 
-def execute_job(job_type: str, payload: dict, *, allow_foundation_training=False, foundation_device="cpu", allow_foundation_evaluation=False) -> dict[str, int | str]:
+def execute_job(job_type: str, payload: dict, *, allow_foundation_training=False, foundation_device="cpu", allow_foundation_evaluation=False, allow_foundation_adapters=False) -> dict[str, int | str]:
+    if job_type == "foundation.adapter-gradient.v1":
+        if allow_foundation_adapters is not True:
+            raise ValueError("Adapter work requires separate explicit worker opt-in")
+        if psutil.virtual_memory().available < 1024**3:
+            raise ValueError("Insufficient available RAM for adapter task")
+        from ai_home.foundation.adapter_tasks import execute_adapter_gradient
+        return execute_adapter_gradient(payload, device=foundation_device)
     if job_type == "foundation.evaluate.v1":
         if not allow_foundation_evaluation:
             raise ValueError("Evaluation requires explicit worker opt-in")
@@ -181,6 +188,7 @@ class NodeAgent:
         transport: httpx.BaseTransport | None = None,
         allow_foundation_training: bool = False,
         allow_foundation_evaluation: bool = False,
+        allow_foundation_adapters: bool = False,
         foundation_device: str = "cpu",
         lease_renew_interval: int = 30,
         transfer_probe_interval: int | None = None,
@@ -203,6 +211,7 @@ class NodeAgent:
         self.last_measurement_uploaded = False
         self.allow_foundation_training = allow_foundation_training
         self.allow_foundation_evaluation = allow_foundation_evaluation
+        self.allow_foundation_adapters = allow_foundation_adapters
         server_url = normalize_base_url(server_url)
         self._client = httpx.Client(
             base_url=server_url,
@@ -214,7 +223,7 @@ class NodeAgent:
     def configure_capabilities(self):
         """Replace this node's capabilities from the current explicit opt-in."""
         capabilities = {"supported_job_types": ["math.sum.v1", "foundation.tokenize.v1"]}
-        if self.allow_foundation_training or self.allow_foundation_evaluation:
+        if self.allow_foundation_training or self.allow_foundation_evaluation or self.allow_foundation_adapters is True:
             import torch
             if self.foundation_device == "cuda" and not torch.cuda.is_available():
                 raise ValueError("CUDA worker requested but CUDA is unavailable")
@@ -222,6 +231,8 @@ class NodeAgent:
                 capabilities["supported_job_types"].append("foundation.gradient.v1")
             if self.allow_foundation_evaluation:
                 capabilities["supported_job_types"].append("foundation.evaluate.v1")
+            if self.allow_foundation_adapters is True:
+                capabilities["supported_job_types"].append("foundation.adapter-gradient.v1")
             capabilities["foundation_torch_version"] = str(torch.__version__)
         response = self._client.put("/api/v1/node/capabilities", json=capabilities)
         response.raise_for_status()
@@ -294,6 +305,7 @@ class NodeAgent:
         try:
             result = execute_job(job.job_type, job.payload, allow_foundation_training=self.allow_foundation_training,
                                  allow_foundation_evaluation=self.allow_foundation_evaluation,
+                                 allow_foundation_adapters=self.allow_foundation_adapters,
                                  foundation_device=self.foundation_device)
             execution_seconds = time.perf_counter() - started
         finally:

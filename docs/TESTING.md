@@ -1,6 +1,38 @@
 # Verificación Foundation — 2026-11-26
 
-Estado vigente en `1f12fd8`: Windows/CUDA, 291 correctas y 5 omisiones PostgreSQL; Linux/PostgreSQL Python 3.11 y 3.12, 288 correctas y 8 omisiones CUDA por versión; Foundation CPU, 283 correctas y 13 omisiones. El paquete Nano se construyó/verificó en CI y en un entorno Windows nuevo sin instalación editable. Véanse [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md) y [CLEAN_REPRODUCTION.md](CLEAN_REPRODUCTION.md). Los apartados posteriores son históricos.
+La evidencia vigente y la distinción entre cambios locales y CI publicada están
+en [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md). Los recuentos de revisiones
+anteriores que siguen son históricos; no validan cambios posteriores.
+
+## Reproducción del flujo de preferencias
+
+Regresión integral local después de integrar escritorio DPO e informes:
+`.venv-cuda/Scripts/python.exe -m pytest services/api/tests -q --durations=5`
+terminó con código cero: **452 aprobadas, 7 PostgreSQL omitidas, 111.57 s**.
+Esto incluye las pruebas CUDA disponibles; no es una nueva ejecución PostgreSQL
+ni evidencia de CI para los cambios sin publicar.
+
+Desde un paquete instalado, crear primero un experimento sintético en una carpeta
+nueva y después ejercitar los dos flujos Tk:
+
+```powershell
+python -I -m ai_home.foundation.preference_smoke --output-dir artifacts/preferences-example --device cpu
+python -I scripts/verify_preference_training_desktop.py --require-installed --fixture-dir artifacts/preferences-example --output-dir artifacts/preferences-ui-example
+python -I scripts/verify_preference_report_desktop.py --require-installed --report artifacts/preferences-ui-example/resumed/report.json
+```
+
+En Linux sin display, anteponer `xvfb-run -a` a los verificadores Tk. El verificador
+de entrenamiento ejecuta actualizaciones reales, pulsa Cancelar después de una
+actualización sincronizada, reanuda y compara todos los tensores con una ejecución
+completa. También cambia de perfil durante una actualización y espera el evento
+terminal para comprobar que se descartan callbacks. El segundo verificador abre
+el informe mediante el botón real y comprueba su contenido y resumen. Las
+ventanas se ocultan: no es una revisión visual ni una medición de calidad humana.
+
+Ambos verificadores pasaron localmente desde un wheel instalado con Python
+aislado y PyTorch 2.15.0+cpu. Evidencia, hash del wheel y límites en
+[PREFERENCE_LEARNING.md](PREFERENCE_LEARNING.md). CI incluye estos comandos,
+pero las modificaciones locales todavía no se han validado remotamente.
 
 ## Ejecución actual
 
@@ -76,3 +108,17 @@ checkpoint mode remains available and is not an approval claim. See
 Registry validation: full CUDA-enabled suite 191 passed, 4 PostgreSQL tests skipped.
 
 PostgreSQL has now been exercised locally: see [POSTGRES_VALIDATION.md](POSTGRES_VALIDATION.md). The complete suite passed 263 tests with no skips using the dedicated test database.
+# Latest local adapter regression
+
+Latest combined run after desktop training, live progress and artifact validation:
+**474 passed, 7 PostgreSQL tests skipped in 109.07 s**. The installed wheel also
+passed the real Tk adapter training/cancellation/resume/profile verifier, report
+inspection and a CPU desktop node job with verified credit settlement. See
+`ADAPTERS.md` for the wheel digest and scope. The previous run below is historical.
+
+After adapter API/scheduler/credit integration, `.venv-cuda/Scripts/python.exe -m
+pytest -q` completed with **472 passed, 7 skipped in 161.76 s**. The skipped tests
+require PostgreSQL. The real CPU/CUDA loopback adapter experiment also completed;
+see [protocol and reproduction](ADAPTERS.md) and
+[report](ADAPTER_DISTRIBUTED_SMOKE.json). These are local results for unpublished
+changes, not a remote CI run or a multihost demonstration.

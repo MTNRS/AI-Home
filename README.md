@@ -30,6 +30,11 @@ los trabajos de nodos no están conectados a créditos.
 - **Acceso responsable al conocimiento:** se respetan licencias, permisos,
   privacidad y controles de acceso de las fuentes.
 
+Desarrollos experimentales locales: [adquisición de fuentes revisables](docs/KNOWLEDGE_CONNECTORS.md),
+[entrenamiento sobre documentación propia](docs/REPOSITORY_DOCUMENT_EXPERIMENT.md) y
+[preferencias DPO con pares explícitamente revisados](docs/PREFERENCE_LEARNING.md).
+Sus informes distinguen mecanismos comprobados de capacidades aún no demostradas.
+
 ## Documentación
 
 - [Arquitectura](docs/ARCHITECTURE.md)
