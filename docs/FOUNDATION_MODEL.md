@@ -45,3 +45,20 @@ checks a tampered declared count against the actual parameter count, and rejects
 oversized/corrupt files. A hidden Windows Tk check opened the actual CUDA resource
 experiment checkpoint (27,552 parameters) and verified both tabs and profile
 closure. Full suite: 230 passed, 4 PostgreSQL skipped.
+
+### Experimental own-model embeddings
+
+`ai_home.foundation.embeddings.FoundationEmbedder(checkpoint, device="cpu")`
+loads the project's own checkpoint and exposes `embed(text)` and `identity`.
+It averages final normalized causal Transformer states over every token in
+non-overlapping context windows, then L2-normalizes the vector. Windows reset
+positions; there is no cross-window attention, special-token insertion, padding,
+or silent truncation. Inputs must be nonempty and at most 32,000 UTF-8 bytes.
+The identity includes the digest of the checkpoint bytes actually loaded, the
+BPE fingerprint, dimensions, window size, and pooling protocol version.
+CPU and explicit CUDA are supported; no external weights are used.
+
+This is an experimental feature extraction primitive, not a trained semantic
+encoder. Search still uses TF-IDF. Retrieval indexing, checkpoint compatibility
+checks for stored vectors, and independent retrieval-quality comparisons remain
+necessary before enabling neural retrieval. No semantic-quality gain is claimed.

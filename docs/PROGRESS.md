@@ -699,3 +699,12 @@ Tests modify a loaded path between real probes and modify file bytes during
 loading, verifying correct attribution and rejection respectively. Full suite:
 264 passed, 5 PostgreSQL skips (server stopped). This adds no signature or
 publisher-authentication claim.
+
+### Own-model feature extraction
+
+Added final hidden-state access without changing logits, plus bounded windowed
+mean embeddings from an own-model checkpoint, with source/checkpoint/tokenizer
+identity. CPU/CUDA tests compare against explicit full-token state pooling and
+check deterministic output, input budgets, and unchanged logits. Full CUDA-env
+suite: 266 passed, 5 skipped (optional PostgreSQL server stopped). TF-IDF remains
+the retrieval backend; neural indexing and retrieval quality are still pending.

@@ -125,6 +125,11 @@ class FoundationModel(nn.Module):
             nn.init.normal_(module.weight, std=0.02)
 
     def forward(self, tokens, past=None, use_cache=False):
+        hidden, cache = self.hidden_states(tokens, past, use_cache)
+        return self.output(hidden), cache
+
+    def hidden_states(self, tokens, past=None, use_cache=False):
+        """Final normalized contextual states, without the vocabulary projection."""
         if tokens.ndim != 2 or tokens.shape[1] < 1:
             raise ValueError("Expected nonempty [batch, tokens]")
         if past is not None and (len(past) != len(self.blocks) or not use_cache):
@@ -142,7 +147,7 @@ class FoundationModel(nn.Module):
             else:
                 x, cache = block(x, None if past is None else past[i], use_cache)
                 caches.append(cache)
-        return self.output(self.norm(x)), tuple(caches) if use_cache else None
+        return self.norm(x), tuple(caches) if use_cache else None
 
     @property
     def parameter_count(self):
