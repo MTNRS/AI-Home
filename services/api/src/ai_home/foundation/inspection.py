@@ -23,6 +23,7 @@ def inspect_checkpoint(path, max_bytes=2_000_000_000):
         "declared_parameter_count_matches": payload.get("parameter_count") == model.parameter_count,
         "inspection_device": "cpu", "training_device": payload.get("device"),
         "checkpoint_status": payload.get("status"), "step": payload.get("step"),
+        "training_complete": payload.get("training_complete"), "stop_reason": payload.get("stop_reason"),
         "data_visibility": payload.get("data_visibility"),
         "embedding_delta_l2": payload.get("embedding_delta_l2"),
         "dataset_sha256": payload.get("dataset_sha256"),

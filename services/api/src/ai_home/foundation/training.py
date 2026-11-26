@@ -14,6 +14,10 @@ from .tokenizer import ByteBPE
 from .resources import estimate_training_bytes, available_training_bytes
 
 
+class TrainingCancelled(RuntimeError):
+    """Cancellation before an optimizer update; no new checkpoint produced."""
+
+
 @dataclass(frozen=True)
 class TrainingConfig:
     steps: int = 100
@@ -102,7 +106,9 @@ def evaluate(model, sequences, device, batch_size=2):
 
 def train(records, output, config=None, training=None, device="auto", resume=None,
           stop_after=None, on_step=None, reviewed_export=None, initial_checkpoint=None,
-          validation_records=None, replay_records=None, replay_fraction=0.25):
+          validation_records=None, replay_records=None, replay_fraction=0.25, cancel=None):
+    if cancel is not None and cancel.is_set():
+        raise TrainingCancelled("Training cancelled before initialization")
     training = training or TrainingConfig()
     if resume and initial_checkpoint:
         raise ValueError("Resume and initialization are distinct operations")
@@ -213,6 +219,8 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
         raise ValueError("No remaining training steps")
     dtype = torch.bfloat16 if training.precision == "bf16" else torch.float16
     output = Path(output)
+    if cancel is not None and cancel.is_set():
+        raise TrainingCancelled("Training cancelled before the first update")
     for step in range(start + 1, final_step + 1):
         progress = (step - training.warmup) / max(1, training.steps - training.warmup)
         multiplier = step / max(1, training.warmup) if step <= training.warmup else (
@@ -250,9 +258,11 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
         metrics.append(metric)
         if on_step:
             on_step(metric)
-        if step % training.checkpoint_every == 0 or step == final_step:
+        cancelled = cancel is not None and cancel.is_set()
+        if step % training.checkpoint_every == 0 or step == final_step or cancelled:
             validation = evaluate(model, validation_data, device)
             metric["validation_loss"] = validation["loss"]
+            cancelled = cancel is not None and cancel.is_set()
             payload = {"format": FORMAT, "config": asdict(config), "tokenizer": tokenizer.to_dict(),
                        "tokenizer_sha256": tokenizer.fingerprint, "model_state": model.state_dict(),
                        "training_config": asdict(training), "step": step, "optimizer": optimizer.state_dict(),
@@ -261,6 +271,9 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
                        "cuda_rng": torch.cuda.get_rng_state_all() if device == "cuda" else [],
                        "device": device, "dataset_sha256": dataset_hash, "metrics": metrics,
                        "validation": validation, "status": "candidate",
+                       "training_complete": step == training.steps,
+                       "stop_reason": "completed" if step == training.steps else (
+                           "cancelled" if cancelled else "step_limit" if step == final_step else "periodic_checkpoint"),
                        "data_visibility": "reviewed-training-only" if reviewed_export or (
                            lineage is not None and lineage.get("data_visibility") != "public") else "public",
                        "parent_checkpoint_sha256": parent_sha256,
@@ -273,4 +286,6 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
                        "parameter_count": model.parameter_count}
             atomic_save(payload, output.with_name(f"{output.stem}.step-{step}.pt"))
             atomic_save(payload, output)
+        if cancelled:
+            break
     return payload

@@ -1680,7 +1680,8 @@ def main() -> None:
 
             def display(report):
                 training_keys = {"training_config", "metrics", "validation", "embedding_delta_l2",
-                                 "training_device", "step", "training_document_count", "validation_document_count"}
+                                 "training_device", "step", "training_complete", "stop_reason",
+                                 "training_document_count", "validation_document_count"}
                 sections = {"Modelo": {k: v for k, v in report.items() if k not in training_keys},
                             "Entrenamiento": {k: v for k, v in report.items() if k in training_keys}}
                 for name, value in sections.items():

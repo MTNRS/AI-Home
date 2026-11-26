@@ -1,11 +1,13 @@
 import argparse
 from dataclasses import asdict
 import json
+import signal
+import threading
 from pathlib import Path
 
 from .data import load_records
 from .model import FoundationConfig
-from .training import TrainingConfig, train, select_device
+from .training import TrainingConfig, TrainingCancelled, train, select_device
 from .resources import plan_training
 
 
@@ -41,11 +43,25 @@ def main():
         with plan_path.open("x", encoding="utf-8") as output:
             json.dump(plan, output, indent=2)
         print(json.dumps({"resource_plan": str(plan_path), **plan}), flush=True)
-    result = train(records, args.output, model, training, args.device, args.resume,
-                   args.stop_after, on_step=lambda value: print(json.dumps(value), flush=True),
-                   reviewed_export=args.reviewed_export)
+    cancel = threading.Event()
+    def interrupt(_signum, _frame):
+        if cancel.is_set():
+            raise KeyboardInterrupt
+        cancel.set()
+        print(json.dumps({"status": "stop_requested", "detail": "Finishing the optimizer step and saving a resumable checkpoint"}), flush=True)
+    previous_handler = signal.signal(signal.SIGINT, interrupt)
+    try:
+        result = train(records, args.output, model, training, args.device, args.resume,
+                       args.stop_after, on_step=lambda value: print(json.dumps(value), flush=True),
+                       reviewed_export=args.reviewed_export, cancel=cancel)
+    except TrainingCancelled:
+        print(json.dumps({"status": "cancelled_before_update", "checkpoint_created": False}), flush=True)
+        raise SystemExit(130)
+    finally:
+        signal.signal(signal.SIGINT, previous_handler)
     print(json.dumps({"checkpoint": str(args.output), "parameters": result["parameter_count"],
                       "validation": result["validation"], "status": "candidate",
+                      "training_complete": result["training_complete"], "stop_reason": result["stop_reason"],
                       "training_config": asdict(training)}))
 
 

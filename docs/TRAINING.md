@@ -146,3 +146,25 @@ Other kernel workspaces, allocator fragmentation, concurrent processes and host
 dataset tensors can exceed the estimate. No automatic OOM retry, live batch
 resizing, multi-GPU sizing, or large-model benchmark has been demonstrated. The
 runtime allowance is calibrated on one tiny case, not proven sufficient at scale.
+
+
+## Controlled cancellation
+
+The training CLI handles the first Ctrl+C by requesting a controlled stop. After
+the current accumulated optimizer update and validation, it saves both the
+numbered checkpoint and output checkpoint, including optimizer, scaler and RNG
+state. Resume with the same configuration and `--resume` as usual. The Python
+trainer accepts a threading-compatible `cancel` event for the same behavior.
+Checkpoints and the desktop inspector expose `training_complete` and
+`stop_reason` (completed, cancelled, step_limit or periodic_checkpoint).
+
+Cancellation before the first update raises `TrainingCancelled` without writing
+a new checkpoint; the CLI exits 130. A second Ctrl+C interrupts immediately and
+may prevent a fresh checkpoint. Cancellation is cooperative: it cannot interrupt
+a running CUDA kernel or validation, and a request arriving during checkpoint
+saving may be observed after the next optimizer update. Completing the final
+planned step is reported as completed even if a stop was also requested.
+
+CPU and CUDA tests stop real training after step 2 with gradient accumulation,
+reload the saved checkpoint and resume to step 4. Every resulting model tensor
+is compared against uninterrupted training (atol 1e-6, rtol 1e-5).

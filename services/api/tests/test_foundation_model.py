@@ -110,3 +110,28 @@ def test_cuda_training(tmp_path, precision):
     assert next(model.parameters()).is_cuda
     generated = list(stream_tokens(model, tokenizer.encode("Hola"), max_new_tokens=8, temperature=0))
     assert all(0 <= t < tokenizer.vocab_size for t in generated)
+
+
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="CUDA unavailable"))])
+def test_controlled_training_stop_saves_exactly_resumable_optimizer_boundary(tmp_path, device):
+    from ai_home.foundation.training import TrainingCancelled
+    torch.set_num_threads(1)
+    cancel = threading.Event()
+    settings = TrainingConfig(steps=4, warmup=0, accumulation=2, checkpoint_every=4)
+    complete = train(records(), tmp_path / "full.pt", config(), settings, device)
+    interrupted = train(records(), tmp_path / "paused.pt", config(), settings, device,
+                        cancel=cancel, on_step=lambda metric: cancel.set() if metric["step"] == 2 else None)
+    assert interrupted["step"] == 2
+    assert interrupted["stop_reason"] == "cancelled" and interrupted["training_complete"] is False
+    assert (tmp_path / "paused.step-2.pt").is_file()
+    saved = load_checkpoint(tmp_path / "paused.pt")[2]
+    assert saved["stop_reason"] == "cancelled"
+    resumed = train(records(), tmp_path / "resumed.pt", config(), settings, device,
+                    resume=tmp_path / "paused.pt")
+    assert resumed["training_complete"] is True and resumed["stop_reason"] == "completed"
+    for key in complete["model_state"]:
+        torch.testing.assert_close(complete["model_state"][key], resumed["model_state"][key], atol=1e-6, rtol=1e-5)
+    with pytest.raises(TrainingCancelled):
+        train(records(), tmp_path / "never.pt", config(), settings, device, cancel=cancel)
+    assert not (tmp_path / "never.pt").exists()

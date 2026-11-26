@@ -432,3 +432,14 @@ a party able to rewrite all hashes can still construct a different dataset.
 
 Validation: 235 passed, 4 PostgreSQL skipped. Tests modify approved content,
 licenses, permissions and review binding, and exercise the actual read budget.
+
+
+### Controlled foundation training cancellation
+
+Added cooperative cancellation at complete optimizer updates, resumable checkpoint
+saving, CLI first-Ctrl+C handling and explicit completion/stop metadata in the
+checkpoint inspector. CPU and CUDA tests verify resumed weights against an
+uninterrupted run and cancellation before initialization creates no checkpoint.
+Validation: 237 passed, 4 PostgreSQL tests skipped (server unavailable). The signal
+handler was inspected; an interactive Windows Ctrl+C run has not been demonstrated.
+See TRAINING.md for cancellation latency and second-interrupt limitations.
