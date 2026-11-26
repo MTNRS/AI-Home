@@ -115,3 +115,21 @@ filesystem without hard-link support reports failure; it does not fall back to
 partial publication. Cancellation racing after the publication boundary may leave
 a fully completed index. Abnormal process termination can leave a temporary file,
 but cannot expose a partially written target index.
+
+### Local model registry control
+
+The desktop's `Administrar registro local de modelos` opens an existing local
+registry. It lists candidate IDs, approved/active versions and activation history,
+and displays the selected candidate's stored evaluation and regression comparison.
+`Aprobar candidato` calls the normal registry gate with its 100% default threshold,
+training lineage, untruncated prompts and no per-probe regression requirements.
+The window does not offer a threshold override. `Activar / rollback` selects an
+already-approved version, rechecks its weights, and records operator and reason.
+To roll back, select an older approved ID and activate it with a rollback reason.
+
+This is a local operator tool with the filesystem permissions of the desktop
+process, not a remote administration endpoint or an authenticated identity proof.
+It affects default-model resolution only for processes configured with that same
+registry. Version-pinned chats retain their selected version. Registering and
+independently evaluating new candidates remains available through the registry CLI;
+this window does not fabricate evaluations or register arbitrary report JSON.

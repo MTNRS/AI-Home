@@ -753,3 +753,18 @@ embedding cancellation assertions: 2 passed. A real Tk smoke using actual worker
 threads/event callbacks built the eight-document neural artifact at
 `artifacts/ui-review/knowledge-acb6baf2e5774340ae1e4668d395d295.json`.
 This verifies the functional flow, not visual layout quality or retrieval gains.
+
+### Local model registry desktop control
+
+Added existing-registry listing, candidate evaluation inspection, fixed-default
+approval, approved-version activation and rollback, with operator/reason auditing.
+All actions reuse the registry gates; no threshold override is exposed. Full suite:
+268 passed, 5 PostgreSQL skips. A real Tk asynchronous smoke exercised rejection
+of an insufficient candidate, two activations and rollback to the first candidate,
+and verified the persisted audit sequence/operator in an isolated registry:
+`artifacts/ui-review/registry-eed024a49ac24a6c9557693172bdc019/registry`.
+The fixture used a newly trained one-step checkpoint and explicit zero-threshold
+CLI approvals for two lifecycle-only test versions. The desktop itself retained
+100% approval and rejected the third candidate. An older smoke checkpoint was
+first rejected for missing required training lineage; that gate was not weakened.
+No production registry was touched. Functional UI testing is not a visual review.

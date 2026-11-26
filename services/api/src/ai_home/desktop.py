@@ -1581,6 +1581,8 @@ def main() -> None:
             self.server_version_combo.pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Actualizar versiones aprobadas",
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
+            ttk.Button(routing, text="Administrar registro local de modelos",
+                       command=self._model_registry_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Explorar conocimiento local",
                        command=self._knowledge_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Crear versión de conocimiento",
@@ -1617,6 +1619,95 @@ def main() -> None:
                 text="La clave nunca se envía al servidor AI@Home.",
                 foreground="#52606d",
             ).pack(anchor="w", pady=(6, 0))
+
+        def _model_registry_dialog(self) -> None:
+            directory = filedialog.askdirectory(parent=self, title="Registro local de modelos")
+            if not directory:
+                return
+            if not (Path(directory) / "registry.sqlite3").is_file():
+                messagebox.showerror("Modelos", "La carpeta no contiene un registro de modelos.", parent=self)
+                return
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Modelos: aprobación, activación y rollback local")
+            window.geometry("900x650")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            ttk.Label(frame, text=f"Registro local: {directory}", wraplength=850).pack(anchor="w")
+            ttk.Label(frame, text="Afecta al modelo predeterminado de los procesos que usan este registro.\n"
+                      "El chat con versión fijada conserva su selección. Rollback: elija una versión anterior aprobada y actívela.",
+                      wraplength=850).pack(anchor="w", pady=8)
+            version = tk.StringVar()
+            selector = ttk.Combobox(frame, textvariable=version, state="readonly", width=65)
+            selector.pack(fill="x")
+            operator = tk.StringVar()
+            reason = tk.StringVar()
+            for label, variable in (("Operador (queda en auditoría)", operator), ("Motivo de activación / rollback", reason)):
+                ttk.Label(frame, text=label).pack(anchor="w", pady=(6, 0))
+                ttk.Entry(frame, textvariable=variable).pack(fill="x")
+            actions = ttk.Frame(frame)
+            actions.pack(fill="x", pady=10)
+            status = tk.StringVar(value="Cargando registro…")
+            ttk.Label(frame, textvariable=status, wraplength=850).pack(anchor="w")
+            report_frame = ttk.Frame(frame)
+            report_frame.pack(fill="both", expand=True, pady=(8, 0))
+            scroll = ttk.Scrollbar(report_frame)
+            scroll.pack(side="right", fill="y")
+            content = tk.Text(report_frame, wrap="word", state="disabled", yscrollcommand=scroll.set)
+            content.pack(fill="both", expand=True)
+            scroll.configure(command=content.yview)
+            busy = False
+            buttons = []
+            def run(action):
+                nonlocal busy
+                if busy:
+                    return
+                selected, who, why = version.get(), operator.get().strip(), reason.get().strip()
+                if action != "refresh" and not selected:
+                    messagebox.showerror("Modelos", "Seleccione una versión.", parent=window)
+                    return
+                if action in {"approve", "activate"} and (not who or (action == "activate" and not why)):
+                    messagebox.showerror("Modelos", "Indique operador y, para activar, el motivo.", parent=window)
+                    return
+                busy = True
+                selector.configure(state="disabled")
+                for button in buttons:
+                    button.configure(state="disabled")
+                status.set("Comprobando registro y pesos…")
+                def finish():
+                    nonlocal busy
+                    busy = False
+                    selector.configure(state="readonly")
+                    for button in buttons:
+                        button.configure(state="normal")
+                def failure():
+                    status.set("Operación rechazada o fallida; revise el error y actualice el registro.")
+                    finish()
+                def operation():
+                    from ai_home.foundation.registry import ModelRegistry
+                    registry = ModelRegistry(directory)
+                    if action == "approve":
+                        registry.approve(selected, operator=who)
+                    elif action == "activate":
+                        registry.activate(selected, operator=who, reason=why)
+                    return {"candidates": registry.list(), "approved_catalog": registry.catalog(),
+                            "history": registry.history(),
+                            "selected": registry.inspect(selected) if selected else None}
+                def display(report):
+                    selector.configure(values=[row["id"] for row in report["candidates"]])
+                    content.configure(state="normal")
+                    content.delete("1.0", "end")
+                    content.insert("end", json.dumps(report, ensure_ascii=False, indent=2))
+                    content.configure(state="disabled")
+                    status.set("Registro actualizado. Aprobación: umbral 100%, procedencia y ausencia de regresiones obligatorias.")
+                    finish()
+                self._background(operation, display, failure, is_current=lambda: bool(window.winfo_exists()))
+            for label, action in (("Actualizar", "refresh"), ("Ver evaluación", "inspect"),
+                                  ("Aprobar candidato", "approve"), ("Activar / rollback", "activate")):
+                button = ttk.Button(actions, text=label, command=lambda value=action: run(value))
+                button.pack(side="left", padx=(0, 8))
+                buttons.append(button)
+            run("refresh")
 
         def _build_knowledge_dialog(self) -> None:
             window = tk.Toplevel(self)
