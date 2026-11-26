@@ -84,3 +84,14 @@ def test_packaged_migrations_outside_checkout(tmp_path, monkeypatch):
         assert 'correction' in {column['name'] for column in inspect(engine).get_columns('training_contributions')}
     finally:
         engine.dispose()
+
+def test_explicit_migration_settings_do_not_target_environment_database(tmp_path, monkeypatch):
+    from ai_home.config import Settings
+    from ai_home.migrate import migration_config
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('AI_HOME_DATABASE_URL', 'sqlite+pysqlite:///untouched.db')
+    settings = Settings(_env_file=None, environment='test', database_url='sqlite+pysqlite:///selected.db')
+    command.upgrade(migration_config(settings), 'head')
+    command.check(migration_config(settings))
+    assert (tmp_path / 'selected.db').exists()
+    assert not (tmp_path / 'untouched.db').exists()

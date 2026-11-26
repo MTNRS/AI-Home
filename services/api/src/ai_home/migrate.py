@@ -5,9 +5,11 @@ from alembic import command
 from alembic.config import Config
 
 
-def migration_config():
+def migration_config(settings=None):
     config = Config()
     config.set_main_option("script_location", "ai_home:migrations")
+    if settings is not None:
+        config.attributes["settings"] = settings
     return config
 
 

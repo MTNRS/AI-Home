@@ -15,10 +15,11 @@ import time
 import httpx
 import torch
 import uvicorn
+from alembic import command
 
 from ai_home.api import create_app
 from ai_home.config import Settings
-from ai_home.database import Base
+from ai_home.migrate import migration_config
 from ai_home.credits import CreditLedger
 from ai_home.job_credits import user_account_id
 from ai_home.node_worker import detect_hardware
@@ -67,7 +68,8 @@ def main():
     settings = Settings(_env_file=None, environment="test", database_url=f"sqlite+pysqlite:///{(output / 'jobs.db').as_posix()}",
         supabase_url=None, supabase_publishable_key="", supabase_jwks_url=None, foundation_distributed_training_enabled=True)
     app = create_app(settings)
-    Base.metadata.create_all(app.state.engine)
+    command.upgrade(migration_config(settings), "head")
+    command.check(migration_config(settings))
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     url = f"http://127.0.0.1:{sock.getsockname()[1]}"
@@ -100,7 +102,7 @@ def main():
             response.raise_for_status()
             client.headers["Authorization"] = "Bearer " + response.json()["access_token"]
             def advance_process(step):
-                process = subprocess.run([sys.executable, "-m", "ai_home.foundation.coordinator", "advance",
+                process = subprocess.run([sys.executable, *(["-I"] if sys.flags.isolated else []), "-m", "ai_home.foundation.coordinator", "advance",
                     str(output / f"round-{step}-plan.json"), str(output / f"round-{step-1}.pt"),
                     str(output / f"coordinator-round-{step}.pt"), "--server", url],
                     env={**os.environ, "AI_HOME_COORDINATOR_TOKEN": client.headers["Authorization"][7:],
@@ -153,7 +155,7 @@ def main():
                     ids = [job["id"] for job in first["jobs"]]
                 for node, worker_device in zip(nodes, args.worker_devices):
                     environment = {**os.environ, "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2"}
-                    worker = subprocess.run([sys.executable, "-m", "ai_home.foundation.node_smoke", "--worker"],
+                    worker = subprocess.run([sys.executable, *(["-I"] if sys.flags.isolated else []), "-m", "ai_home.foundation.node_smoke", "--worker"],
                         input=json.dumps({"url": url, "token": node["node_token"], "allow_foundation_training": True, "foundation_device": worker_device}),
                         capture_output=True, text=True, check=True, timeout=60, env=environment,
                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
@@ -209,6 +211,8 @@ def main():
                 "elapsed_seconds": time.perf_counter() - started, "parameter_count": model.parameter_count,
                 "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim"}
             report["coordinator_process_runs"] = coordinator_runs
+            report["isolated_python"] = bool(sys.flags.isolated)
+            report["database_setup"] = "packaged Alembic upgrade and schema check"
             report["credits"] = {"reward_per_job": args.reward_credits,
                 "requester": client.get("/api/v1/credits").json(),
                 "workers": [client.get("/api/v1/credits", headers=h).json() for h in worker_sessions],

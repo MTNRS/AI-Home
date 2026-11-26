@@ -27,6 +27,13 @@ jobs:
       - run: python -m ai_home.foundation.smoke_package verify artifacts/foundation-nano-smoke.zip
       - run: python -m pip install . --no-deps --force-reinstall
       - run: python -I scripts/verify_installed_api.py --output-dir artifacts/installed-api --checkpoint artifacts/foundation-smoke/foundation-nano.pt
+      - run: python -I -m ai_home.foundation.distributed_smoke --output-dir artifacts/installed-distributed --rounds 2 --reward-credits 3 --worker-devices cpu cpu --restart-coordinator
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installed-runtime-reports
+          path: |
+            artifacts/installed-api/report.json
+            artifacts/installed-distributed/report.json
       - uses: actions/upload-artifact@v4
         with:
           name: foundation-nano-smoke-package

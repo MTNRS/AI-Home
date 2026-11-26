@@ -86,3 +86,33 @@ existing revision 0008 database to 0009 from outside the checkout, repeats upgra
 idempotently and checks schema drift. Linux CI now runs the installed-wheel HTTP
 check too; this addition still needs its remote result. GUI installation and full
 distributed deployment remain outside this fresh-environment verification.
+
+## Installed distributed runtime
+
+The subsequent distributed smoke uses the packaged Alembic history and schema
+check instead of `Base.metadata.create_all`. Its explicit disposable Settings are
+passed to Alembic, so an unrelated environment database URL cannot redirect the
+migration. A regression test verifies that the environment-selected database is
+not created when explicit Settings target a different database.
+
+The coordinator and worker subprocesses inherit Python `-I` when the controller
+runs isolated. From outside the checkout, with the updated wheel installed:
+
+```powershell
+clean-venv\Scripts\python.exe -I -m ai_home.foundation.distributed_smoke --output-dir distributed-run --rounds 2 --reward-credits 3 --worker-devices cpu cpu --restart-coordinator
+```
+
+[Actual Windows CPU report](INSTALLED_DISTRIBUTED_SMOKE.json): 28,192 parameters,
+four worker processes, two rounds, 26.57 seconds, embedding L2 change 0.1838996708.
+Two worker accounts each earned six synthetic credits for verified gradients;
+the requester finished with zero available/reserved credits. Four separate
+coordinator invocations returned waiting/waiting/committed/committed, preserving
+job IDs and the committed checkpoint on retry. The smoke compares restored
+weights against its uninterrupted reference and rejects duplicate jobs.
+
+Linux CI now runs this installed-wheel experiment and publishes the API and
+distributed JSON reports, excluding disposable databases and credentials. The new
+remote result remains to be checked. This is real process collaboration on one
+host, not independent physical machines or evidence about residential bandwidth,
+latency, coordinator service failover, or useful language quality. Production
+PostgreSQL/authentication and the GUI remain separate deployment checks.

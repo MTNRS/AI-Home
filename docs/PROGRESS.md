@@ -952,3 +952,16 @@ nuevas, informe sin credenciales en INSTALLED_API_SMOKE.json. Suite completa:
 292 correctas, 5 PostgreSQL omitidas. Añadida verificación wheel/HTTP a CI; pendiente
 resultado remoto. Limpieza de build/ rechazada por política automática; directorio
 local generado excluido del commit, sin afectar código ni prueba.
+
+### Distribuido desde wheel con aislamiento
+
+Smoke distribuido usa migraciones empaquetadas y Settings explícitos; workers y
+coordinador heredan -I. Prueba adicional garantiza que las migraciones explícitas
+no afectan a la URL de otra DB del entorno. Wheel reinstalado en venv CPU nuevo:
+4 procesos worker / 2 rondas reales HTTP, cambio L2 0,1838996708, dos cuentas con
+6 créditos ganados cada una, requester sin reserva pendiente. Reinicios conservan
+trabajos/checkpoint: waiting/waiting/committed/committed. 26,57 segundos; un solo
+host, sin afirmar red multihost ni calidad. Reporte INSTALLED_DISTRIBUTED_SMOKE.json.
+Suite: 293 correctas, 5 PostgreSQL omitidas (38,50 s). Nueva etapa CI para este
+smoke y reportes; pendiente resultado. CI anterior 9b126d9 pasó, incluida API
+instalada (run 45820882944), y PostgreSQL Python 3.11/3.12.
