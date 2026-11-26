@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ai_home.models import ComputeJob, ComputeNode
+from ai_home.job_credits import JobFunding, refund_job, reserve_job, settle_job
 from ai_home.schemas import HardwareReport
 
 SUPPORTED_JOB_TYPES = ("math.sum.v1",)
@@ -59,6 +60,7 @@ class RegisteredNode:
 class ClaimedJob:
     job: ComputeJob
     lease_token: str
+    reward_credits: int = 0
 
 
 def register_node(
@@ -232,21 +234,21 @@ def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=
     ):
         raise NodeNotFound
 
-    session.execute(
-        update(ComputeJob)
-        .where(
+    exhausted = session.scalars(
+        select(ComputeJob).where(
             ComputeJob.status == "leased",
             ComputeJob.lease_expires_epoch <= now,
             ComputeJob.attempt_count >= MAX_JOB_ATTEMPTS,
-        )
-        .values(
-            status="failed",
-            assigned_node_id=None,
-            lease_token_hash=None,
-            lease_expires_epoch=None,
-            failure_code="lease_expired",
-        )
+        ).with_for_update(skip_locked=True)
     )
+    for expired in exhausted:
+        refund_job(session, expired)
+        expired.status = "failed"
+        expired.assigned_node_id = None
+        expired.lease_token_hash = None
+        expired.lease_expires_epoch = None
+        expired.failure_code = "lease_expired"
+    session.flush()
     session.execute(
         update(ComputeJob)
         .where(
@@ -290,7 +292,8 @@ def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=
     job.attempt_count += 1
     job.failure_code = None
     session.flush()
-    return ClaimedJob(job=job, lease_token=lease_token)
+    funding = session.get(JobFunding, job.job_id)
+    return ClaimedJob(job=job, lease_token=lease_token, reward_credits=funding.amount if funding else 0)
 
 
 def submit_job_result(
@@ -327,6 +330,7 @@ def submit_job_result(
     if result != expected:
         raise InvalidJobResult
 
+    settle_job(session, job, node.owner_user_id)
     job.status = "completed"
     job.result = result
     job.assigned_node_id = None
@@ -337,25 +341,27 @@ def submit_job_result(
 
 
 def create_tokenize_job(session: Session, *, owner_user_id: str, idempotency_key: str,
-                        payload: dict, allow_public_node_processing: bool) -> ComputeJob:
+                        payload: dict, allow_public_node_processing: bool, reward_credits=0) -> ComputeJob:
     from ai_home.foundation.tasks import TokenizePayload
     if allow_public_node_processing is not True:
         raise ValueError("Public node processing requires explicit consent")
     payload = TokenizePayload.model_validate(payload).model_dump()
-    return _create_foundation_job(session, owner_user_id, idempotency_key, payload, FOUNDATION_JOB_TYPE)
+    return _create_foundation_job(session, owner_user_id, idempotency_key, payload, FOUNDATION_JOB_TYPE, reward_credits)
 
 
 def create_gradient_job(session: Session, *, owner_user_id: str, idempotency_key: str,
-                        payload: dict, allow_public_node_processing: bool) -> ComputeJob:
+                        payload: dict, allow_public_node_processing: bool, reward_credits=0) -> ComputeJob:
     from ai_home.foundation.distributed import GradientPayload
     if allow_public_node_processing is not True:
         raise ValueError("Public node processing requires explicit consent")
     payload = GradientPayload.model_validate(payload).model_dump()
-    return _create_foundation_job(session, owner_user_id, idempotency_key, payload, GRADIENT_JOB_TYPE)
+    return _create_foundation_job(session, owner_user_id, idempotency_key, payload, GRADIENT_JOB_TYPE, reward_credits)
 
 
-def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job_type):
-    request_hash = _request_hash(job_type, payload)
+def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job_type, reward_credits):
+    if type(reward_credits) is not int or not 0 <= reward_credits <= 1_000_000:
+        raise ValueError("Invalid job reward")
+    request_hash = _request_hash(job_type, {"payload": payload, "reward_credits": reward_credits} if reward_credits else payload)
     existing = session.scalar(select(ComputeJob).where(ComputeJob.owner_user_id == owner_user_id,
                                                        ComputeJob.idempotency_key == idempotency_key))
     if existing is not None:
@@ -368,6 +374,25 @@ def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job
                      public_node_consent_at_epoch=int(time.time()),
                      public_node_consent_version=PUBLIC_NODE_CONSENT_VERSION)
     session.add(job)
+    session.flush()
+    reserve_job(session, job, reward_credits)
+    return job
+
+
+def cancel_job(session, job_id, owner_user_id):
+    job = session.scalar(select(ComputeJob).where(ComputeJob.job_id == job_id,
+        ComputeJob.owner_user_id == owner_user_id).with_for_update())
+    if job is None:
+        raise JobNotFound
+    if job.status == "cancelled":
+        return job
+    if job.status not in ("queued", "leased"):
+        raise ValueError("Only pending jobs can be cancelled")
+    refund_job(session, job)
+    job.status = "cancelled"
+    job.assigned_node_id = None
+    job.lease_token_hash = None
+    job.lease_expires_epoch = None
     session.flush()
     return job
 

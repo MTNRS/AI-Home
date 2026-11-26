@@ -300,3 +300,7 @@ Entrenamiento, reanudación e inferencia propios verificados en RTX 4070 SUPER c
 ## Entrenamiento experimental en nodos
 
 Existe una demostración reproducible de gradientes reales aportados por dos identidades de nodo mediante procesos separados y HTTP loopback. Agrega gradientes, actualiza pesos, guarda checkpoints y genera texto. Solo se ha verificado en un equipo y CPU; no se reclama rendimiento distribuido multihost. Véase [DISTRIBUTED_TRAINING.md](docs/DISTRIBUTED_TRAINING.md).
+
+## Créditos por contribuciones verificadas
+
+Los trabajos Foundation pueden financiar recompensas mediante reservas del solicitante. La verificación del resultado y el abono al contribuyente comparten transacción; cancelaciones y fallos terminales devuelven fondos. Consultas de saldo/movimientos propios y migración 0006 disponibles. Véase [CREDITS.md](docs/CREDITS.md). El cobro de inferencia sigue pendiente.

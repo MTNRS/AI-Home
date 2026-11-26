@@ -44,3 +44,7 @@ Suite completa en entorno CUDA: 146 aprobadas, 4 omitidas (PostgreSQL), 18,63 se
 ## Gradientes neuronales entre nodos
 
 Suite completa en entorno CUDA: 150 aprobadas, 4 omitidas (PostgreSQL), 14,76 segundos. Tras normalizar configuración y eliminar dependencia NumPy del codec: 4 pruebas distribuidas aprobadas, 3,99 segundos. Se verifica equivalencia matemática con actualización monolítica, rechazo de bases antiguas, documentos solapados, artefactos alterados, opt-in y runtime incompatible, y desactivación de nuevas asignaciones. Smoke HTTP real: dos rondas y cuatro trabajos neuronales aceptados; checkpoint recargado e inferencia real. Informe en DISTRIBUTED_GRADIENT_SMOKE.json.
+
+## Créditos de trabajos Foundation
+
+Suite completa final en entorno CUDA: 158 aprobadas, 4 omitidas (PostgreSQL), 37,55 segundos. Migración 0006 probada con upgrade, comprobación de esquema y downgrade sobre SQLite temporal. Pruebas de pagos y asignaciones incluyen saldo insuficiente, conservación, duplicados, fallo inyectado tras asiento, cancelación, leases agotados, eliminación de cuenta, autofinanciación sin emisión y gradientes reales. Smoke financiado por HTTP loopback: 20 créditos sintéticos iniciales, cuatro trabajos verificados y 10 créditos por contribuyente; informe en DISTRIBUTED_FUNDED_SMOKE.json. `git diff --check`: exit 0. Concurrencia PostgreSQL pendiente.

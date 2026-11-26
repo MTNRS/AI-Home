@@ -367,6 +367,7 @@ class ClaimedJobResponse(BaseModel):
     payload: dict
     lease_token: str
     lease_expires_epoch: int
+    reward_credits: int = 0
 
 
 class SubmitJobResultRequest(BaseModel):
@@ -389,6 +390,7 @@ class CreateTokenizeJobRequest(BaseModel):
     payload: dict
     allow_public_node_processing: StrictBool
     idempotency_key: str = Field(min_length=1, max_length=160)
+    reward_credits: StrictInt = Field(default=0, ge=0, le=1_000_000)
 
     @model_validator(mode="after")
     def validate_public_payload(self):
@@ -404,6 +406,7 @@ class CreateGradientJobRequest(BaseModel):
     payload: dict
     allow_public_node_processing: StrictBool
     idempotency_key: str = Field(min_length=1, max_length=160)
+    reward_credits: StrictInt = Field(default=0, ge=0, le=1_000_000)
 
     @model_validator(mode="after")
     def require_consent(self):

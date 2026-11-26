@@ -19,6 +19,8 @@ import uvicorn
 from ai_home.api import create_app
 from ai_home.config import Settings
 from ai_home.database import Base
+from ai_home.credits import CreditLedger
+from ai_home.job_credits import user_account_id
 from ai_home.node_worker import detect_hardware
 from .checkpoint import FORMAT, atomic_save, load_checkpoint
 from .data import canonical_hash, prepare_records
@@ -33,9 +35,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=2)
+    parser.add_argument("--reward-credits", type=int, default=0)
     args = parser.parse_args()
     if not 1 <= args.rounds <= 10:
         parser.error("Reference experiment permits 1-10 rounds")
+    if not 0 <= args.reward_credits <= 100:
+        parser.error("Smoke reward must be between 0 and 100 internal test credits")
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(2)
@@ -75,15 +80,32 @@ def main():
             raise RuntimeError("Loopback server did not start")
         with httpx.Client(base_url=url, timeout=60) as client:
             credentials = {"email": "distributed-smoke@example.com", "password": secrets.token_urlsafe(32)}
-            client.post("/api/v1/auth/register", json=credentials).raise_for_status()
+            registration = client.post("/api/v1/auth/register", json=credentials)
+            registration.raise_for_status()
+            if args.reward_credits:
+                # Explicit synthetic issuance in this disposable demo database only.
+                ledger = CreditLedger(app.state.engine)
+                ledger.create_account("smoke-issuance", "test_issuance", allow_negative=True)
+                account = user_account_id(registration.json()["user_id"])
+                ledger.create_account(account, "user")
+                issued = args.rounds * 2 * args.reward_credits
+                ledger.post(idempotency_key="smoke-initial-credits", operation="smoke_issuance",
+                            postings={"smoke-issuance": -issued, account: issued})
             response = client.post("/api/v1/auth/login", json=credentials)
             response.raise_for_status()
             client.headers["Authorization"] = "Bearer " + response.json()["access_token"]
-            nodes = []
+            nodes, worker_sessions = [], []
             for i in range(2):
+                worker_credentials = {"email": f"worker-{i}@example.com", "password": secrets.token_urlsafe(32)}
+                client.post("/api/v1/auth/register", json=worker_credentials).raise_for_status()
+                response = client.post("/api/v1/auth/login", json=worker_credentials)
+                response.raise_for_status()
+                worker_headers = {"Authorization": "Bearer " + response.json()["access_token"]}
+                worker_sessions.append(worker_headers)
                 response = client.post("/api/v1/nodes", json={"name": f"gradient-worker-{i}",
                     "hardware": detect_hardware().model_dump(mode="json"),
-                    "supported_job_types": ["foundation.gradient.v1"], "foundation_torch_version": str(torch.__version__)})
+                    "supported_job_types": ["foundation.gradient.v1"], "foundation_torch_version": str(torch.__version__)},
+                    headers=worker_headers)
                 response.raise_for_status()
                 nodes.append(response.json())
             for step in range(1, args.rounds + 1):
@@ -94,7 +116,8 @@ def main():
                         "config": asdict(config), "parameters": parameters, "torch_version": str(torch.__version__),
                         "weights_public_and_redistributable": True}
                     response = client.post("/api/v1/jobs/foundation/gradient", json={"payload": payload,
-                        "allow_public_node_processing": True, "idempotency_key": f"round-{step}-shard-{shard}"})
+                        "allow_public_node_processing": True, "idempotency_key": f"round-{step}-shard-{shard}",
+                        "reward_credits": args.reward_credits})
                     response.raise_for_status()
                     ids.append(response.json()["job_id"])
                 for node in nodes:
@@ -140,6 +163,12 @@ def main():
                 "checkpoint_sha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
                 "elapsed_seconds": time.perf_counter() - started, "parameter_count": model.parameter_count,
                 "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim"}
+            report["credits"] = {"reward_per_job": args.reward_credits,
+                "requester": client.get("/api/v1/credits").json(),
+                "workers": [client.get("/api/v1/credits", headers=h).json() for h in worker_sessions],
+                "issuance": "Synthetic initial balance in disposable demo database; no money or cryptocurrency"}
+            if any(w["earned"] != args.rounds * args.reward_credits for w in report["credits"]["workers"]):
+                raise RuntimeError("Verified work was not settled correctly")
             (output / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
             print(json.dumps(report, indent=2))
     finally:

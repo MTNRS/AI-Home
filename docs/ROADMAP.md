@@ -114,3 +114,7 @@ Integrada tokenización BPE pública en scheduler/NodeAgent con capacidades decl
 ## Entrenamiento neuronal con nodos — 2026-11-26
 
 Integrado foundation.gradient.v1 con scheduler/NodeAgent y verificación por recomputación. Dos identidades de nodo aportan gradientes reales sobre shards públicos; agregación por tokens y AdamW producen checkpoints e inferencia. Demostración de dos rondas por HTTP loopback; solo un equipo y CPU. Créditos, multihost y escalabilidad de verificación pendientes. Ver DISTRIBUTED_TRAINING.md.
+
+## Créditos Foundation — 2026-11-26
+
+Reservas/liquidaciones/reembolsos integrados con el ledger en la misma transacción del trabajo. API de saldo y movimientos propios, cancelación, devolución por leases agotados y por eliminación de cuenta. Cuatro trabajos de gradientes reales pagaron 10 créditos a cada uno de dos usuarios en una base de prueba. Cobro de inferencia, interfaz y concurrencia PostgreSQL siguen pendientes. Ver CREDITS.md.

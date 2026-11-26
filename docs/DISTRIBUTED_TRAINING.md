@@ -51,7 +51,7 @@ artifacts/foundation-node-smoke-v1, excluidos de Git.
 ## Pendiente
 
 Validación de entrenamiento neuronal entre equipos distintos,
-recompensas con créditos, scheduling por GPU/VRAM/red/rendimiento, renovación de
+scheduling por GPU/VRAM/red/rendimiento, renovación de
 leases para entrenamientos largos y prueba entre equipos. Tokenizar datos no
 es entrenar pesos. PostgreSQL concurrente sigue pendiente de servidor de prueba;
 SQLite no demuestra garantías de concurrencia de producción.
@@ -125,8 +125,17 @@ terminar. Artefactos de la ejecución en artifacts/distributed-gradient-smoke-v2
 ### Límites restantes
 
 No hay renovación de leases largos, reanudación del coordinador entre rondas,
-integración de créditos, distribución GPU, medidas de red, verificación remota
+cobro de inferencia, distribución GPU, medidas de red, verificación remota
 eficiente ni prueba multihost. El checkpoint puede cargarse para inferencia y
 conserva el optimizador, pero el CLI de entrenamiento local no lo trata como
 resume de su propio scheduler. Continúan pendientes las garantías concurrentes
 de PostgreSQL y el endurecimiento de producción.
+
+## Recompensas financiadas integradas
+
+Tokenización y gradientes aceptan reward_credits. Se reservan fondos del
+solicitante al crear el trabajo y se abonan al propietario del nodo solo después
+de verificar el resultado. La demostración --reward-credits 5 completó cuatro
+trabajos neuronales y liquidó 10 créditos a cada worker. Las menciones anteriores
+a créditos pendientes corresponden al estado previo. Detalles de atomicidad,
+reembolso, migración y límites en CREDITS.md.

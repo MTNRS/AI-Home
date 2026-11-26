@@ -238,3 +238,7 @@ foundation.tasks define el contrato acotado de tokenización pública. API, jobs
 ## Entrenamiento por shards experimental
 
 foundation.distributed define tensores FP32 acotados y gradientes causales por shard. API/jobs asignan solo a nodos compatibles con opt-in; el servidor recalcula antes de aceptar. El coordinador aplica promedio ponderado por tokens, clipping y AdamW. Los checkpoints candidatos preservan trazabilidad y artefactos de ronda. El protocolo de referencia es CPU, no una solución eficiente para GPUs heterogéneas o redes domésticas.
+
+## Contabilidad de trabajos
+
+CreditLedger.post_in_session reutiliza validación/idempotencia/asientos balanceados dentro de la transacción SQL del scheduler. JobFunding persiste reserva y destino de la liquidación. La financiación no se incorpora al payload del worker ni la decide el resultado remoto. La finalización verificada transfiere escrow al dueño del nodo autenticado. Se conserva auditoría al eliminar objetos operativos.

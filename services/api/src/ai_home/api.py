@@ -13,7 +13,7 @@ import uuid
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -32,6 +32,8 @@ from ai_home.auth import (
     verify_password,
 )
 from ai_home.config import Settings
+from ai_home.credits import Account, InsufficientCredits, LedgerTransaction, Posting
+from ai_home.job_credits import JobFunding, refund_job, user_account_id
 from ai_home.database import build_engine
 from ai_home.inference import chat_completion
 from ai_home.jobs import (
@@ -43,6 +45,7 @@ from ai_home.jobs import (
     NodeNotFound,
     authenticate_node,
     claim_job,
+    cancel_job,
     create_math_sum_job,
     create_tokenize_job,
     create_gradient_job,
@@ -953,6 +956,10 @@ def create_app(
         session.execute(
             delete(AuthSession).where(AuthSession.user_id == current_user.user_id)
         )
+        for owned_job in session.scalars(select(ComputeJob).where(
+                ComputeJob.owner_user_id == current_user.user_id,
+                ComputeJob.status.in_(("queued", "leased"))).with_for_update()):
+            refund_job(session, owned_job)
         session.execute(
             update(ComputeJob)
             .where(
@@ -1113,7 +1120,8 @@ def create_app(
         session: Session = Depends(get_db),
     ) -> ComputeJob:
         arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
-                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing)
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing,
+                         reward_credits=payload.reward_credits)
         try:
             try:
                 job = create_tokenize_job(session, **arguments)
@@ -1127,6 +1135,9 @@ def create_app(
         except JobIdempotencyConflict:
             session.rollback()
             raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
+        except InsufficientCredits:
+            session.rollback()
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
         return job
 
     @app.post("/api/v1/jobs/foundation/gradient", response_model=JobResponse, status_code=201)
@@ -1138,7 +1149,8 @@ def create_app(
         if not request.app.state.settings.foundation_distributed_training_enabled:
             raise HTTPException(status_code=503, detail="Experimental gradient jobs are disabled.")
         arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
-                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing)
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing,
+                         reward_credits=payload.reward_credits)
         try:
             try:
                 job = create_gradient_job(session, **arguments)
@@ -1155,7 +1167,45 @@ def create_app(
         except (ValueError, ImportError):
             session.rollback()
             raise HTTPException(status_code=422, detail="Invalid or unsupported gradient task.") from None
+        except InsufficientCredits:
+            session.rollback()
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
         return job
+
+    @app.get("/api/v1/credits")
+    def get_own_credits(current_user: AuthenticatedUser = Depends(get_current_user),
+                        session: Session = Depends(get_db)) -> dict[str, int]:
+        account_id = user_account_id(current_user.user_id)
+        account = session.get(Account, account_id)
+        reserved = session.scalar(select(func.sum(JobFunding.amount)).where(
+            JobFunding.owner_account == account_id, JobFunding.status == "reserved")) or 0
+        earned = session.scalar(select(func.sum(JobFunding.amount)).where(
+            JobFunding.worker_account == account_id, JobFunding.owner_account != account_id,
+            JobFunding.status == "settled")) or 0
+        return {"available": account.balance if account else 0, "reserved": reserved, "earned": earned}
+
+    @app.get("/api/v1/credits/transactions")
+    def get_own_credit_transactions(current_user: AuthenticatedUser = Depends(get_current_user),
+                                    session: Session = Depends(get_db)) -> list[dict]:
+        rows = session.execute(select(LedgerTransaction, Posting.amount).join(Posting).where(
+            Posting.account_id == user_account_id(current_user.user_id)).order_by(
+                LedgerTransaction.transaction_id.desc()).limit(100))
+        return [{"transaction_id": entry.transaction_id, "operation": entry.operation,
+                 "amount": amount, "created_at": entry.created_at} for entry, amount in rows]
+
+    @app.post("/api/v1/jobs/{job_id}/cancel", response_model=JobResponse)
+    def cancel_owned_job(job_id: str, current_user: AuthenticatedUser = Depends(get_current_user),
+                         session: Session = Depends(get_db)):
+        try:
+            job = cancel_job(session, job_id, current_user.user_id)
+            session.commit()
+            return job
+        except JobNotFound:
+            session.rollback()
+            raise HTTPException(status_code=404, detail="Job not found.") from None
+        except ValueError:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Only pending jobs can be cancelled.") from None
 
     @app.get("/api/v1/jobs", response_model=list[JobResponse])
     def get_jobs(
@@ -1252,6 +1302,7 @@ def _claimed_job_response(claim: ClaimedJob) -> ClaimedJobResponse:
         payload=claim.job.payload,
         lease_token=claim.lease_token,
         lease_expires_epoch=claim.job.lease_expires_epoch or 0,
+        reward_credits=claim.reward_credits,
     )
 
 

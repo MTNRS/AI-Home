@@ -51,3 +51,7 @@ La matriz anterior describe la auditoría inicial. La ejecución actual demuestr
 ## Criterio CUDA verificado
 
 El criterio mecánico 4 (entrenamiento GPU) tiene ahora evidencia directa: suite CUDA y smoke real en RTX 4070 SUPER. Véase CUDA_VALIDATION.md. La auditoría global sigue incompleta: nodos, créditos de entrenamiento, interfaz completa y otros requisitos no quedan cubiertos por estas pruebas.
+
+## Créditos de contribución verificados
+
+El criterio 17 dispone de evidencia para tokenización y gradientes: reservas financiadas, validación, liquidación y reembolsos; dos usuarios recibieron 10 créditos cada uno por trabajos neuronales reales en la demo. No se extiende esta evidencia al cobro de inferencia, la concurrencia PostgreSQL ni una economía de producción. Véase CREDITS.md.

@@ -85,3 +85,7 @@ Clientes antiguos conservan solo suma. Los nuevos anuncian tokenización explíc
 ## 2026-11-26: gradientes verificables antes de escalar
 
 La primera modalidad neuronal usa CPU, modelos de hasta 50.000 parámetros y shards públicos pequeños. Se elige recomputación central con tolerancias explícitas para comprobar trabajo real antes de investigar verificación escalable. La tarea requiere tres decisiones explícitas: activación del operador, permiso de distribución y opt-in del worker. No se activan automáticamente los nodos existentes.
+
+## 2026-11-26: recompensas financiadas sin autoemisión
+
+Cada recompensa consume una reserva del solicitante. No se emiten créditos por métricas de un nodo ni por trabajos creados por el propio receptor. Asignación inicial es una operación administrativa explícita y auditable, separada de earned. Estado de trabajo y movimientos del ledger comparten una transacción; no se introduce otro libro mayor.
