@@ -1473,3 +1473,11 @@ del primer paso, en memoria y en disco. No publica checkpoint ni manifiesto de
 caché completa si se interrumpe; cierra el archivo parcial. Seis pruebas de caché
 aprobadas. Persisten límites durante una llamada individual al tokenizador y
 el entrenamiento BPE; no se afirma cancelación inmediata en esas fases.
+
+### Cancelación cooperativa dentro del tokenizador
+
+BPE train/extend/encode admiten evento de cancelación y lo comprueban durante
+conteo y fusiones por bloques; el entrenador lo transmite y conserva la semántica
+de cancelación sin checkpoint parcial. Igualdad exacta de tokens/vocabularios
+con evento inactivo verificada. Suite local completa: 379 aprobadas, 7 PostgreSQL
+omitidas en 52,88 segundos. Operaciones nativas siguen sin límite duro de parada.

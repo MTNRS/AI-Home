@@ -1,12 +1,37 @@
 import tempfile
 from pathlib import Path
 import unittest
+import threading
 
-from ai_home.foundation.tokenizer import ByteBPE
+from ai_home.foundation.tokenizer import ByteBPE, TokenizationCancelled
 from ai_home.foundation.data import split_records
 
 
 class TokenizerTests(unittest.TestCase):
+    def test_cancel_checks_preserve_tokens_and_merge_training(self):
+        texts = ['Español English 日本語 ' * 300, 'Datos propios y código ' * 300]
+        event = threading.Event()
+        normal = ByteBPE.train(texts, 280)
+        cancellable = ByteBPE.train(texts, 280, cancel=event)
+        self.assertEqual(normal.to_dict(), cancellable.to_dict())
+        self.assertEqual(normal.encode(texts[0]), normal.encode(texts[0], cancel=event))
+        self.assertEqual(normal.extend(texts, 290).to_dict(), normal.extend(texts, 290, cancel=event).to_dict())
+
+    def test_cancellation_inside_counting_and_merging(self):
+        class StopAfterChecks:
+            def __init__(self, limit):
+                self.calls, self.limit = 0, limit
+            def is_set(self):
+                self.calls += 1
+                return self.calls >= self.limit
+        with self.assertRaises(TokenizationCancelled):
+            ByteBPE.train(['ab' * 20000], 280, cancel=StopAfterChecks(5))
+        tokenizer = ByteBPE([(97, 98)])
+        with self.assertRaises(TokenizationCancelled):
+            tokenizer.encode('ab' * 20000, cancel=StopAfterChecks(3))
+        with self.assertRaises(TokenizationCancelled):
+            tokenizer.extend(['ab' * 20000], 280, cancel=StopAfterChecks(4))
+
     def test_unicode_roundtrip_and_serialization(self):
         texts = ["Español, inglés 日本語 🧠\n", "def f(x): return x + 1\t", "<assistant> literal"]
         tokenizer = ByteBPE.train(texts * 4, vocab_size=310)

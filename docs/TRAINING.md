@@ -292,3 +292,8 @@ de cancelación puede depender del documento actual.
 Seis pruebas de caché aprobadas, incluyendo cancelación después de escribir una
 fila, ausencia de checkpoint/manifiesto y liberación del archivo, además de
 igualdad causal/SFT y reanudación CPU/CUDA.
+
+La limitación histórica del BPE se ha reducido: el entrenador transmite ahora
+cancelación a aprendizaje/codificación BPE y comprueba bloques durante conteo y
+fusión. Ver TOKENIZER.md. Persisten operaciones nativas no interrumpibles; no se
+promete una latencia máxima de parada.

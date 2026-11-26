@@ -10,7 +10,7 @@ from torch.nn import functional as F
 from .checkpoint import FORMAT, atomic_save, load_checkpoint
 from .data import canonical_hash, prepare_records, split_records
 from .model import FoundationConfig, FoundationModel
-from .tokenizer import ByteBPE
+from .tokenizer import ByteBPE, TokenizationCancelled
 from .resources import estimate_training_bytes, available_training_bytes
 
 
@@ -57,6 +57,11 @@ def select_device(device="auto"):
 
 
 def _sequence_rows(records, tokenizer, context, objective="causal", cancel=None):
+    def encode(text):
+        try:
+            return tokenizer.encode(text, cancel=cancel)
+        except TokenizationCancelled as exc:
+            raise TrainingCancelled("Training cancelled during tokenization") from exc
     def check_cancel():
         if cancel is not None and cancel.is_set():
             raise TrainingCancelled("Training cancelled during sequence preparation")
@@ -69,11 +74,11 @@ def _sequence_rows(records, tokenizer, context, objective="causal", cancel=None)
                 role = message["role"]
                 if role not in ("user", "assistant"):
                     raise ValueError("SFT supports user/assistant roles")
-                body = [*tokenizer.encode(message["content"]), 258]
+                body = [*encode(message["content"]), 258]
                 ids.extend([260 if role == "user" else 261, *body])
                 labels.extend([-100, *(body if role == "assistant" else [-100] * len(body))])
         else:
-            ids = [257, *tokenizer.encode(record["text"]), 258]
+            ids = [257, *encode(record["text"]), 258]
             labels = ids
         for start in range(0, len(ids) - 1, context):
             check_cancel()
@@ -190,8 +195,11 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
             raise ValueError("Parent lacks dataset lineage; cannot verify evaluation isolation")
         config = model.config
     else:
-        tokenizer = ByteBPE.train([r["text"] for r in train_records],
-                                  vocab_size=config.vocab_size if config else 512)
+        try:
+            tokenizer = ByteBPE.train([r["text"] for r in train_records],
+                                      vocab_size=config.vocab_size if config else 512, cancel=cancel)
+        except TokenizationCancelled as exc:
+            raise TrainingCancelled("Training cancelled while learning tokenizer") from exc
         if config is None:
             config = FoundationConfig(vocab_size=tokenizer.vocab_size)
         elif config.vocab_size != tokenizer.vocab_size:
