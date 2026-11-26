@@ -102,3 +102,20 @@ No se modificó el diseño porque la inspección no encontró un defecto en esto
 estados. No se revisaron otros DPI, lector de pantalla, diálogos de archivos,
 mensajes de error ni una respuesta larga durante esta inspección. Las pruebas
 funcionales de generación y aislamiento están documentadas aparte en VISION_PREFIX.
+
+## Panel de nodo ampliado — revisión 2026-11-26
+
+Revisión nativa Windows del panel DISTRIBUTED COMPUTE tras a1e2850, con
+preferencias vacías y sin iniciar sesión ni registrar un nodo. Se inspeccionó
+la ventana real a 720x560 (mínimo) y 900x700 (habitual). En ambos tamaños se
+ven completas las casillas de consentimiento, entrenamiento y medición HTTP,
+el selector CPU/CUDA y los botones iniciar, detener y revocar. Textos legibles,
+sin solapamientos observados; el tamaño mínimo ajusta los párrafos en varias
+líneas. La selección inicial mantiene entrenamiento y medición desactivados.
+
+Un intento de ampliar mediante arrastre fue rechazado por límites de coordenadas
+del controlador; se abrió una segunda instancia con geometría 900x700 para
+inspeccionarla. Ambas ventanas se cerraron y sus procesos finalizaron con código
+0. Esta revisión cubre el DPI actual; no otros escalados, lectores de pantalla,
+mensajes de error o todas las combinaciones de controles. Los smokes CPU/CUDA
+separados aportan la evidencia funcional.
