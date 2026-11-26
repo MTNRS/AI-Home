@@ -79,6 +79,12 @@ def test_real_http_disconnect_stops_generation_and_next_request_succeeds(tmp_pat
             if kwargs.get("cancel") is not None and kwargs["cancel"].is_set():
                 stopped.set()
     monkeypatch.setattr(inference, "stream_text", observed)
+    active_streams = []
+    original_run = InferenceStream.run
+    def tracked_run(stream):
+        active_streams.append(stream)
+        return original_run(stream)
+    monkeypatch.setattr(InferenceStream, "run", tracked_run)
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
@@ -103,6 +109,9 @@ def test_real_http_disconnect_stops_generation_and_next_request_succeeds(tmp_pat
                 stream_server_chat(base, token, [{"role": "user", "content": "Hi"}],
                                    cancel=cancel, on_delta=receive)
             assert chunks and stopped.wait(5)
+            # The generator's finally runs before credit cleanup and lock release.
+            # Wait for actual worker completion, not merely generator cancellation.
+            assert active_streams and active_streams[-1].finished.wait(5)
             monkeypatch.setattr(inference, "stream_text", original)
             response = client.post("/api/v1/chat/completions", json={
                 "messages": [{"role": "user", "content": "Hi"}]},
