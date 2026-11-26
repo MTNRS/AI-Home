@@ -1237,3 +1237,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - 5 pruebas pasaron en 5.45s. CUDA FP16/BF16 con acumulación y checkpointing:
   ejecución continua y reanudada producen pesos exactamente iguales.
 - Sin afirmaciones de rendimiento/calidad; BF16 CPU no medido en este cambio.
+
+## 2026-11-26 — CI de vía visual y estado global actualizado
+
+- Revisión 3990136: Foundation 45832874139 success (333 passed/20 skipped),
+  incluyendo aislamiento visual real instalado con Xvfb y artefactos/smokes.
+- PostgreSQL 45832873887 success: Python 3.11/3.12, 340 passed/13 skipped cada uno.
+- FOUNDATION_STATUS.md actualizado con implementación visual y límites, diez
+  secciones existentes y evidencia remota vigente; no es aceptación final.
