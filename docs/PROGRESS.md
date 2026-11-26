@@ -1519,3 +1519,10 @@ de commit/revisión. La revisión del corpus conserva el campo con vinculación 
 metadatos y permisos sin cambios. 28 pruebas aprobadas con transporte simulado y
 dumps propios. No detecta renombrados, traducciones ni parentesco semántico; no
 se modifican corpus previamente publicados.
+
+### Linaje de familias al ampliar vocabulario
+
+Corregida pérdida de grupos en `expand_checkpoint`: conserva linaje, añade
+familias del nuevo corpus y rechaza familias del holdout anterior con texto
+distinto. Dieciocho pruebas de grupos/modelo aprobadas. Transporte de grupos en
+el protocolo distribuido todavía pendiente; no se afirma cobertura universal.

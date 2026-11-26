@@ -26,6 +26,9 @@ def expand_checkpoint(parent, output, records, vocab_size, seed=42, max_bytes=2_
         raise ValueError("Parent lacks dataset lineage")
     records = prepare_records(records)
     hashes = {r["sha256"] for r in records}
+    groups = {r['split_group_sha256'] for r in records if 'split_group_sha256' in r}
+    if groups & set(previous.get('validation_split_groups', [])):
+        raise ValueError('Tokenizer corpus includes a previous holdout split group')
     if hashes & set(previous["validation_document_hashes"]):
         raise ValueError("Tokenizer corpus includes a previous holdout")
     expanded = tokenizer.extend((r["text"] for r in records), vocab_size)
@@ -55,6 +58,8 @@ def expand_checkpoint(parent, output, records, vocab_size, seed=42, max_bytes=2_
         "data_visibility": previous.get("data_visibility", "reviewed-training-only"),
         "training_document_hashes": sorted(set(previous["training_document_hashes"]) | hashes),
         "validation_document_hashes": previous["validation_document_hashes"],
+        "training_split_groups": sorted(set(previous.get('training_split_groups', [])) | groups),
+        "validation_split_groups": previous.get('validation_split_groups', []),
         "vocabulary_migration": {"seed": seed, "old_size": tokenizer.vocab_size,
             "new_size": expanded.vocab_size, "parent_tokenizer_sha256": tokenizer.fingerprint,
             "corpus_sha256": canonical_hash(records), "optimizer_reset_required": True},

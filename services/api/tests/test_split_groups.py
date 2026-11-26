@@ -49,6 +49,15 @@ def test_training_rejects_family_leakage_and_retains_lineage(tmp_path):
     parent = train(records('a', 'train'), tmp_path / 'parent.pt',
                    validation_records=records('b', 'validation'), **kwargs)
     assert parent['training_split_groups'] == [hashlib.sha256(b'a').hexdigest()]
+    from ai_home.foundation.vocabulary import expand_checkpoint
+    from ai_home.foundation.checkpoint import load_checkpoint
+    with pytest.raises(ValueError, match='holdout split group'):
+        expand_checkpoint(tmp_path / 'parent.pt', tmp_path / 'invalid-expansion.pt',
+                          records('b', 'unseen revision'), 270)
+    expand_checkpoint(tmp_path / 'parent.pt', tmp_path / 'expanded.pt', records('c', 'new corpus'), 270)
+    expanded = load_checkpoint(tmp_path / 'expanded.pt')[2]
+    assert expanded['training_split_groups'] == sorted(hashlib.sha256(g).hexdigest() for g in (b'a', b'c'))
+    assert expanded['validation_split_groups'] == parent['validation_split_groups']
     with pytest.raises(ValueError, match='checkpoint lineage'):
         train(records('b', 'new unseen text'), tmp_path / 'candidate.pt',
               validation_records=records('c', 'new validation'), initial_checkpoint=tmp_path / 'parent.pt', **kwargs)

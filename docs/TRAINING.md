@@ -371,3 +371,16 @@ recuperación; los fragmentos de RAG no se convierten por ello en datos entrenad
 revisiones Wikipedia, estabilidad y conservación después de aprobación. Se usó
 HTTP simulado para el conector y dumps locales propios; no se descargó ni aprobó
 contenido externo nuevo en esta validación.
+
+### Grupos documentales en ampliaciones de vocabulario
+
+La migración `expand_checkpoint` conserva los grupos de entrenamiento y
+validación del padre y añade los grupos del corpus de ampliación a entrenamiento.
+Rechaza documentos nuevos si pertenecen a una familia del holdout anterior;
+proteger únicamente hashes de texto no bastaba. Se mantiene la comprobación de
+hashes documentales existente. La prueba usa un checkpoint entrenado real,
+rechaza una revisión distinta de la familia reservada y verifica el linaje de
+un candidato ampliado. Checkpoints antiguos sin grupos conservan su limitación.
+
+Pendiente: transportar y verificar este campo en el protocolo tipado de nodos
+(distribuido), cuyo esquema actual todavía no admite la nueva etiqueta.
