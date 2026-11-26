@@ -63,8 +63,15 @@ class KnowledgeIndex:
         size = payload["chunk_chars"]
         if type(size) is not int or not 100 <= size <= 2000:
             raise ValueError("Invalid chunk size")
+        self.file_bytes = len(raw)
+        self.chunk_chars = size
+        self.sources = []
         self.chunks = []
         for record in _validate(payload["records"]):
+            self.sources.append({key: record.get(key) for key in (
+                "source", "url", "license", "date", "language", "sha256", "training_allowed", "retrieval_allowed")})
+            self.sources[-1]["retrieval_allowed"] = record.get("retrieval_allowed", record.get("training_allowed"))
+            self.sources[-1]["retrieval_permission_origin"] = "explicit" if "retrieval_allowed" in record else "legacy-training-permission"
             for offset in range(0, len(record["text"]), size):
                 self.chunks.append({
                     "id": f"{record['sha256']}:{offset}",
@@ -78,6 +85,14 @@ class KnowledgeIndex:
         self.idf = {term: math.log((1 + len(counts)) / (1 + freq)) + 1
                     for term, freq in frequencies.items()}
         self.vectors = [self.embed(count) for count in counts]
+
+    def summary(self):
+        return {"format": FORMAT, "version": self.version, "file_bytes": self.file_bytes,
+                "documents": len(self.sources), "chunks": len(self.chunks),
+                "chunk_chars": self.chunk_chars, "vocabulary_terms": len(self.idf),
+                "embedding": "sparse-tfidf", "languages": sorted({r["language"] for r in self.sources}),
+                "licenses": sorted({r["license"] for r in self.sources}),
+                "sources": self.sources[:100], "sources_truncated": len(self.sources) > 100}
 
     def embed(self, counts):
         vector = {term: (1 + math.log(count)) * self.idf[term]
@@ -95,6 +110,11 @@ class KnowledgeIndex:
             if score > 0:
                 ranked.append({**chunk, "score": score, "index_version": self.version})
         return sorted(ranked, key=lambda item: (-item["score"], item["id"]))[:limit]
+
+
+def inspect_knowledge(path, query=""):
+    index = KnowledgeIndex(path)
+    return {"summary": index.summary(), "results": index.search(query) if query.strip() else []}
 
 
 def retrieval_messages(messages, references):

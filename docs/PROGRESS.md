@@ -407,3 +407,13 @@ architecture and retained training metrics are exposed without tensor/optimizer
 payloads. Inspection does not activate or approve models. Validation: 230 passed,
 4 skipped; hidden real Windows Tk inspection of the CUDA experiment checkpoint
 passed. Broader training/evaluation/evolution control panels remain incomplete.
+
+
+### Desktop knowledge explorer (2026-11-26)
+
+Added local reviewed-index inspection and query controls. The view reports verified
+index version/counts and source license/permission metadata, distinguishing legacy
+permission inheritance. Search displays actual fragments with provenance and never
+runs generation or sends a query remotely. Profile/window lifecycle guards apply.
+Validation: 231 passed, 4 skipped; hidden real Windows Tk index/search/profile-close
+check passed using authored fixtures. Visual inspection of the new dialog remains.

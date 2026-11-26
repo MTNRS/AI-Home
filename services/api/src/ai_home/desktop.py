@@ -1565,6 +1565,8 @@ def main() -> None:
             self.server_version_combo.pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Actualizar versiones aprobadas",
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
+            ttk.Button(routing, text="Explorar conocimiento local",
+                       command=self._knowledge_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Inspeccionar checkpoint local",
                        command=self._inspect_checkpoint_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ajustes de generación Foundation",
@@ -1589,6 +1591,64 @@ def main() -> None:
                 text="La clave nunca se envía al servidor AI@Home.",
                 foreground="#52606d",
             ).pack(anchor="w", pady=(6, 0))
+
+        def _knowledge_dialog(self) -> None:
+            path = filedialog.askopenfilename(parent=self, title="Índice de conocimiento revisado",
+                                             filetypes=[("Índice JSON", "*.json")])
+            if not path:
+                return
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Conocimiento: índice local y fuentes")
+            window.geometry("820x580")
+            controls = ttk.Frame(window, padding=12)
+            controls.pack(fill="x")
+            query = ttk.Entry(controls)
+            query.pack(side="left", fill="x", expand=True)
+            scrollbar = ttk.Scrollbar(window)
+            scrollbar.pack(side="right", fill="y")
+            content = tk.Text(window, wrap="word", state="disabled", yscrollcommand=scrollbar.set)
+            content.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+            scrollbar.configure(command=content.yview)
+            busy = False
+
+            def search():
+                nonlocal busy
+                if busy:
+                    return
+                text = query.get().strip()
+                if len(text) > 32000:
+                    messagebox.showerror("Conocimiento", "La consulta supera el límite de 32.000 caracteres.", parent=window)
+                    return
+                busy = True
+                button.configure(state="disabled")
+
+                def inspect():
+                    from ai_home.knowledge import inspect_knowledge
+                    return inspect_knowledge(path, text)
+
+                def finish():
+                    nonlocal busy
+                    busy = False
+                    button.configure(state="normal")
+
+                def display(report):
+                    content.configure(state="normal")
+                    content.delete("1.0", "end")
+                    content.insert("end", "Recuperación local de fragmentos. No genera respuestas ni entrena pesos.\n"
+                                   "La consulta no se envía a Internet.\n\n")
+                    content.insert("end", json.dumps(report, indent=2, ensure_ascii=False))
+                    if text and not report["results"]:
+                        content.insert("end", "\n\nNo se encontraron fragmentos relevantes.")
+                    content.configure(state="disabled")
+                    finish()
+
+                self._background(inspect, display, finish, is_current=lambda: bool(window.winfo_exists()))
+
+            button = ttk.Button(controls, text="Buscar / actualizar", command=search)
+            button.pack(side="right", padx=(8, 0))
+            query.bind("<Return>", lambda _: search())
+            search()
 
         def _inspect_checkpoint_dialog(self) -> None:
             path = filedialog.askopenfilename(parent=self, title="Checkpoint Foundation",

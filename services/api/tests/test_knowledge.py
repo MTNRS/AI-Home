@@ -25,6 +25,7 @@ def test_retrieval_integrity_provenance_and_immutable_versions(tmp_path):
     assert matches[0]["index_version"] == version
     assert matches[0]["document_sha256"] in matches[0]["id"]
     assert index.search("inexistente") == []
+    assert all(s["retrieval_permission_origin"] == "legacy-training-permission" and s["retrieval_allowed"] is True for s in index.summary()["sources"])
     assert KnowledgeIndex(path).search("Marte") == index.search("Marte")
     with pytest.raises(FileExistsError):
         build_index(records(), path)
@@ -178,3 +179,21 @@ def test_updated_index_preserves_old_version_and_new_provenance(tmp_path):
     assert old_hit["document_sha256"] != new_hit["document_sha256"]
     assert new_hit["date"] == "2026-11-27"
     assert new_hit["url"].endswith("revision-2")
+
+
+def test_knowledge_inspection_reports_real_index_structure_and_source_permissions(tmp_path):
+    from ai_home.knowledge import inspect_knowledge
+    data = [{**record, "retrieval_allowed": True, "training_allowed": False} for record in records()]
+    path = tmp_path / "index.json"
+    version = build_index(data, path, chunk_chars=100)
+    report = inspect_knowledge(path, "Marte")
+    summary = report["summary"]
+    assert summary["version"] == version
+    assert summary["file_bytes"] == path.stat().st_size
+    assert summary["documents"] == 2 and summary["chunks"] == 2
+    assert summary["embedding"] == "sparse-tfidf"
+    assert summary["languages"] == ["es"]
+    assert all(s["training_allowed"] is False and s["retrieval_allowed"] is True for s in summary["sources"])
+    assert len(report["results"]) == 1
+    assert inspect_knowledge(path, "unknownword")["results"] == []
+    assert inspect_knowledge(path)["results"] == []

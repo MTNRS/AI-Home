@@ -145,3 +145,27 @@ pipeline tests cover pending-record rejection, review, indexing, independent use
 permissions, duplicate approvals, changed content/metadata and no-overwrite
 behavior. Full suite before the template helper: 189 passed, 4 PostgreSQL skipped;
 all 9 connector tests pass after adding the template helper.
+
+
+## Desktop knowledge explorer
+
+“Explorar conocimiento local” opens an existing reviewed index. The read-only view
+reports its verified version, file size, document/chunk counts, chunk size, sparse
+TF-IDF vocabulary size, languages, licenses and source permissions. Up to 100 source
+metadata entries are shown with an explicit truncation flag when more exist. Legacy
+retrieval permission inherited from training authorization is labeled separately
+from explicit retrieval permission.
+
+Enter a query and choose “Buscar / actualizar” to retrieve up to three fragments
+with their source URL, document hash, offset and score. Empty matches are explicit.
+This is local index inspection/retrieval, not model generation, weight training,
+source approval or Internet search. It does not change the server's selected index.
+The index is reloaded and revalidated for each search; a tampered or unauthorized
+index produces an error instead of results. Closing the window or switching account
+invalidates queued UI callbacks. No query is sent to a remote endpoint.
+
+Validation: a real authored index fixture verifies summary counts, permissions,
+legacy permission labeling and retrieval. A hidden Windows Tk check exercised the
+actual view and search controls, verified a fragment/provenance display and closed
+the window through profile switching. Full suite: 231 passed, 4 PostgreSQL skipped;
+no claim of full visual layout review for this new window is made.
