@@ -633,3 +633,18 @@ verify absence of comparison/final/experiment artifacts. Final suite: 258 passed
 5 PostgreSQL tests skipped because the portable server is stopped; prior full
 PostgreSQL verification remains documented separately. Interactive CLI signal
 entry has not been manually demonstrated.
+
+
+### Desktop evolution execution
+
+Added the experiment form and bounded file-entry job adapter, real stage/probe/
+optimizer progress, controlled cancellation and app-close waiting. Local training,
+evaluation and evolution workers exclude one another. The existing real two-arm
+experiment test now exercises the desktop adapter. A live Tk button run trained
+control and experiment (embedding deltas 0.1138595 and 0.0569225), then rejected
+the proposal because experimental held-out loss did not match the control.
+No promotion occurred. Evidence is under artifacts/ui-review/evolution-
+dfa437b9c0a643f6897b01962b0f29f6. Layout has not been visually reviewed.
+The first suite run overlapped the Tk run and hit transient host RAM guards in
+three tests. Sequential rerun: 258 passed, 5 PostgreSQL skips (server stopped).
+No memory guard was relaxed and no other application was stopped.

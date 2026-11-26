@@ -1587,6 +1587,8 @@ def main() -> None:
                        command=self._run_training_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ejecutar evaluación local",
                        command=self._run_evaluation_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Ejecutar evolución local",
+                       command=self._run_evolution_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ver evaluación o evolución",
                        command=self._experiment_report_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Inspeccionar checkpoint local",
@@ -1672,6 +1674,94 @@ def main() -> None:
             query.bind("<Return>", lambda _: search())
             search()
 
+        def _run_evolution_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Experimento de evolución Foundation")
+            window.geometry("900x650")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            names = ("Checkpoint padre", "Suite JSON", "Validación JSON", "Replay JSON", "Datos nuevos JSON",
+                     "Entrenamiento JSON", "Carpeta nueva")
+            fields = [tk.StringVar() for _ in names]
+            for row, (label, variable) in enumerate(zip(names, fields)):
+                ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=6)
+                ttk.Entry(frame, textvariable=variable, width=60).grid(row=row, column=1, sticky="ew")
+                def choose(index=row, value=variable):
+                    path = (filedialog.asksaveasfilename(parent=window, title="Nueva carpeta de experimento")
+                            if index == 6 else filedialog.askopenfilename(parent=window))
+                    if path:
+                        value.set(path)
+                ttk.Button(frame, text="Elegir", command=choose).grid(row=row, column=2, padx=5)
+            frame.columnconfigure(1, weight=1)
+            reviewed = tk.BooleanVar(value=False)
+            ttk.Checkbutton(frame, text="Los datos nuevos son una exportación SFT revisada", variable=reviewed).grid(row=7, column=1, sticky="w")
+            device = tk.StringVar(value="cpu")
+            multiplier = tk.StringVar(value="0.5")
+            tokens = tk.StringVar(value="64")
+            for row, label, value in ((8, "Dispositivo", device), (9, "Multiplicador learning rate", multiplier), (10, "Tokens por prueba", tokens)):
+                ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w")
+                widget = (ttk.Combobox(frame, textvariable=value, values=("cpu", "cuda"), state="readonly", width=12)
+                          if row == 8 else ttk.Entry(frame, textvariable=value, width=12))
+                widget.grid(row=row, column=1, sticky="w")
+            status = tk.StringVar(value="Entrena control y experimento, compara y propone una decisión. No activa modelos.")
+            ttk.Label(frame, textvariable=status, wraplength=820).grid(row=12, column=0, columnspan=3, sticky="w", pady=12)
+            cancellation = threading.Event()
+            events = queue.Queue()
+            def stop():
+                cancellation.set()
+                status.set("Parada solicitada; esperando al paso o evaluación en curso…")
+            def start():
+                if any(getattr(self, name, None) is not None and getattr(self, name).is_alive()
+                       for name in ("training_worker", "evaluation_worker", "evolution_worker")):
+                    status.set("Ya hay un trabajo Foundation local en curso.")
+                    return
+                try:
+                    paths = [field.get().strip() for field in fields]
+                    rate, count = float(multiplier.get()), int(tokens.get())
+                    if not all(paths) or not math.isfinite(rate) or not .1 <= rate <= 4 or rate == 1 or not 1 <= count <= 4096:
+                        raise ValueError("Completa las rutas; multiplicador 0.1–4 distinto de 1 y tokens 1–4096.")
+                except ValueError as error:
+                    status.set(str(error))
+                    return
+                selected_device, selected_review = device.get(), reviewed.get()
+                cancellation.clear()
+                self.evolution_cancel = cancellation
+                start_button.configure(state="disabled")
+                status.set("Preparando experimento…")
+                def execute():
+                    try:
+                        from ai_home.foundation.evolution_job import run_evolution
+                        result = run_evolution(*paths, reviewed_export=selected_review, device=selected_device,
+                                               multiplier=rate, max_new_tokens=count, cancel=cancellation,
+                                               on_progress=lambda item: events.put(("progress", item)))
+                        events.put(("done", result))
+                    except Exception as error:
+                        events.put(("error", str(error)))
+                self.evolution_worker = threading.Thread(target=execute, daemon=True)
+                self.evolution_worker.start()
+            def poll():
+                if not window.winfo_exists():
+                    return
+                while not events.empty():
+                    kind, value = events.get_nowait()
+                    if kind == "progress":
+                        detail = (f"paso {value['step']}, pérdida {value['train_loss']:.4f}" if "step" in value
+                                  else f"pruebas {value['completed']}/{value['total']}" if "completed" in value else "")
+                        status.set(f"{value['stage']} · {detail}")
+                    elif kind == "done":
+                        status.set(f"{value['decision']}: {value['reason']}. Sin promoción automática.")
+                        start_button.configure(state="normal")
+                    else:
+                        status.set(value)
+                        start_button.configure(state="normal")
+                window.after(100, poll)
+            start_button = ttk.Button(frame, text="Ejecutar experimento", command=start)
+            start_button.grid(row=11, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Parar", command=stop).grid(row=11, column=2)
+            window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
+            poll()
+
         def _run_training_dialog(self) -> None:
             window = tk.Toplevel(self)
             self.private_windows.append(window)
@@ -1711,7 +1801,7 @@ def main() -> None:
                 status.set("Parada solicitada; guardando al terminar el paso en curso…")
             def start():
                 if any(getattr(self, name, None) is not None and getattr(self, name).is_alive()
-                       for name in ("training_worker", "evaluation_worker")):
+                       for name in ("training_worker", "evaluation_worker", "evolution_worker")):
                     status.set("Ya hay un entrenamiento o evaluación local en curso.")
                     return
                 paths = [value.get().strip() for value in values.values()]
@@ -1798,7 +1888,7 @@ def main() -> None:
                 status.set("Cancelación solicitada; esperando al trabajo en curso…")
             def start():
                 if any(getattr(self, name, None) is not None and getattr(self, name).is_alive()
-                       for name in ("training_worker", "evaluation_worker")):
+                       for name in ("training_worker", "evaluation_worker", "evolution_worker")):
                     status.set("Ya hay un entrenamiento o evaluación local en curso.")
                     return
                 try:
@@ -2966,6 +3056,12 @@ def main() -> None:
             self._background(revoke, on_success)
 
         def _close(self) -> None:
+            evolution = getattr(self, "evolution_worker", None)
+            if evolution is not None and evolution.is_alive():
+                self.evolution_cancel.set()
+                self.status_var.set("Esperando a detener el experimento antes de cerrar…")
+                self.after(100, self._close)
+                return
             worker = getattr(self, "training_worker", None)
             if worker is not None and worker.is_alive():
                 self.training_cancel.set()

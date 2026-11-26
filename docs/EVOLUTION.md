@@ -83,3 +83,19 @@ creates no run directory. The CLI exits 130 on cooperative cancellation.
 The complete experiment is not automatically resumable as an orchestrated job;
 retained training checkpoints can be resumed with the existing Python training
 API using matching data/replay settings. Partial work is not an acceptance decision.
+
+
+## Desktop experiment control
+
+**Ejecutar evolución local** selects a parent checkpoint, probe suite, independent
+validation corpus, replay corpus, incremental dataset (or reviewed SFT export),
+training configuration and new output directory. Choose CPU/CUDA, learning-rate
+multiplier and probe token budget. The form executes the existing controlled
+experiment, displays real stage/step/probe progress and records the final proposal.
+It cannot activate a model.
+
+Training, evaluation and evolution exclude one another within this desktop
+instance. Closing the experiment window or changing account requests cancellation;
+normal application close waits for controlled shutdown. Other applications and
+API processes are not coordinated. Output directories are exclusive, and the
+normal lineage, authorization and regression gates remain in force.

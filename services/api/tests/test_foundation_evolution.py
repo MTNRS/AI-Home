@@ -30,8 +30,13 @@ def test_evolution_trains_two_real_candidates_and_reports_evidence(tmp_path):
     parent = tmp_path / "parent.pt"
     train(records("old"), parent, config, settings, "cpu", validation_records=records("holdout"))
     suite = json.loads((Path(__file__).resolve().parents[3] / "docs/evaluation-probes-v1.json").read_text(encoding="utf-8"))
-    report = run_experiment(parent, tmp_path / "experiment", suite, paths["holdout"], paths["old"],
-                            dataset=paths["new"], training=settings, device="cpu", max_new_tokens=4)
+    from dataclasses import asdict
+    from ai_home.foundation.evolution_job import run_evolution
+    suite_path, training_path = tmp_path / "suite.json", tmp_path / "training.json"
+    suite_path.write_text(json.dumps(suite), encoding="utf-8")
+    training_path.write_text(json.dumps(asdict(settings)), encoding="utf-8")
+    report = run_evolution(parent, suite_path, paths["holdout"], paths["old"], paths["new"],
+                           training_path, tmp_path / "experiment", device="cpu", max_new_tokens=4)
     import threading
     from ai_home.foundation.training import TrainingCancelled
     from ai_home.foundation.checkpoint import load_checkpoint
