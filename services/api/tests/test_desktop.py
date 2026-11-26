@@ -588,3 +588,22 @@ def test_credit_view_rejects_invalid_balance_and_auth_failure():
     with pytest.raises(httpx.HTTPStatusError):
         server_credits("https://example.org", "expired", transport=httpx.MockTransport(
             lambda request: httpx.Response(401)))
+
+
+def test_generation_dialog_parsing_and_complete_request_forwarding():
+    from ai_home.desktop import parse_generation_settings, server_chat_result
+    values = {"temperature": "0", "top_k": "20", "top_p": "0.8",
+              "repetition_penalty": "1.2", "seed": "7", "max_new_tokens": ""}
+    options = parse_generation_settings(values)
+    assert "max_new_tokens" not in options
+    assert options["temperature"] == 0 and options["seed"] == 7
+    for key, value in (("temperature", "nan"), ("top_k", "1.5"), ("max_new_tokens", "5000"),
+                       ("seed", "-1"), ("top_p", "0")):
+        with pytest.raises(ValueError):
+            parse_generation_settings({**values, key: value})
+    def handle(request):
+        assert json.loads(request.read())["generation"] == options
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+    result = server_chat_result("https://example.org", "token", [{"role": "user", "content": "Hi"}],
+                                generation=options, transport=httpx.MockTransport(handle))
+    assert result.answer == "ok"

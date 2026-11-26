@@ -42,6 +42,7 @@ from ai_home.providers import (
 from ai_home.privacy import contains_common_secret
 from ai_home.schemas import (
     KnowledgeReference,
+    FoundationGeneration,
     NodeCredentialResponse,
     SessionResponse,
     TrainingContributionExportResponse,
@@ -378,6 +379,7 @@ def server_chat_result(
     user_token: str,
     messages: list[dict[str, str]],
     *,
+    generation: dict | None = None,
     use_knowledge: bool = False,
     model_version: str | None = None,
     timeout_seconds: float = 180,
@@ -391,7 +393,9 @@ def server_chat_result(
     ) as client:
         response = client.post(
             "/api/v1/chat/completions",
-            json={"messages": messages, **({"use_knowledge": True} if use_knowledge else {}),
+            json={"messages": messages,
+                  **({"generation": FoundationGeneration.model_validate(generation).model_dump(exclude_none=True)} if generation is not None else {}),
+                  **({"use_knowledge": True} if use_knowledge else {}),
                   **({"model_version": str(UUID(model_version))} if model_version else {})},
         )
         response.raise_for_status()
@@ -452,6 +456,18 @@ def format_credits(balance, transactions):
             label = "Asignación del operador: " + row["operation"].split(":", 1)[1]
         lines.append(f"{row['created_at']} | {row['amount']:+d} | {label} | ID {row['transaction_id']}")
     return "\n".join(lines)
+
+
+def parse_generation_settings(values):
+    parsed = {}
+    for key in ("max_new_tokens", "top_k", "seed"):
+        value = values[key].strip()
+        if key == "max_new_tokens" and not value:
+            continue
+        parsed[key] = int(value)
+    for key in ("temperature", "top_p", "repetition_penalty"):
+        parsed[key] = float(values[key].strip())
+    return FoundationGeneration.model_validate(parsed).model_dump(exclude_none=True)
 
 
 def format_knowledge_references(turns) -> str:
@@ -559,6 +575,7 @@ def main() -> None:
             self.pinned_server_version = None
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
+            self.generation_settings = None
             self.chat_cancel = None
             self.chat_request_active = False
             self.training_submission_active = False
@@ -1520,6 +1537,8 @@ def main() -> None:
             self.server_version_combo.pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Actualizar versiones aprobadas",
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
+            ttk.Button(routing, text="Ajustes de generación Foundation",
+                       command=self._generation_dialog).pack(anchor="w", pady=(6, 0))
             self.stream_enabled_var = tk.BooleanVar(value=False)
             ttk.Checkbutton(routing, text="Texto progresivo (servidor Foundation)",
                             variable=self.stream_enabled_var).pack(anchor="w", pady=(6, 0))
@@ -1540,6 +1559,43 @@ def main() -> None:
                 text="La clave nunca se envía al servidor AI@Home.",
                 foreground="#52606d",
             ).pack(anchor="w", pady=(6, 0))
+
+        def _generation_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Generación Foundation del servidor")
+            window.transient(self)
+            frame = ttk.Frame(window, padding=16)
+            frame.pack(fill="both", expand=True)
+            custom = tk.BooleanVar(value=self.generation_settings is not None)
+            ttk.Checkbutton(frame, text="Usar ajustes personalizados", variable=custom).grid(
+                row=0, column=0, columnspan=2, sticky="w")
+            defaults = FoundationGeneration().model_dump()
+            selected = self.generation_settings or defaults
+            labels = [("temperature", "Temperatura (0 = determinista)"),
+                      ("top_k", "Top-k (0 = sin filtro)"), ("top_p", "Top-p"),
+                      ("repetition_penalty", "Penalización de repetición"),
+                      ("seed", "Semilla"), ("max_new_tokens", "Máximo de tokens (vacío = servidor)")]
+            fields = {}
+            for row, (key, label) in enumerate(labels, 1):
+                value = selected.get(key, defaults[key])
+                fields[key] = tk.StringVar(value="" if value is None else str(value))
+                ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
+                ttk.Entry(frame, textvariable=fields[key], width=18).grid(row=row, column=1, pady=4)
+            ttk.Label(frame, text="Se aplican a la próxima petición al servidor Foundation.\n"
+                      "El servidor mantiene su propio límite de tokens.").grid(row=7, column=0, columnspan=2, pady=8)
+
+            def save():
+                try:
+                    settings = parse_generation_settings({key: value.get() for key, value in fields.items()}) if custom.get() else None
+                except (ValueError, TypeError):
+                    messagebox.showerror("Generación", "Revisa los números y los límites de los ajustes.", parent=window)
+                    return
+                self.generation_settings = settings
+                self.status_var.set("Ajustes personalizados de generación." if settings is not None else "Generación con valores del servidor.")
+                window.destroy()
+
+            ttk.Button(frame, text="Aplicar", command=save).grid(row=8, column=0, columnspan=2)
 
         def _show_credits(self) -> None:
             if self.session_token is None or self.session_server_url is None:
@@ -1904,6 +1960,9 @@ def main() -> None:
             try:
                 use_server = self.use_server_ai_var.get()
                 use_stream = self.stream_enabled_var.get()
+                generation = dict(self.generation_settings) if self.generation_settings is not None else None
+                if generation is not None and not use_server:
+                    raise ValueError("Los ajustes personalizados requieren el servidor Foundation.")
                 if use_stream and not use_server:
                     raise ValueError("El texto progresivo requiere activar el servidor Foundation.")
                 use_knowledge = self.use_knowledge_var.get()
@@ -1940,7 +1999,7 @@ def main() -> None:
                     if use_stream:
                         operation = lambda: server_stream_result(
                             server_url, user_token, request_messages,
-                            use_knowledge=use_knowledge, model_version=requested_version,
+                            use_knowledge=use_knowledge, model_version=requested_version, generation=generation,
                             cancel=request_cancel,
                             on_delta=lambda content: self.events.put(("chat_delta", (
                                 request_conversation_id, request_cancel, content))),
@@ -1948,7 +2007,7 @@ def main() -> None:
                     else:
                         operation = lambda: server_chat_result(
                             server_url, user_token, request_messages,
-                            use_knowledge=use_knowledge, model_version=requested_version,
+                            use_knowledge=use_knowledge, model_version=requested_version, generation=generation,
                         )
                 else:
                     provider_id, provider_url = self._selected_provider()
@@ -2063,6 +2122,7 @@ def main() -> None:
             self.api_key_var.set("")
             self.use_knowledge_var.set(False)
             self.stream_enabled_var.set(False)
+            self.generation_settings = None
             self.server_version_combo.configure(values=[DEFAULT_SERVER_VERSION])
 
         def _show_knowledge_references(self) -> None:

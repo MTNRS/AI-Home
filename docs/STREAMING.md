@@ -125,9 +125,30 @@ Temperature zero is greedy decoding. A seed controls stochastic sampling on the
 selected device; reproducibility across different devices/runtime versions is not
 promised. The full-response `generation` field and streaming metadata return the
 effective values. These controls are Foundation-only; specifying them for an
-external backend returns an explicit error. Desktop sampling controls are not yet
-exposed; existing desktop defaults remain unchanged.
+external backend returns an explicit error. Desktop sampling controls are available through the optional dialog below;
+existing defaults remain unchanged unless customized.
 
 Actual-checkpoint tests compare direct inference, full HTTP response and SSE with
 identical greedy settings and retrieved context. They assert equal generated
 text, matching reported settings and token-budget rejection on both routes.
+
+
+### Desktop generation dialog
+
+“Ajustes de generación Foundation” opens the temperature, top-k, top-p,
+repetition penalty, seed and token-limit controls. Enable custom settings and
+apply; leave the token limit empty to retain the server limit. Disabling custom
+settings restores server defaults. Values use the same strict bounded schema as
+the API, after parsing text input into numbers. Invalid inputs leave the current
+settings unchanged and display an error.
+
+Both complete-response and streaming clients forward the selected settings.
+Each request captures its own copy; editing while a request runs affects only the
+next request. These controls require server routing and the Foundation backend;
+they are not silently applied to direct/external providers. Settings are session
+local, not stored on disk, and reset on profile changes. The actual server token
+limit remains authoritative and oversized requests return an error.
+
+Validation: 229 passed, 4 PostgreSQL skipped. HTTP-client tests cover forwarding
+for both routes and malformed/out-of-range input. A hidden Windows Tk test invoked
+the real dialog controls, applied temperature zero and verified account reset.

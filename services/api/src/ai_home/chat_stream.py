@@ -5,7 +5,7 @@ from uuid import UUID
 
 import httpx
 
-from ai_home.schemas import KnowledgeReference
+from ai_home.schemas import KnowledgeReference, FoundationGeneration
 from ai_home.urls import normalize_base_url
 
 
@@ -14,10 +14,12 @@ class GenerationCancelled(RuntimeError):
 
 
 def stream_server_chat(server_url, user_token, messages, *, cancel, on_delta,
-                       model_version=None, use_knowledge=False, transport=None):
+                       model_version=None, use_knowledge=False, generation=None, transport=None):
     """Run in a background thread; callbacks must not directly mutate Tk widgets."""
     async def consume():
         body = {"messages": messages, "use_knowledge": use_knowledge}
+        if generation is not None:
+            body["generation"] = FoundationGeneration.model_validate(generation).model_dump(exclude_none=True)
         if model_version is not None:
             body["model_version"] = str(UUID(model_version))
         async with httpx.AsyncClient(base_url=normalize_base_url(server_url), timeout=180,

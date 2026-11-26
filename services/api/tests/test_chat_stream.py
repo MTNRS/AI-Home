@@ -50,3 +50,18 @@ def test_cancel_while_waiting_for_response_headers():
     with pytest.raises(GenerationCancelled):
         stream_server_chat("https://example.org", "token", [{"role": "user", "content": "Hi"}],
                            cancel=cancel, on_delta=lambda _: None, transport=httpx.MockTransport(waiting))
+
+
+def test_stream_client_forwards_validated_generation_controls():
+    def handle(request):
+        options = json.loads(request.read())["generation"]
+        assert options["temperature"] == 0
+        assert options["max_new_tokens"] == 4
+        events = [{"type": "metadata"}, {"type": "delta", "content": "Hi"},
+                  {"type": "done", "characters": 2, "chunks": 1}]
+        return httpx.Response(200, headers={"content-type": "text/event-stream"},
+                              text="".join("data: " + json.dumps(e) + "\n\n" for e in events))
+    result = stream_server_chat("https://example.org", "token", [{"role": "user", "content": "Hi"}],
+        cancel=threading.Event(), on_delta=lambda _: None,
+        generation={"temperature": 0.0, "max_new_tokens": 4}, transport=httpx.MockTransport(handle))
+    assert result["answer"] == "Hi"

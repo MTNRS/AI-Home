@@ -377,3 +377,12 @@ checkpoint tests compare greedy direct, complete-response and streaming outputs
 with the same retrieved context. Desktop sampling widgets remain pending.
 
 Validation: full CUDA-enabled suite 227 passed, 4 PostgreSQL tests skipped.
+
+
+### Desktop generation settings (2026-11-26)
+
+Added the optional Foundation generation dialog with six validated controls and
+restoration of server defaults. Both response modes forward an immutable request
+snapshot; profile changes reset settings. Local/external routing does not silently
+ignore custom Foundation settings. Validation: 229 passed, 4 skipped; hidden real
+Windows Tk apply/reset check passed. Visual layout inspection remains pending.
