@@ -56,3 +56,20 @@ probe IDs, inconsistent category totals and truncation summaries. A report's
 file hash identifies its bytes; it does not authenticate who ran it or prove
 that the named checkpoint produced it. Evolution reports show recorded control
 and experimental categories; this viewer does not rerun the experiment.
+
+
+## Run an evaluation from the desktop
+
+Choose **Ejecutar evaluación local** on the provider control page, select the
+Foundation checkpoint, probe-suite JSON and a new output JSON path. Select CPU
+or CUDA and a generation budget (1–4096 tokens per probe), then **Evaluar y guardar**.
+The worker executes real inference without blocking Tk and reports completed
+probe counts. One evaluation worker can run at a time in this desktop instance.
+This does not coordinate GPU resources with separate API/training processes.
+
+Cancel, closing the window, changing profile or closing the app requests
+cooperative cancellation. Loading and active kernels cannot be interrupted;
+cancellation is checked between generated tokens/probes and before publication.
+Incomplete evaluations are not published. Complete reports are flushed and
+exclusively linked into place, never overwriting an existing file. Cancellation
+after publication does not remove the completed report. No model is activated.

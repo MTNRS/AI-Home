@@ -1567,6 +1567,8 @@ def main() -> None:
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
             ttk.Button(routing, text="Explorar conocimiento local",
                        command=self._knowledge_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Ejecutar evaluación local",
+                       command=self._run_evaluation_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ver evaluación o evolución",
                        command=self._experiment_report_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Inspeccionar checkpoint local",
@@ -1651,6 +1653,87 @@ def main() -> None:
             button.pack(side="right", padx=(8, 0))
             query.bind("<Return>", lambda _: search())
             search()
+
+        def _run_evaluation_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Ejecutar evaluación Foundation")
+            window.geometry("740x420")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            values = {name: tk.StringVar() for name in ("Checkpoint", "Suite JSON", "Informe nuevo")}
+            for row, (name, value) in enumerate(values.items()):
+                ttk.Label(frame, text=name).grid(row=row, column=0, sticky="w", pady=6)
+                ttk.Entry(frame, textvariable=value, width=58).grid(row=row, column=1, sticky="ew")
+                def choose(label=name, variable=value):
+                    if label == "Informe nuevo":
+                        path = filedialog.asksaveasfilename(parent=window, defaultextension=".json")
+                    else:
+                        path = filedialog.askopenfilename(parent=window)
+                    if path:
+                        variable.set(path)
+                ttk.Button(frame, text="Elegir", command=choose).grid(row=row, column=2, padx=5)
+            frame.columnconfigure(1, weight=1)
+            device = tk.StringVar(value="cpu")
+            budget = tk.StringVar(value="64")
+            ttk.Label(frame, text="Dispositivo").grid(row=3, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=12).grid(row=3, column=1, sticky="w")
+            ttk.Label(frame, text="Tokens por prueba").grid(row=4, column=0, sticky="w")
+            ttk.Entry(frame, textvariable=budget, width=12).grid(row=4, column=1, sticky="w")
+            status = tk.StringVar(value="Se ejecutará inferencia real. El informe no activa ni aprueba el modelo.")
+            ttk.Label(frame, textvariable=status, wraplength=660).grid(row=6, column=0, columnspan=3, sticky="w", pady=14)
+            cancellation = threading.Event()
+            events = queue.Queue()
+            def stop():
+                cancellation.set()
+                status.set("Cancelación solicitada; esperando al trabajo en curso…")
+            def start():
+                active = getattr(self, "evaluation_worker", None)
+                if active is not None and active.is_alive():
+                    status.set("Ya hay una evaluación local en curso.")
+                    return
+                try:
+                    count = int(budget.get())
+                    if not 1 <= count <= 4096 or any(not value.get().strip() for value in values.values()):
+                        raise ValueError("Completa las rutas y elige entre 1 y 4096 tokens.")
+                except ValueError as error:
+                    status.set(str(error))
+                    return
+                paths = [value.get().strip() for value in values.values()]
+                selected_device = device.get()
+                cancellation.clear()
+                start_button.configure(state="disabled")
+                status.set("Cargando checkpoint y ejecutando pruebas…")
+                def execute():
+                    try:
+                        from ai_home.foundation.evaluation_job import run_evaluation
+                        report = run_evaluation(*paths, device=selected_device, max_new_tokens=count,
+                                                cancel=cancellation, on_probe=lambda item: events.put(("progress", item)))
+                        events.put(("done", report))
+                    except Exception as error:
+                        events.put(("error", str(error)))
+                self.evaluation_worker = threading.Thread(target=execute, daemon=True)
+                self.evaluation_worker.start()
+            def poll():
+                if not window.winfo_exists():
+                    return
+                while not events.empty():
+                    kind, value = events.get_nowait()
+                    if kind == "progress":
+                        status.set(f"Pruebas completadas: {value['completed']}/{value['total']}")
+                    elif kind == "done":
+                        passed = sum(row["passed"] for row in value["results"])
+                        status.set(f"Informe guardado. Resultado: {passed}/{len(value['results'])} pruebas superadas.")
+                        start_button.configure(state="normal")
+                    else:
+                        status.set(value)
+                        start_button.configure(state="normal")
+                window.after(100, poll)
+            start_button = ttk.Button(frame, text="Evaluar y guardar", command=start)
+            start_button.grid(row=5, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Cancelar", command=stop).grid(row=5, column=2)
+            window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
+            poll()
 
         def _experiment_report_dialog(self) -> None:
             path = filedialog.askopenfilename(parent=self, title="Informe de evaluación o evolución",

@@ -491,3 +491,15 @@ well as experimental losses. Reports retain the regressed probe IDs. Tests
 include increasing aggregate accuracy that conceals a lost correct response,
 protocol mismatches, inconsistent metrics and real two-candidate training.
 Validation: 245 passed, 4 PostgreSQL skips. No acceptance or quality gain claimed.
+
+
+### Desktop evaluation execution
+
+Added checkpoint/suite/output selection, CPU/CUDA selection, generation budget,
+background execution, per-probe progress and cancellation. Window/profile/app
+closure requests cancellation; complete reports publish exclusively and partial
+reports are discarded. Real training/evaluation tests verify progress, read-back,
+output collision and pre/mid-run cancellation. A live Tk smoke invoked the actual
+button, evaluated the existing CUDA-trained checkpoint on CPU and saved a real
+10-probe report under artifacts/ui-review. Layout has not been visually reviewed.
+Full suite: 246 passed, 4 PostgreSQL skips. No quality or promotion claim.

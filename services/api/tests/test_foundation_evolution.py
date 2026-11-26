@@ -96,3 +96,32 @@ def test_suite_rejects_ambiguous_or_executable_scoring():
     suite["cases"][0]["execute"] = "print('untrusted code')"
     with pytest.raises(ValueError):
         ProbeSuite.model_validate(suite)
+
+
+def test_evaluation_job_progress_cancellation_and_exclusive_report(tmp_path):
+    import threading
+    from ai_home.foundation.evaluation import EvaluationCancelled
+    from ai_home.foundation.evaluation_job import run_evaluation
+    from ai_home.foundation.reports import read_report
+    checkpoint = tmp_path / "model.pt"
+    config = FoundationConfig(vocab_size=280, width=32, layers=1, heads=4, kv_heads=2, hidden=64, context=128)
+    train(records("job"), checkpoint, config, TrainingConfig(steps=1, warmup=0), "cpu")
+    suite = Path(__file__).resolve().parents[3] / "docs/evaluation-probes-v1.json"
+    output = tmp_path / "evaluation.json"
+    progress = []
+    result = run_evaluation(checkpoint, suite, output, max_new_tokens=2, on_probe=progress.append)
+    assert len(progress) == len(result["results"]) == 10
+    assert progress[-1]["completed"] == 10
+    assert read_report(output)["report"] == result
+    original = output.read_bytes()
+    with pytest.raises(FileExistsError):
+        run_evaluation(checkpoint, suite, output)
+    assert output.read_bytes() == original
+    cancellation = threading.Event()
+    cancelled = tmp_path / "cancelled.json"
+    with pytest.raises(EvaluationCancelled):
+        run_evaluation(checkpoint, suite, cancelled, max_new_tokens=2, cancel=cancellation,
+                       on_probe=lambda item: cancellation.set())
+    assert not cancelled.exists()
+    with pytest.raises(EvaluationCancelled):
+        run_evaluation(checkpoint, suite, cancelled, cancel=cancellation)

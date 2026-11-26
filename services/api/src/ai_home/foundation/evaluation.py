@@ -52,7 +52,16 @@ def normalize(text):
     return unicodedata.normalize("NFC", text).replace("\r\n", "\n").strip()
 
 
-def evaluate_checkpoint(path, suite, *, device="auto", max_new_tokens=64, max_bytes=2_000_000_000):
+class EvaluationCancelled(RuntimeError):
+    """Incomplete evaluations must not be published as complete reports."""
+
+
+def evaluate_checkpoint(path, suite, *, device="auto", max_new_tokens=64, max_bytes=2_000_000_000,
+                        cancel=None, on_probe=None):
+    def check_cancel():
+        if cancel is not None and cancel.is_set():
+            raise EvaluationCancelled("Evaluation cancelled; no complete report produced")
+    check_cancel()
     suite = ProbeSuite.model_validate(suite)
     device = select_device(device)
     if type(max_new_tokens) is not int or not 1 <= max_new_tokens <= 4096:
@@ -63,6 +72,7 @@ def evaluate_checkpoint(path, suite, *, device="auto", max_new_tokens=64, max_by
     if device == "cuda":
         torch.cuda.reset_peak_memory_stats()
     for probe in suite.cases:
+        check_cancel()
         texts = [probe.prompt, *(probe.prompt + "\n" + a for a in probe.answers)]
         if any(hashlib.sha256(normalize(t).encode()).hexdigest() in training_hashes for t in texts):
             raise ValueError("Probe overlaps known training documents")
@@ -71,7 +81,8 @@ def evaluate_checkpoint(path, suite, *, device="auto", max_new_tokens=64, max_by
         if device == "cuda":
             torch.cuda.synchronize()
         started = time.perf_counter()
-        tokens = list(stream_tokens(model, prompt, max_new_tokens=max_new_tokens, temperature=0))
+        tokens = list(stream_tokens(model, prompt, max_new_tokens=max_new_tokens, temperature=0, cancel=cancel))
+        check_cancel()
         if device == "cuda":
             torch.cuda.synchronize()
         elapsed = time.perf_counter() - started
@@ -81,6 +92,9 @@ def evaluate_checkpoint(path, suite, *, device="auto", max_new_tokens=64, max_by
                         "passed": passed, "prompt_truncated": truncated,
                         "prompt_tokens": len(prompt), "generated_tokens": len(tokens),
                         "generation_seconds": elapsed, "tokens_per_second": len(tokens) / elapsed})
+        if on_probe is not None:
+            on_probe({"completed": len(results), "total": len(suite.cases), "id": probe.id, "passed": passed})
+    check_cancel()
     categories = {}
     for category in sorted({p.category for p in suite.cases}):
         rows = [r for r in results if r["category"] == category]
