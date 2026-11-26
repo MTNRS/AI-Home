@@ -1706,3 +1706,13 @@ intactos y perdida coincidente con referencia dentro de tolerancia. Informes
 DISTRIBUTED_EVALUATION_SMOKE.json y DISTRIBUTED_EVALUATION_CPU_SMOKE.json.
 Anadido gate CPU/CPU de paquete instalado en CI (ejecucion remota pendiente).
 No son dos equipos fisicos ni evidencia de capacidad linguistica.
+
+### Permiso de evaluacion en el nodo de escritorio
+
+Casilla independiente, desactivada inicialmente, transmitida al trabajador junto
+con CPU/CUDA seleccionado aun cuando entrenamiento esta desactivado. Cambio de
+perfil borra ambos permisos. 37 pruebas escritorio/privacidad aprobadas y smokes
+Tk reales de navegacion y cambio de perfil correctos. La prueba del limite del
+trabajador usa captura de argumentos; la evaluacion real por sockets esta cubierta
+por el smoke anterior. Revision visual del panel actualizado y formulario de
+coordinacion de evaluaciones siguen pendientes.

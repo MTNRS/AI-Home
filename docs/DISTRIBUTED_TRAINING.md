@@ -432,8 +432,10 @@ exige RAM suficiente, respeta snapshots de recursos/caducidad y VRAM CUDA, y no
 entrega estas tareas a trabajadores antiguos. En Python se habilita mediante
 `NodeAgent(..., allow_foundation_evaluation=True)`, seguido de
 `configure_capabilities()` y el bucle habitual `run_once()`. El permiso es
-independiente de `allow_foundation_training`; el escritorio todavia no expone
-esta nueva opcion. No se habilita por instalar una actualizacion.
+independiente de `allow_foundation_training`. El panel de nodos del escritorio
+incluye una casilla de evaluacion separada, desactivada por defecto; usa el
+dispositivo Foundation seleccionado. Cambiar de perfil revoca ambos permisos
+locales y detiene el bucle anterior. No se habilita por instalar una actualizacion.
 
 Resultados alterados se rechazan antes de liquidar creditos. Se reutilizan reservas,
 leases, idempotencia y liquidacion transaccional. El test de API usa transporte

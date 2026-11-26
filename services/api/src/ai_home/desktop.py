@@ -2611,6 +2611,7 @@ def main() -> None:
             self.consent_var = tk.BooleanVar(value=False)
             self.transfer_probe_var = tk.BooleanVar(value=False)
             self.node_training_var = tk.BooleanVar(value=False)
+            self.node_evaluation_var = tk.BooleanVar(value=False)
             self.node_device_var = tk.StringVar(value="cpu")
             ttk.Checkbutton(
                 parent,
@@ -2619,9 +2620,11 @@ def main() -> None:
             ).pack(anchor="w", pady=8)
             ttk.Checkbutton(parent, text="Permitir entrenamiento Foundation experimental con datos públicos.",
                             variable=self.node_training_var).pack(anchor="w", pady=4)
+            ttk.Checkbutton(parent, text="Permitir evaluación Foundation experimental con datos públicos.",
+                            variable=self.node_evaluation_var).pack(anchor="w", pady=4)
             device_row = ttk.Frame(parent)
             device_row.pack(anchor="w", pady=4)
-            ttk.Label(device_row, text="Dispositivo de entrenamiento:").pack(side="left")
+            ttk.Label(device_row, text="Dispositivo Foundation:").pack(side="left")
             ttk.Combobox(device_row, textvariable=self.node_device_var, values=("cpu", "cuda"),
                          state="readonly", width=8).pack(side="left", padx=8)
             ttk.Label(parent, text="Requiere PyTorch compatible y autorización del servidor. CUDA no usa CPU como alternativa.",
@@ -3028,6 +3031,7 @@ def main() -> None:
             self.node_registration_active = False
             self.consent_var.set(False)
             self.node_training_var.set(False)
+            self.node_evaluation_var.set(False)
             self.transfer_probe_var.set(False)
             for window in self.private_windows:
                 if window.winfo_exists():
@@ -3501,7 +3505,7 @@ def main() -> None:
             self.node_thread = threading.Thread(
                 target=self._node_loop,
                 args=(server_url, node_id, token, stop_event, self.transfer_probe_var.get(),
-                      self.node_training_var.get(), self.node_device_var.get()),
+                      self.node_training_var.get(), self.node_device_var.get(), self.node_evaluation_var.get()),
                 daemon=True,
             )
             self.node_thread.start()
@@ -3516,10 +3520,12 @@ def main() -> None:
             measure_transfer: bool = False,
             allow_training: bool = False,
             foundation_device: str = "cpu",
+            allow_evaluation: bool = False,
         ) -> None:
             agent = NodeAgent(server_url=server_url, node_token=token,
                               allow_foundation_training=allow_training,
-                              foundation_device=foundation_device if allow_training else "cpu",
+                              allow_foundation_evaluation=allow_evaluation,
+                              foundation_device=foundation_device if allow_training or allow_evaluation else "cpu",
                               transfer_probe_interval=60 if measure_transfer else None)
             valid = lambda: self.node_stop is stop_event
             try:

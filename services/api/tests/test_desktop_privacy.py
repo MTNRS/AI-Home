@@ -54,7 +54,7 @@ def test_profile_switch_clears_chat_and_closes_old_memory_dialogs(tmp_path, monk
         private_windows=[window], memory_notes=["old secret"],
         prompt=Mock(), api_key_var=Mock(), use_knowledge_var=Mock(), prompt_is_placeholder=True,
         _clear_chat=Mock(), server_version_combo=Mock(), stream_enabled_var=Mock(),
-        node_stop=Mock(), consent_var=Mock(), node_training_var=Mock(), transfer_probe_var=Mock(),
+        node_stop=Mock(), consent_var=Mock(), node_training_var=Mock(), node_evaluation_var=Mock(), transfer_probe_var=Mock(),
     )
     method("_switch_memory_profile")(app, "https://one.example", str(uuid4()))
     assert app.memory_notes == []
@@ -140,3 +140,21 @@ def test_late_stream_fragments_are_discarded_after_stop_or_conversation_change()
                           chat_preview_var=preview, after=Mock(), _drain_events=Mock())
     method("_drain_events")(app)
     preview.set.assert_called_once_with("accepted")
+
+
+def test_node_evaluation_permission_is_independent_and_keeps_selected_device(monkeypatch):
+    import queue
+    import threading
+    agent = Mock()
+    factory = Mock(return_value=agent)
+    monkeypatch.setattr(desktop, "NodeAgent", factory)
+    stopped = threading.Event()
+    stopped.set()
+    app = SimpleNamespace(node_stop=stopped, events=queue.Queue())
+    method("_node_loop")(app, "http://127.0.0.1", "node", "test-token", stopped,
+                         allow_training=False, foundation_device="cuda", allow_evaluation=True)
+    assert factory.call_args.kwargs["allow_foundation_training"] is False
+    assert factory.call_args.kwargs["allow_foundation_evaluation"] is True
+    assert factory.call_args.kwargs["foundation_device"] == "cuda"
+    agent.configure_capabilities.assert_called_once()
+    agent.close.assert_called_once()
