@@ -76,7 +76,7 @@ def main():
     parser.add_argument("--vocab-size", required=True, type=int)
     parser.add_argument("--seed", default=42, type=int)
     args = parser.parse_args()
-    print(json.dumps(expand_checkpoint(args.parent, args.output, load_records(args.corpus),
+    print(json.dumps(expand_checkpoint(args.parent, args.output, load_records(args.corpus)[0],
                                        args.vocab_size, args.seed)))
 
 

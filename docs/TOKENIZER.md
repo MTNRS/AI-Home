@@ -24,6 +24,7 @@ training lineage. The parent and existing outputs cannot be overwritten.
 This changes text segmentation and output probabilities, even though old IDs
 remain valid. Re-tokenize datasets and evaluate again. The artifact is not an
 exact-resume checkpoint: optimizer state and prior evaluation results are omitted.
-Use the Python trainer's `initial_checkpoint` argument for fresh optimizer training,
+Use training CLI `--initial-checkpoint expanded.pt` (or the Python trainer's
+`initial_checkpoint` argument) for fresh optimizer training,
 then the normal evaluation and approval process. No model is activated by migration.
 The memory budget checks model tensors, not a hard process-memory limit.

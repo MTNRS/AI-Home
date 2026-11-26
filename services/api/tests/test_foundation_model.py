@@ -176,3 +176,44 @@ def test_vocabulary_migration(tmp_path, tied):
     trained = train(records(), tmp_path / "trained.pt", training=TrainingConfig(steps=1, warmup=0),
                     device="cpu", initial_checkpoint=target)
     assert trained["embedding_delta_l2"] > 0
+
+
+def test_vocabulary_and_fresh_training_cli_end_to_end(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+    from dataclasses import asdict
+    from ai_home.foundation.data import split_records
+    parent = tmp_path / "parent.pt"
+    settings = TrainingConfig(steps=1, warmup=0)
+    train(records(), parent, config(), settings, "cpu")
+    original = parent.read_bytes()
+    corpus, holdout = split_records(records())
+    for name, documents in (("corpus", corpus), ("holdout", holdout)):
+        (tmp_path / (name + ".json")).write_text(json.dumps({"format_version": 1, "records": documents}), encoding="utf-8")
+    (tmp_path / "settings.json").write_text(json.dumps(asdict(settings)), encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src"), "OMP_NUM_THREADS": "1"}
+    def invoke(module, *arguments):
+        return subprocess.run([sys.executable, "-m", module, *map(str, arguments)],
+                              env=env, capture_output=True, text=True, timeout=60)
+    expanded = tmp_path / "expanded.pt"
+    result = invoke("ai_home.foundation.vocabulary", parent, tmp_path / "corpus.json", expanded,
+                    "--vocab-size", 290)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["new_size"] > 280
+    trained = tmp_path / "trained.pt"
+    args = ["--dataset", tmp_path / "corpus.json", "--validation-dataset", tmp_path / "holdout.json",
+            "--training-config", tmp_path / "settings.json", "--initial-checkpoint", expanded,
+            "--output", trained, "--device", "cpu", "--auto-fit"]
+    result = invoke("ai_home.foundation", *args)
+    assert result.returncode == 0, result.stderr
+    payload = load_checkpoint(trained)[2]
+    assert payload["embedding_delta_l2"] > 0 and payload["training_complete"]
+    assert payload["config"] == load_checkpoint(expanded)[2]["config"]
+    assert json.loads(result.stdout.splitlines()[-1])["training_complete"]
+    assert parent.read_bytes() == original
+    conflict = invoke("ai_home.foundation", *args, "--resume", parent)
+    assert conflict.returncode == 2
+    shrinking = invoke("ai_home.foundation", *args, "--allow-model-shrink")
+    assert shrinking.returncode == 2

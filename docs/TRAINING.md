@@ -168,3 +168,21 @@ planned step is reported as completed even if a stop was also requested.
 CPU and CUDA tests stop real training after step 2 with gradient accumulation,
 reload the saved checkpoint and resume to step 4. Every resulting model tensor
 is compared against uninterrupted training (atol 1e-6, rtol 1e-5).
+
+
+## Fresh training from a parent candidate
+
+Use `--initial-checkpoint parent.pt` to preserve a parent model and tokenizer
+while starting a new optimizer and training schedule. This differs from exact
+`--resume`; the flags are mutually exclusive. `--validation-dataset holdout.json`
+uses an explicit authorized independent holdout. Existing lineage checks reject
+training on earlier holdouts or evaluating earlier training documents.
+
+```powershell
+python -m ai_home.foundation --dataset corpus.json --validation-dataset holdout.json --initial-checkpoint expanded.pt --training-config training.json --output trained.pt --device cuda --auto-fit
+```
+
+With a parent, automatic resource fitting uses the actual parent architecture
+and may adjust microbatch/accumulation. Architecture shrinking is prohibited.
+An explicitly supplied model configuration must match the parent. The output
+is a candidate requiring evaluation and approval, not a newly active model.

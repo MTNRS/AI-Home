@@ -5,6 +5,7 @@ import signal
 import threading
 from pathlib import Path
 
+from .checkpoint import load_checkpoint
 from .data import load_records
 from .model import FoundationConfig
 from .training import TrainingConfig, TrainingCancelled, train, select_device
@@ -12,7 +13,7 @@ from .resources import plan_training
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI@Home Foundation: training from random weights")
+    parser = argparse.ArgumentParser(description="AI@Home Foundation: training from random weights or an explicit parent candidate")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--dataset", type=Path)
     source.add_argument("--reviewed-export", type=Path)
@@ -22,18 +23,32 @@ def main():
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--auto-fit", action="store_true")
     parser.add_argument("--allow-model-shrink", action="store_true")
-    parser.add_argument("--resume", type=Path)
+    initialization = parser.add_mutually_exclusive_group()
+    initialization.add_argument("--resume", type=Path)
+    initialization.add_argument("--initial-checkpoint", type=Path,
+                                help="Start a new training run from a parent with a fresh optimizer")
+    parser.add_argument("--validation-dataset", type=Path,
+                        help="Independent authorized holdout; otherwise split the training dataset")
     parser.add_argument("--stop-after", type=int)
     args = parser.parse_args()
     if args.allow_model_shrink and not args.auto_fit:
         parser.error("--allow-model-shrink requires --auto-fit")
     if args.auto_fit and args.resume:
         parser.error("Automatic configuration changes are not permitted during resume")
+    if args.initial_checkpoint and args.allow_model_shrink:
+        parser.error("Parent checkpoint architecture cannot be shrunk")
     records = load_records(args.dataset)[0] if args.dataset else None
     model = FoundationConfig(**json.loads(args.model_config.read_text())) if args.model_config else None
     training = TrainingConfig(**json.loads(args.training_config.read_text())) if args.training_config else TrainingConfig()
     if args.reviewed_export and training.objective != "sft":
         parser.error("--reviewed-export requires a training configuration with objective=sft")
+    validation = load_records(args.validation_dataset)[0] if args.validation_dataset else None
+    if args.initial_checkpoint and args.auto_fit:
+        parent_model, parent_tokenizer, parent_payload = load_checkpoint(args.initial_checkpoint, max_bytes=training.memory_budget_bytes)
+        if model is not None and model != parent_model.config:
+            parser.error("Model configuration differs from parent checkpoint")
+        model = parent_model.config
+        del parent_model, parent_tokenizer, parent_payload
     if args.auto_fit:
         args.device = select_device(args.device)
         model, training, plan = plan_training(model or FoundationConfig(), training, args.device,
@@ -53,7 +68,8 @@ def main():
     try:
         result = train(records, args.output, model, training, args.device, args.resume,
                        args.stop_after, on_step=lambda value: print(json.dumps(value), flush=True),
-                       reviewed_export=args.reviewed_export, cancel=cancel)
+                       reviewed_export=args.reviewed_export, cancel=cancel,
+                       initial_checkpoint=args.initial_checkpoint, validation_records=validation)
     except TrainingCancelled:
         print(json.dumps({"status": "cancelled_before_update", "checkpoint_created": False}), flush=True)
         raise SystemExit(130)

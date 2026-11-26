@@ -457,3 +457,15 @@ Validation: full existing suite 237 passed, 4 PostgreSQL skips; after adding
 migration cases the focused model suite passed all 12 tests. Initial new tests
 used invalid warmup settings, corrected before the passing run. No quality
 improvement or automatic promotion is claimed. See TOKENIZER.md for usage.
+
+
+### Reproducible expanded-vocabulary training CLI
+
+Added `--initial-checkpoint` and `--validation-dataset`; fresh optimizer training
+is distinct from exact resume. Auto-fit uses the actual parent architecture and
+cannot shrink it. Fixed the vocabulary CLI's dataset-loader tuple unpacking,
+which Python API-only tests had not exercised. A real subprocess test now runs
+vocabulary expansion followed by fresh CPU training with explicit holdout and
+auto-fit, checks changed weights, preserved parent, matching architecture and
+rejects conflicting resume/shrink options. Full suite: 240 passed, 4 PostgreSQL
+tests skipped because the server is unavailable.
