@@ -1,6 +1,6 @@
 # Verificación Foundation — 2026-11-26
 
-Estado vigente: Linux/Python 3.11 y 3.12 con PostgreSQL verificaron 267 pruebas correctas y 8 omisiones CUDA; Foundation CPU verificó 262 y 13 omisiones opcionales, además del entrenamiento smoke. Revisión `2e3d4c4`. Enlaces, diferencias con Windows/CUDA y alcance en [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md). Los resultados posteriores de este documento son históricos.
+Estado vigente en `1f12fd8`: Windows/CUDA, 291 correctas y 5 omisiones PostgreSQL; Linux/PostgreSQL Python 3.11 y 3.12, 288 correctas y 8 omisiones CUDA por versión; Foundation CPU, 283 correctas y 13 omisiones. El paquete Nano se construyó/verificó en CI y en un entorno Windows nuevo sin instalación editable. Véanse [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md) y [CLEAN_REPRODUCTION.md](CLEAN_REPRODUCTION.md). Los apartados posteriores son históricos.
 
 ## Ejecución actual
 

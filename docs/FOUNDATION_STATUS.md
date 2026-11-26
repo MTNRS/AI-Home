@@ -9,10 +9,10 @@ otros documentos describen el estado en que se escribieron, no el estado actual.
 ## Evidencia vigente de ejecución y entrega
 
 - Rama: `codex/foundation-validation`; PR borrador [#1](https://github.com/MTNRS/AI-Home/pull/1).
-- Revisión de código validada remotamente: `2e3d4c40f43d9d9e1b3c85910191fc10a19cd710`.
-- [Matriz Linux/PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45812648778): Python 3.11 y 3.12, cada uno 267 pruebas correctas y 8 omitidas por CUDA ausente.
-- [Foundation CPU](https://github.com/MTNRS/AI-Home/actions/runs/45812648867): 262 correctas, 13 omitidas (CUDA y PostgreSQL opcionales), entrenamiento smoke real y artefacto subido.
-- Última suite Windows/CUDA completa anterior al ajuste de sincronización del test: 270 correctas, 5 PostgreSQL omitidas. Después del ajuste: las 3 pruebas de streaming correctas localmente.
+- Revisión validada remotamente: `1f12fd8` (paquete experimental Nano incluido).
+- [Matriz Linux/PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45819653191): Python 3.11 y 3.12, cada uno 288 pruebas correctas y 8 omitidas por CUDA ausente.
+- [Foundation CPU](https://github.com/MTNRS/AI-Home/actions/runs/45819653096): 283 correctas, 13 omitidas; entrenamiento real, empaquetado/verificación y artefacto subido.
+- Suite Windows/CUDA: 291 correctas, 5 PostgreSQL omitidas. Reproducción adicional en venv CPU nuevo con instalación wheel no editable: entrenamiento/reanudación/inferencia y paquetes local/Linux verificados; [alcance y comandos](CLEAN_REPRODUCTION.md).
 - `main` permanece en `2ddea7dd3c2a048212ca3e64b68190a26080ed76`. La copia importada tenía historia independiente; se enlazó con el historial remoto mediante un merge sin cambiar el árbol local. No se hizo force-push.
 - La PR es entrega revisable de trabajo experimental, no una versión estable ni finalización del objetivo.
 
@@ -38,7 +38,7 @@ otros documentos describen el estado en que se escribieron, no el estado actual.
 | Interfaz (17) | Chat, training/evaluation/evolution, conocimiento, créditos, inspección y registro con rollback funcionales | Consolidar secciones nombradas; revisión visual de diálogos recientes; no hay evidencia visual integral |
 | Pruebas (18) | CPU/CUDA local; Linux 3.11/3.12/PostgreSQL remoto; entrenamientos y cambios reales de pesos | Ampliar al resto de funcionalidades pendientes y mantener evidencia de cada revisión |
 | Aceptación (19) | Los 22 criterios tienen componentes y demostraciones locales parciales descritos arriba | No se reduce el objetivo a sus criterios mínimos; falta auditar todos los requisitos explícitos antes de declarar aceptación |
-| Entrega (20) | Código, configuraciones, informes y PR publicados; paquete Nano smoke con pesos/corpus propios, manifiesto y verificador en Actions ([detalle](SMOKE_DISTRIBUTION.md)) | Corpus/evaluaciones representativos redistribuibles, instrucciones verificadas en entorno limpio y auditoría final |
+| Entrega (20) | Código, configuraciones, informes y PR publicados; paquete Nano smoke con pesos/corpus propios, manifiesto y verificador en Actions ([detalle](SMOKE_DISTRIBUTION.md)) | Corpus/evaluaciones representativos redistribuibles, reproducción integral de API/GUI/servicios y auditoría final |
 | Prioridad y misión (21–22) | Pesos propios desde cero; modelo externo no sustituye automáticamente Foundation | Plataforma generalista/multimodal/comunitaria sigue siendo objetivo de investigación, no capacidad obtenida |
 
 ## Próximas líneas de implementación

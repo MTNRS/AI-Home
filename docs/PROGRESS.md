@@ -928,3 +928,14 @@ o aprobación de calidad. Actions construye, verifica y sube el paquete por sepa
 Suite local: 291 correctas, 5 PostgreSQL omitidas, 46,50 segundos. Incluye pruebas
 con entrenamiento real y rechazos por corrupción, metadatos, rutas y privacidad.
 CI previa (9930d35): Foundation y PostgreSQL Python 3.11/3.12 correctos.
+
+### Reproducción desde instalación aislada
+
+Checkout fijado a 1f12fd8, venv Windows nuevo, PyTorch 2.15.0+cpu y wheel del proyecto
+sin modo editable. Ejecución fuera del checkout con Python -I: entrenamiento,
+reanudación, carga, generación, empaquetado y verificación correctos; pip check
+sin dependencias rotas. También descargado y verificado en ese entorno el paquete
+real producido por Linux CI. Documentados hashes, reporte, comandos y límites en
+CLEAN_REPRODUCTION.md. No es una instalación integral de API/GUI/distribuido ni
+una máquina nueva. CI de 1f12fd8: Foundation 283/13 omitidas; PostgreSQL Python
+3.11 y 3.12, 288/8 omitidas cada uno. Inventario y encabezado TESTING actualizados.
