@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import time
+import threading
 from typing import Literal
 import uuid
 
@@ -212,6 +213,7 @@ def create_app(
     )
 
     app = FastAPI(title="AI@Home API", version="0.1.0")
+    foundation_inference_lock = threading.Lock()
     app.state.settings = application_settings
     app.state.engine = database_engine
     app.state.session_factory = session_factory
@@ -471,6 +473,33 @@ def create_app(
         current_user: AuthenticatedUser = Depends(get_current_user),
     ) -> ChatCompletionResponse:
         settings: Settings = request.app.state.settings
+        if settings.chat_backend == "foundation":
+            if settings.foundation_checkpoint is None:
+                raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
+            # One active local generation per process; no prompts or KV caches are shared.
+            if not foundation_inference_lock.acquire(blocking=False):
+                raise HTTPException(status_code=503, detail="Foundation inference is busy.",
+                                    headers={"Retry-After": "1"})
+            try:
+                from ai_home.foundation.inference import complete
+
+                answer = complete(
+                    [message.model_dump() for message in payload.messages],
+                    settings.foundation_checkpoint,
+                    device=settings.foundation_device,
+                    max_bytes=settings.foundation_memory_budget_bytes,
+                    max_new_tokens=settings.foundation_max_new_tokens,
+                )
+            except Exception:
+                # Do not return filesystem paths, checkpoint contents or conversation data.
+                raise HTTPException(status_code=503,
+                                    detail="Foundation inference failed; verify the checkpoint and runtime.") from None
+            finally:
+                foundation_inference_lock.release()
+            return ChatCompletionResponse(choices=[{
+                "index": 0, "message": {"role": "assistant", "content": answer},
+                "finish_reason": "stop",
+            }])
         if settings.chat_provider_url is None or settings.chat_provider_model is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

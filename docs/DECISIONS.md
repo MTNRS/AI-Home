@@ -61,3 +61,7 @@ Se añade un subsistema propio en `ai_home.foundation` con BPE desde cero, Trans
 Consultar [auditoría y matriz completa](FOUNDATION_AUDIT.md), [modelo](FOUNDATION_MODEL.md), [entrenamiento](TRAINING.md) y [pruebas](TESTING.md). Aprendizaje continuo, distribución, créditos de entrenamiento, RAG público, evolución y paneles completos siguen pendientes; no se reduce el objetivo ni se declaran demostrados.
 
 
+
+## 2026-11-26: backend Foundation explícito y aislamiento por petición
+
+Foundation pasa a ser el backend HTTP predeterminado. El proxy externo se conserva con selección explícita. No se comparte KV cache ni se ingieren mensajes del chat; el checkpoint es configuración del servidor. El bloqueo no espera ni acumula peticiones: responde ocupado. El límite es por proceso, no un scheduler global.

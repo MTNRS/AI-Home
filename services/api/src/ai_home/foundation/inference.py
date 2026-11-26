@@ -67,10 +67,10 @@ def stream_text(model, tokenizer, messages, **options):
         yield final
 
 
-def complete(messages, checkpoint_path, device="auto", **options):
+def complete(messages, checkpoint_path, device="auto", max_bytes=2_000_000_000, **options):
     if not Path(checkpoint_path).is_file():
         raise RuntimeError("No existe el checkpoint del modelo fundacional seleccionado.")
-    model, tokenizer, _ = load_checkpoint(checkpoint_path, select_device(device))
+    model, tokenizer, _ = load_checkpoint(checkpoint_path, select_device(device), max_bytes=max_bytes)
     answer = "".join(stream_text(model, tokenizer, messages, **options))
     if not answer.strip():
         raise RuntimeError("El modelo no ha producido texto; necesita entrenamiento y evaluación.")

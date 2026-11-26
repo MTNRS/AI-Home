@@ -1,6 +1,7 @@
 """Environment-backed application settings."""
 
 from typing import Literal
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, SecretStr, model_validator
@@ -21,6 +22,11 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite+pysqlite:///./ai_home.db"
     session_lifetime_seconds: int = 86_400
+    chat_backend: Literal["foundation", "openai-compatible"] = "foundation"
+    foundation_checkpoint: Path | None = None
+    foundation_device: Literal["auto", "cpu", "cuda"] = "auto"
+    foundation_max_new_tokens: int = Field(default=128, ge=1, le=4096)
+    foundation_memory_budget_bytes: int = Field(default=2_000_000_000, ge=1)
     chat_provider_url: str | None = None
     chat_provider_model: str | None = None
     chat_provider_api_key: SecretStr = SecretStr("")

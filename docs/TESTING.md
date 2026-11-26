@@ -16,3 +16,7 @@ La salida generada es incoherente. Este experimento demuestra ejecución, no cal
 ## Antecedentes
 
 La sesión anterior no disponía de torch/pytest y no pudo ejecutar la validación neuronal. Esa limitación queda superada para CPU. El workflow `.github/workflows/foundation.yml` sigue pendiente de publicación y ejecución remotas.
+
+## Integración HTTP posterior
+
+`python -m pytest -q`: 129 aprobadas, 5 omitidas, 11,59 segundos. `git diff --check`: exit 0. El test de chat entrena pesos reales, verifica autenticación, compara HTTP con inferencia directa en dos conversaciones y comprueba errores con checkpoints corruptos/ausentes sin fallback externo. La generación neuronal no se simula.

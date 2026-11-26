@@ -8,7 +8,7 @@ Arquitectura: decoder causal, RoPE, GQA configurable, RMSNorm, SwiGLU, conexione
 
 Micro, Small, Medium y Large siguen pendientes de benchmarks y presupuestos medidos. No se atribuye capacidad lingüística, razonamiento o multimodalidad. La estimación de memoria es aproximada y rechaza configuraciones excesivas; todavía no realiza autoajuste mediante benchmarks.
 
-El proveedor de escritorio AI@Home Foundation acepta el nombre de un checkpoint .pt del directorio de modelos de AI@Home. No tiene fallback a un proveedor externo. El proveedor byte-level mantiene su comportamiento previo. El servicio HTTP todavía no expone este motor como backend propio; integración de escritorio escrita, no probada en ejecución.
+El proveedor de escritorio AI@Home Foundation acepta el nombre de un checkpoint .pt del directorio de modelos de AI@Home. No tiene fallback a un proveedor externo. El proveedor byte-level mantiene su comportamiento previo. El servicio HTTP expone Foundation mediante `/api/v1/chat/completions`, con autenticación y checkpoint configurado por el operador. La prueba de integración entrena un checkpoint y compara las respuestas HTTP con inferencia directa real. La interfaz gráfica sigue sin revisión visual.
 
 Referencias técnicas consultadas: https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention y https://docs.pytorch.org/docs/stable/notes/serialization . La implementación utiliza primitivas de PyTorch y no incorpora una implementación completa de otro modelo.
 

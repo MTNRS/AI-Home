@@ -203,3 +203,26 @@ Se añade un subsistema propio en `ai_home.foundation` con BPE desde cero, Trans
 Consultar [auditoría y matriz completa](FOUNDATION_AUDIT.md), [modelo](FOUNDATION_MODEL.md), [entrenamiento](TRAINING.md) y [pruebas](TESTING.md). Aprendizaje continuo, distribución, créditos de entrenamiento, RAG público, evolución y paneles completos siguen pendientes; no se reduce el objetivo ni se declaran demostrados.
 
 
+
+## Chat HTTP con Foundation (2026-11-26)
+
+Configurar `AI_HOME_CHAT_BACKEND=foundation` (valor predeterminado),
+`AI_HOME_FOUNDATION_CHECKPOINT` con la ruta al checkpoint propio y
+`AI_HOME_FOUNDATION_DEVICE=cpu`, `cuda` o `auto`. El límite de salida se configura
+con `AI_HOME_FOUNDATION_MAX_NEW_TOKENS` (1–4096); el presupuesto de carga con
+`AI_HOME_FOUNDATION_MEMORY_BUDGET_BYTES`. El checkpoint lo elige el operador,
+no una ruta arbitraria enviada por el cliente.
+
+La ruta autenticada `/api/v1/chat/completions` usa inferencia neuronal local.
+Un checkpoint ausente, corrupto o una dependencia no disponible devuelve 503;
+no hay fallback externo. Cada petición crea su propio modelo/cache y no guarda
+mensajes ni los incorpora al entrenamiento. Una generación simultánea por
+proceso; se devuelve 503 y Retry-After cuando está ocupado. Desplegar un único
+worker por dispositivo para respetar este límite. La carga por petición es
+conservadora y puede añadir latencia; caché de pesos compartida pendiente.
+
+Para conservar el proxy externo, configurar explícitamente
+`AI_HOME_CHAT_BACKEND=openai-compatible` además de sus variables anteriores.
+Esta selección explícita es necesaria al actualizar instalaciones del proxy.
+El endpoint HTTP devuelve una respuesta completa; streaming/cancelación HTTP
+siguen pendientes (el generador neuronal ya soporta ambos localmente).

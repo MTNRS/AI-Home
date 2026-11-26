@@ -162,3 +162,7 @@ Se añade un subsistema propio en `ai_home.foundation` con BPE desde cero, Trans
 Consultar [auditoría y matriz completa](FOUNDATION_AUDIT.md), [modelo](FOUNDATION_MODEL.md), [entrenamiento](TRAINING.md) y [pruebas](TESTING.md). Aprendizaje continuo, distribución, créditos de entrenamiento, RAG público, evolución y paneles completos siguen pendientes; no se reduce el objetivo ni se declaran demostrados.
 
 
+
+## Integración HTTP Foundation — 2026-11-26
+
+Implementada inferencia propia autenticada en el endpoint de chat, configuración de dispositivo/presupuesto/salida y exclusión mutua por proceso. Prueba real con entrenamiento y generación, rechazo de checkpoint corrupto/ausente y ausencia de fallback externo: 11 pruebas de chat aprobadas. Streaming HTTP, selección de versiones por usuario e interfaz de control completa siguen pendientes.

@@ -20,6 +20,7 @@ def client():
     app = create_app(
         Settings(
             environment="test",
+            chat_backend="openai-compatible",
             chat_provider_url="http://localhost:11434/v1",
             chat_provider_model="test-model",
             chat_provider_api_key="provider-secret",
@@ -165,4 +166,62 @@ def test_chat_endpoint_converts_provider_failure_to_gateway_error(
     assert response.json()["detail"] == (
         "Configured chat provider failed to complete the request."
     )
+
+
+def test_foundation_chat_uses_real_trained_checkpoint(client, tmp_path, monkeypatch):
+    torch = pytest.importorskip("torch")
+    from ai_home.foundation.model import FoundationConfig
+    from ai_home.foundation.training import TrainingConfig, train
+    from ai_home.foundation.inference import complete
+
+    torch.set_num_threads(1)
+    records = [{"source": "authored API test", "url": "local:test", "license": "Apache-2.0",
+                "date": "2026-11-26", "language": "es", "training_allowed": True,
+                "privacy_reviewed": True, "visibility": "public",
+                "text": (f"Documento {i}: entrenamos un modelo propio con datos revisados. " * 12)}
+               for i in range(8)]
+    path = tmp_path / "candidate.pt"
+    result = train(records, path,
+                   FoundationConfig(vocab_size=280, width=32, layers=2, heads=4,
+                                    kv_heads=2, hidden=64, context=16),
+                   TrainingConfig(steps=2, warmup=1), "cpu")
+    assert result["embedding_delta_l2"] > 0
+    settings = client.app.state.settings
+    settings.chat_backend = "foundation"
+    settings.foundation_checkpoint = path
+    settings.foundation_device = "cpu"
+    settings.foundation_max_new_tokens = 8
+
+    def forbidden_external(*args, **kwargs):
+        pytest.fail("Foundation must never fall back to external inference")
+
+    monkeypatch.setattr("ai_home.api.chat_completion", forbidden_external)
+    messages = [{"role": "user", "content": "Hola"}]
+    assert client.post("/api/v1/chat/completions", json={"messages": messages}).status_code == 401
+    token = create_session(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.post("/api/v1/chat/completions", headers=headers, json={"messages": messages})
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-store"
+    assert response.json()["choices"][0]["message"]["content"] == complete(
+        messages, path, device="cpu", max_new_tokens=8)
+    # A subsequent conversation has its own prompt and cache.
+    other = [{"role": "user", "content": "Otra pregunta"}]
+    response = client.post("/api/v1/chat/completions", headers=headers, json={"messages": other})
+    assert response.json()["choices"][0]["message"]["content"] == complete(
+        other, path, device="cpu", max_new_tokens=8)
+    path.write_bytes(b"invalid checkpoint")
+    response = client.post("/api/v1/chat/completions", headers=headers, json={"messages": messages})
+    assert response.status_code == 503
+    assert str(tmp_path) not in response.text
+    path.unlink()
+    assert client.post("/api/v1/chat/completions", headers=headers,
+                       json={"messages": messages}).status_code == 503
+
+
+def test_foundation_is_default_and_has_bounded_generation():
+    assert Settings(_env_file=None).chat_backend == "foundation"
+    for value in (0, 4097):
+        with pytest.raises(ValueError):
+            Settings(_env_file=None, foundation_max_new_tokens=value)
 
