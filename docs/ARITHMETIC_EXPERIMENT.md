@@ -83,3 +83,35 @@ Reproducción: `python -m ai_home.foundation.arithmetic_robustness --checkpoints
 RUTA1 RUTA2 RUTA3 --output-dir NUEVO --device cuda` (en una sola línea).
 [Informe completo](ARITHMETIC_ROBUSTNESS.json). Artefactos locales en
 `artifacts/arithmetic-robustness-v1`; script y suite procedural versionados.
+
+## Hipótesis: ampliar formatos de entrenamiento
+
+Tras observar fragilidad, se fijó la siguiente intervención: expandir solamente
+los 70 pares train a cuatro formatos (280 registros); conservar las 16 preguntas
+de validación originales y los pares de desarrollo reservados. Modelo, semillas
+42/7/123, LR, precisión, batch y 1.000 actualizaciones permanecen iguales. El
+presupuesto de pasos/contexto coincide, aunque cambian ejemplos muestreados y
+longitudes de entrada; no es igualdad de datos vistos ni de tiempo exacto.
+
+Las tres ejecuciones CUDA desde cero finalizan con resultados por formato
+(original/espacios/Suma/Add) de 10/14 en semilla 42, 11/14 en 7 y 8/14 en 123.
+La invariancia de puntuación mejora, pero no basta para aceptación: la comparación
+por probe mediante `evolution.probe_regressions` detecta 4 regresiones en semilla
+42, ninguna en 7 y 3 en 123 respecto de sus controles. Se rechaza la promoción
+incondicional; no se publica un candidato. El resultado de semilla 7 requiere
+confirmación independiente, no selección retrospectiva como ganador.
+
+Esta suite ya había sido inspeccionada y motivó la intervención: es evaluación
+de desarrollo, no prueba independiente final. Ningún par reservado ni su
+permutación entró en entrenamiento. Dos pruebas del protocolo comprueban la
+separación. El campo `selection` del CLI se aclaró a «sin ajustes dentro de la
+ejecución»; los protocolos locales anteriores conservan su texto histórico,
+que no debe interpretarse como ausencia de adaptación a resultados previos.
+
+Reproducir con `arithmetic_experiment --augment-formats --seed N` y después
+`arithmetic_robustness` sobre los tres candidatos. Informes publicados:
+[comparación](ARITHMETIC_AUGMENTATION_COMPARISON.json) y
+[evaluación completa](ARITHMETIC_AUGMENTATION_EVALUATION.json). Checkpoints,
+configuraciones y datos locales en `artifacts/arithmetic-aug42-v1`,
+`artifacts/arithmetic-aug7-v1`, `artifacts/arithmetic-aug123-v1` y
+`artifacts/arithmetic-aug-robustness-v1`. No se afirma mejora de lenguaje general.

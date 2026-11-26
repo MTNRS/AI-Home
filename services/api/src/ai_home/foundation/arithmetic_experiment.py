@@ -33,11 +33,24 @@ def protocol():
     return partitions, suite
 
 
+def augment_formats(records):
+    """Expand only a supplied partition; never move a held-out pair to train."""
+    expanded = []
+    for record in records:
+        a, b = record['messages'][0]['content'].removesuffix('=').split('+')
+        answer = record['messages'][1]['content']
+        for prompt in (f'{a}+{b}=', f'{a} + {b} =', f'Suma {a}+{b}', f'Add {a}+{b}'):
+            expanded.append({**record, 'text': prompt + '\n' + answer,
+                'messages': [{'role': 'user', 'content': prompt}, {'role': 'assistant', 'content': answer}]})
+    return expanded
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--device', choices=('cpu', 'cuda'), default='cpu')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--augment-formats', action='store_true')
     args = parser.parse_args()
     if not 0 <= args.seed < 2**32:
         parser.error('Seed must be an integer between 0 and 2**32 - 1')
@@ -45,6 +58,8 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(2)
     partitions, suite = protocol()
+    if args.augment_formats:
+        partitions['train'] = augment_formats(partitions['train'])
     config = FoundationConfig(vocab_size=262, width=64, layers=2, heads=4,
                               kv_heads=2, hidden=128, context=16)
     training = TrainingConfig(steps=1000, batch_size=16, learning_rate=.002,
@@ -55,7 +70,9 @@ def main():
         'training': asdict(training), 'device': args.device, 'max_new_tokens': 4,
         'partition_sha256': canonical_hash(partitions), 'suite_sha256': canonical_hash(suite),
         'comparison': 'one-update checkpoint versus fixed 1000-update checkpoint',
-        'selection': 'No tuning or early stopping using test results; no promotion',
+        'selection': 'No within-run tuning or early stopping; no promotion',
+        'format_augmentation': args.augment_formats,
+        'evaluation_role': 'Previously observed development benchmark' if args.augment_formats else 'Original reserved benchmark',
         'claim_limit': 'Single seed, procedural single-digit addition; not broad mathematical reasoning'}
     save('protocol.json', plan)
     save('partitions.json', partitions)

@@ -1431,3 +1431,11 @@ Evaluados los tres checkpoints sin entrenar: para semillas 42/7/123, espacios
 13/14,6/14,7/14 original y todos los prompts caben. Hay dependencia fuerte del
 formato; las variantes verbales no prueban comprensión lingüística. Conservado
 informe completo y CLI reproducible; no hay promoción ni selección del mejor.
+
+### Experimento controlado de ampliación de formatos
+
+280 ejemplos derivados solo de los 70 pares train, mismos pasos/modelo/semillas:
+10/14,11/14,8/14 en cada uno de los cuatro formatos. La comparación por probe
+contra controles detecta 4,0,3 regresiones, por lo que no se acepta promoción
+incondicional. Suite tratada explícitamente como desarrollo ya observado.
+Conservados informes/checkpoints; dos pruebas del protocolo aprobadas.
