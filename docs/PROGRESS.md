@@ -850,3 +850,13 @@ créditos ganados por cada worker. Evidencia: COORDINATOR_RESTART_SMOKE.json.
 Suite local posterior: 284 correctas, 5 PostgreSQL omitidas. CI del código anterior
 0029fc3 pasó en runs 45815026730 (matriz) y 45815026912 (Foundation). El ensayo nuevo
 no demuestra reinicio del servidor, supervisor automático ni failover multihost.
+
+### Supervisión acotada de rondas
+
+El CLI advance admite --wait-seconds / --poll-seconds y la API supervise admite
+cancelación cooperativa. Reintenta únicamente errores de transporte con el mismo
+plan, detiene ante errores HTTP/política y devuelve observación/plazo/intentos sin
+cancelar implícitamente jobs financiados. Deadline entre pasadas, no interrupción
+forzosa de llamadas o kernels. Pruebas con reloj virtual de control y reconciliación
+real API/ledger/checkpoint; suite completa: 285 correctas, 5 PostgreSQL omitidas.
+No se presenta como servicio del sistema ni supervisor multihost.

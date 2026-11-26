@@ -4,12 +4,44 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from ai_home.foundation.checkpoint import FORMAT, atomic_save
-from ai_home.foundation.coordinator import advance, create_plan
+from ai_home.foundation.coordinator import advance, create_plan, supervise
 from ai_home.foundation.distributed import aggregate_gradients, execute_gradient, encode_tensors
 from ai_home.credits import CreditLedger
 from ai_home.job_credits import user_account_id
 from test_foundation_distributed import setup_shards
 from test_nodes_and_jobs import client, register, login, user_headers, hardware_report
+
+
+def test_supervisor_retries_lost_transport_but_not_http_policy_errors(monkeypatch):
+    import ai_home.foundation.coordinator as coordinator
+    import threading
+    clock = [0.]
+    monkeypatch.setattr(coordinator.time, "monotonic", lambda: clock[0])
+    class Wait:
+        def is_set(self):
+            return False
+        def wait(self, seconds):
+            clock[0] += seconds
+    outcomes = [httpx.ReadError("lost response"), {"state": "waiting", "jobs": []},
+                {"state": "committed", "step": 2}]
+    def advance(*args):
+        value = outcomes.pop(0)
+        if isinstance(value, Exception):
+            raise value
+        return value
+    monkeypatch.setattr(coordinator, "advance", advance)
+    result = coordinator.supervise(None, None, None, None, wait_seconds=10, poll_seconds=1, cancel=Wait())
+    assert result["state"] == "committed" and result["attempts"] == 3 and result["transport_errors"] == 1
+    response = httpx.Response(401, request=httpx.Request("GET", "https://example.org"))
+    outcomes.append(httpx.HTTPStatusError("unauthorized", request=response.request, response=response))
+    with pytest.raises(httpx.HTTPStatusError):
+        coordinator.supervise(None, None, None, None, wait_seconds=10, cancel=Wait())
+    event = threading.Event(); event.set()
+    stopped = coordinator.supervise(None, None, None, None, wait_seconds=10, cancel=event)
+    assert stopped["attempts"] == 0 and stopped["state"] == "stopped" and not stopped["jobs_cancelled"]
+    monkeypatch.setattr(coordinator, "advance", lambda *args: {"state": "waiting", "jobs": []})
+    timed_out = coordinator.supervise(None, None, None, None, wait_seconds=2, poll_seconds=1, cancel=Wait())
+    assert timed_out["state"] == "timed_out" and timed_out["attempts"] == 2
 
 
 def test_restart_reuses_jobs_and_credit_reservations(client, tmp_path, monkeypatch):
@@ -67,6 +99,9 @@ def test_restart_reuses_jobs_and_credit_reservations(client, tmp_path, monkeypat
     before = output.read_bytes()
     assert advance(client, plan, parent, output) == committed
     assert output.read_bytes() == before and len(client.get("/api/v1/jobs").json()) == 2
+    observed = supervise(client, plan, parent, output, wait_seconds=10, poll_seconds=1)
+    assert observed["state"] == "committed" and observed["attempts"] == 1
+    assert output.read_bytes() == before
     # Self-work returns funds to the same account; neither retry mints credits.
     assert ledger.balance(account) == 20
     register(client, "different-owner@example.com")

@@ -266,3 +266,27 @@ fresh-process reconstruction at those boundaries; it does not demonstrate forced
 process termination during every instruction, API-server restart, automatic
 service supervision or multi-host failover. The separate fault-injection test
 covers interruption before checkpoint publication and lost HTTP creation replies.
+
+### Bounded coordinator supervision
+
+Add `--wait-seconds 300 --poll-seconds 5` to `coordinator advance` to observe the
+same round until committed or until the polling deadline. Wait is bounded to
+1–3600 seconds; polling interval is 1–60 seconds. The default remains a single
+pass. A transport failure retries the identical durable job keys, including after
+a lost creation response. HTTP status failures (authentication, permission,
+rate limits or server errors), invalid plans and failed/cancelled jobs remain
+visible errors rather than being silently retried.
+
+The API `supervise(..., cancel=event)` supports cooperative stopping between
+passes. CLI Ctrl+C returns `interrupted`; timeout returns `timed_out` with the last
+observation and attempt/transport-error counts. Neither action cancels funded
+server jobs or assumes that no checkpoint was committed. Re-run the same plan to
+reconcile after an interruption; use the explicit server cancellation API to
+cancel jobs. HTTP calls and independent gradient verification already in progress
+can extend beyond the polling deadline; this is not a hard wall-clock kill timer.
+The helper is not a Windows service or multihost failover manager.
+
+Control-flow tests use a virtual clock to verify retry, deadline, stop and refusal
+to retry HTTP policy errors. The real API/ledger/gradient test additionally uses
+supervision to reconcile an already committed checkpoint without changing bytes.
+These tests are distinct from the real HTTP fresh-process smoke described above.

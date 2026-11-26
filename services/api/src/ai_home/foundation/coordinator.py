@@ -2,6 +2,10 @@
 from dataclasses import asdict
 import json
 from pathlib import Path
+import threading
+import time
+
+import httpx
 
 from ai_home.immutable_artifacts import publish_bytes
 from ai_home.urls import normalize_base_url
@@ -85,6 +89,33 @@ def advance(client, plan_path, parent, output):
     return {"state": "committed", "step": result["step"], "round_request_sha256": result["round_request_sha256"]}
 
 
+def supervise(client, plan_path, parent, output, *, wait_seconds, poll_seconds=5, cancel=None):
+    """Bounded restartable polling; stopping the observer does not cancel funded jobs."""
+    if (type(wait_seconds) is not int or not 1 <= wait_seconds <= 3600
+            or type(poll_seconds) is not int or not 1 <= poll_seconds <= 60):
+        raise ValueError("Invalid coordinator wait bounds")
+    cancellation = cancel if cancel is not None else threading.Event()
+    deadline = time.monotonic() + wait_seconds
+    last, attempts, transport_errors = None, 0, 0
+    while not cancellation.is_set():
+        if time.monotonic() >= deadline:
+            break
+        attempts += 1
+        try:
+            last = advance(client, plan_path, parent, output)
+        except httpx.TransportError:
+            # A response may be lost after creation; replay the same immutable plan.
+            # HTTP authentication/policy/status failures are deliberately not retried.
+            transport_errors += 1
+        else:
+            if last["state"] == "committed":
+                return {**last, "attempts": attempts, "transport_errors": transport_errors}
+        cancellation.wait(max(0, min(poll_seconds, deadline - time.monotonic())))
+    return {"state": "stopped" if cancellation.is_set() else "timed_out", "last_observation": last,
+            "attempts": attempts, "transport_errors": transport_errors,
+            "jobs_cancelled": False}
+
+
 def main():
     import argparse
     import os
@@ -104,6 +135,8 @@ def main():
     resume.add_argument("parent", type=Path)
     resume.add_argument("output", type=Path)
     resume.add_argument("--server", required=True)
+    resume.add_argument("--wait-seconds", type=int, default=0)
+    resume.add_argument("--poll-seconds", type=int, default=5)
     args = parser.parse_args()
     if args.command == "plan":
         with args.payloads.open("rb") as source:
@@ -120,7 +153,15 @@ def main():
             raise ValueError("Set AI_HOME_COORDINATOR_TOKEN for the authenticated owner")
         with httpx.Client(base_url=normalize_base_url(args.server), timeout=60, trust_env=False,
                           headers={"Authorization": f"Bearer {token}"}, follow_redirects=False) as client:
-            print(json.dumps(advance(client, args.plan, args.parent, args.output)))
+            try:
+                if args.wait_seconds:
+                    result = supervise(client, args.plan, args.parent, args.output,
+                                       wait_seconds=args.wait_seconds, poll_seconds=args.poll_seconds)
+                else:
+                    result = advance(client, args.plan, args.parent, args.output)
+            except KeyboardInterrupt:
+                result = {"state": "interrupted", "jobs_cancelled": False}
+            print(json.dumps(result))
 
 
 if __name__ == "__main__":
