@@ -42,3 +42,39 @@ def test_embeddings_cover_all_tokens_and_preserve_logits(tmp_path, device):
     for invalid in ("", " ", "é" * 16001, None):
         with pytest.raises(ValueError):
             embedder.embed(invalid)
+
+    from ai_home.knowledge import KnowledgeIndex, build_index, retrieval_messages
+    from ai_home.foundation.data import canonical_hash
+    import json
+    common = dict(source="Authored fixture", url="https://example.org/fixture",
+                  license="Apache-2.0", date="2026-11-26", language="es",
+                  training_allowed=False, retrieval_allowed=True,
+                  privacy_reviewed=True, visibility="public")
+    records = [{**common, "text": text}, {**common, "text": "Una segunda fuente diferente."}]
+    index_path = tmp_path / "neural.json"
+    version = build_index(records, index_path, embedder=embedder)
+    index = KnowledgeIndex(index_path, embedder=embedder)
+    matches = index.search(text)
+    assert matches[0]["text"] == text
+    assert matches[0]["score"] == pytest.approx(1, abs=1e-5)
+    assert matches[0]["index_version"] == version
+    assert matches[0]["url"] == common["url"]
+    assert index.summary()["embedding"] == embedder.identity
+    from ai_home.knowledge import prepare_knowledge_context
+    with pytest.raises(ValueError, match="too small for retrieved evidence"):
+        prepare_knowledge_context([{"role": "user", "content": "Q"}],
+                                  embedder.model, embedder.tokenizer, index_path)
+    assert retrieval_messages([{"role": "user", "content": text}], matches)[0]["role"] == "user"
+    with pytest.raises(ValueError, match="exact embedding"):
+        KnowledgeIndex(index_path)
+    embedder.model.checkpoint_sha256 = "0" * 64
+    with pytest.raises(ValueError, match="exact embedding"):
+        KnowledgeIndex(index_path, embedder=embedder)
+    embedder.model.checkpoint_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    payload["neural"]["vectors"][0] = [0.] * config.width
+    payload.pop("version")
+    payload["version"] = canonical_hash(payload)
+    index_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="normalized neural"):
+        KnowledgeIndex(index_path, embedder=embedder)

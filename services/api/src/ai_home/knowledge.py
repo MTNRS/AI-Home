@@ -32,11 +32,19 @@ def _validate(records, *, purpose="retrieval"):
     return records
 
 
-def build_index(records, path, chunk_chars=800):
+def build_index(records, path, chunk_chars=800, *, embedder=None):
     if type(chunk_chars) is not int or not 100 <= chunk_chars <= 2000:
         raise ValueError("chunk_chars must be between 100 and 2000")
     records = _validate(records)
     payload = {"format": FORMAT, "chunk_chars": chunk_chars, "records": records}
+    if embedder is not None:
+        vectors = []
+        for record in records:
+            for offset in range(0, len(record["text"]), chunk_chars):
+                vectors.append(embedder.embed(record["text"][offset:offset + chunk_chars]))
+                if len(vectors) * embedder.identity["dimensions"] > 200000:
+                    raise ValueError("Neural index vector budget exceeded")
+        payload["neural"] = {"identity": embedder.identity, "vectors": vectors}
     payload["version"] = canonical_hash(payload)
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
     if len(raw) > MAX_BYTES:
@@ -51,7 +59,7 @@ def build_index(records, path, chunk_chars=800):
 
 class KnowledgeIndex:
     """Deterministic sparse TF-IDF embeddings and cosine retrieval."""
-    def __init__(self, path):
+    def __init__(self, path, *, embedder=None):
         with Path(path).open("rb") as source:
             raw = source.read(MAX_BYTES + 1)
         if len(raw) > MAX_BYTES:
@@ -85,12 +93,26 @@ class KnowledgeIndex:
         self.idf = {term: math.log((1 + len(counts)) / (1 + freq)) + 1
                     for term, freq in frequencies.items()}
         self.vectors = [self.embed(count) for count in counts]
+        self.neural = payload.get("neural")
+        self.embedder = embedder
+        if self.neural is not None:
+            if embedder is None or self.neural.get("identity") != embedder.identity:
+                raise ValueError("Neural index requires its exact embedding checkpoint and protocol")
+            vectors = self.neural.get("vectors")
+            width = embedder.identity["dimensions"]
+            if not isinstance(vectors, list) or len(vectors) != len(self.chunks) or len(vectors) * width > 200000:
+                raise ValueError("Invalid neural vector count")
+            for vector in vectors:
+                if (not isinstance(vector, list) or len(vector) != width
+                        or any(type(v) not in (int, float) or not math.isfinite(v) for v in vector)
+                        or not math.isclose(sum(v * v for v in vector), 1, abs_tol=1e-5)):
+                    raise ValueError("Invalid normalized neural vector")
 
     def summary(self):
         return {"format": FORMAT, "version": self.version, "file_bytes": self.file_bytes,
                 "documents": len(self.sources), "chunks": len(self.chunks),
                 "chunk_chars": self.chunk_chars, "vocabulary_terms": len(self.idf),
-                "embedding": "sparse-tfidf", "languages": sorted({r["language"] for r in self.sources}),
+                "embedding": self.neural["identity"] if self.neural else "sparse-tfidf", "languages": sorted({r["language"] for r in self.sources}),
                 "licenses": sorted({r["license"] for r in self.sources}),
                 "sources": self.sources[:100], "sources_truncated": len(self.sources) > 100}
 
@@ -103,6 +125,12 @@ class KnowledgeIndex:
     def search(self, query, limit=3):
         if type(limit) is not int or not 1 <= limit <= 10 or len(query) > 32000:
             raise ValueError("Invalid retrieval budget")
+        if self.neural is not None:
+            query_vector = self.embedder.embed(query)
+            ranked = [{**chunk, "score": sum(a * b for a, b in zip(query_vector, vector)),
+                       "index_version": self.version}
+                      for chunk, vector in zip(self.chunks, self.neural["vectors"])]
+            return sorted(ranked, key=lambda item: (-item["score"], item["id"]))[:limit]
         query_vector = self.embed(Counter(terms(query)))
         ranked = []
         for chunk, vector in zip(self.chunks, self.vectors):
@@ -146,7 +174,9 @@ def complete_with_knowledge(messages, checkpoint_path, index_path, device="auto"
 
 def prepare_knowledge_context(messages, model, tokenizer, index_path):
     query = next(m["content"] for m in reversed(messages) if m["role"] == "user")
-    index = KnowledgeIndex(index_path)
+    from ai_home.foundation.embeddings import FoundationEmbedder
+    model.eval()
+    index = KnowledgeIndex(index_path, embedder=FoundationEmbedder.from_loaded(model, tokenizer))
     matches = index.search(query)
     # Refuse silent context truncation: references must actually reach the model.
     if len(tokenizer.conversation(messages)) > model.config.context:
@@ -172,12 +202,19 @@ def main():
     search = commands.add_parser("search")
     search.add_argument("index", type=Path)
     search.add_argument("query")
+    for command in (build, search):
+        command.add_argument("--embedding-checkpoint", type=Path)
+        command.add_argument("--embedding-device", choices=("cpu", "cuda"), default="cpu")
     args = parser.parse_args()
+    embedder = None
+    if args.embedding_checkpoint:
+        from ai_home.foundation.embeddings import FoundationEmbedder
+        embedder = FoundationEmbedder(args.embedding_checkpoint, device=args.embedding_device)
     if args.command == "build":
         records, _ = load_records(args.dataset, purpose="retrieval")
-        print(build_index(records, args.index))
+        print(build_index(records, args.index, embedder=embedder))
     else:
-        print(json.dumps(KnowledgeIndex(args.index).search(args.query), ensure_ascii=True, indent=2))
+        print(json.dumps(KnowledgeIndex(args.index, embedder=embedder).search(args.query), ensure_ascii=True, indent=2))
 
 
 if __name__ == "__main__":

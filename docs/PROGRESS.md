@@ -708,3 +708,13 @@ identity. CPU/CUDA tests compare against explicit full-token state pooling and
 check deterministic output, input budgets, and unchanged logits. Full CUDA-env
 suite: 266 passed, 5 skipped (optional PostgreSQL server stopped). TF-IDF remains
 the retrieval backend; neural indexing and retrieval quality are still pending.
+
+### Optional checkpoint-bound neural retrieval
+
+Connected own-model embeddings to immutable public knowledge indexes, CLI build /
+search and generation-context retrieval. Stored vector identity must match the
+loaded checkpoint and tokenizer; normalized shape/count/budget validation applies.
+Existing TF-IDF remains the default. CPU and CUDA tests cover exact-text retrieval,
+provenance, checkpoint mismatch, malformed vectors and RAG context refusal. Full
+suite: 266 passed, 5 PostgreSQL-dependent skips; final added context assertion:
+2 embedding tests passed on CPU/CUDA. No semantic retrieval improvement is claimed.

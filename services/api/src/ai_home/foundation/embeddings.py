@@ -24,6 +24,14 @@ class FoundationEmbedder:
                 "dimensions": self.model.config.width,
                 "window_tokens": self.model.config.context}
 
+    @classmethod
+    def from_loaded(cls, model, tokenizer):
+        if model.training or not getattr(model, "checkpoint_sha256", None):
+            raise ValueError("Embeddings require an evaluated, checkpoint-backed model")
+        instance = cls.__new__(cls)
+        instance.model, instance.tokenizer = model, tokenizer
+        return instance
+
     @torch.inference_mode()
     def embed(self, text):
         if not isinstance(text, str) or not text.strip() or len(text.encode("utf-8")) > 32000:

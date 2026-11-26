@@ -59,6 +59,31 @@ BPE fingerprint, dimensions, window size, and pooling protocol version.
 CPU and explicit CUDA are supported; no external weights are used.
 
 This is an experimental feature extraction primitive, not a trained semantic
-encoder. Search still uses TF-IDF. Retrieval indexing, checkpoint compatibility
-checks for stored vectors, and independent retrieval-quality comparisons remain
-necessary before enabling neural retrieval. No semantic-quality gain is claimed.
+encoder. TF-IDF remains the default. The optional neural index described below provides
+checkpoint-bound retrieval. Independent retrieval-quality comparisons remain
+necessary before recommending it. No semantic-quality gain is claimed.
+
+### Optional neural knowledge index
+
+Build a separate immutable knowledge index with the own checkpoint:
+
+```powershell
+python -m ai_home.knowledge build approved-dataset.json neural-index.json --embedding-checkpoint model.pt --embedding-device cpu
+python -m ai_home.knowledge search neural-index.json "consulta" --embedding-checkpoint model.pt
+```
+
+The public retrieval permission and privacy review rules still apply, even if
+training permission is false. Index version hashing covers vectors, checkpoint
+identity, and source records. Loading requires matching checkpoint digest, BPE,
+window size, dimensions and pooling method; malformed/non-normalized vectors are
+rejected. The bounded reference index permits at most 200,000 vector components
+and retains the existing 8 MB serialized limit. Updates require a new filename.
+RAG accepts this index with that same generation checkpoint, reusing the loaded
+model. Source references and whole-chunk context fitting are preserved. Different
+embedding/generation checkpoints are not supported in this initial integration.
+
+Without `--embedding-checkpoint`, building and searching retain TF-IDF behavior.
+Neural search ranks all chunks by cosine, including nonpositive similarities;
+it has no calibrated relevance threshold. Exact-text self-retrieval tests verify
+the mechanism, not semantic generalization. Independent relevance benchmarks
+are still required before recommending this backend over TF-IDF.
