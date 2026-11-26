@@ -1583,6 +1583,8 @@ def main() -> None:
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
             ttk.Button(routing, text="Explorar conocimiento local",
                        command=self._knowledge_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Crear versión de conocimiento",
+                       command=self._build_knowledge_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Entrenar modelo local",
                        command=self._run_training_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ejecutar evaluación local",
@@ -1615,6 +1617,79 @@ def main() -> None:
                 text="La clave nunca se envía al servidor AI@Home.",
                 foreground="#52606d",
             ).pack(anchor="w", pady=(6, 0))
+
+        def _build_knowledge_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Crear versión de conocimiento")
+            window.geometry("800x440")
+            frame = ttk.Frame(window, padding=16)
+            frame.pack(fill="both", expand=True)
+            fields = [tk.StringVar() for _ in range(3)]
+            inputs = []
+            for row, label in enumerate(("Dataset autorizado JSON", "Nuevo índice JSON", "Checkpoint opcional (neuronal)")):
+                ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=8)
+                entry = ttk.Entry(frame, textvariable=fields[row], width=50)
+                entry.grid(row=row, column=1, sticky="ew")
+                def choose(index=row):
+                    path = (filedialog.asksaveasfilename(parent=window, defaultextension=".json")
+                            if index == 1 else filedialog.askopenfilename(parent=window))
+                    if path:
+                        fields[index].set(path)
+                picker = ttk.Button(frame, text="Elegir", command=choose)
+                picker.grid(row=row, column=2, padx=6)
+                inputs.extend((entry, picker))
+            frame.columnconfigure(1, weight=1)
+            device = tk.StringVar(value="cpu")
+            device_box = ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=10)
+            ttk.Label(frame, text="Dispositivo neuronal").grid(row=3, column=0, sticky="w")
+            device_box.grid(row=3, column=1, sticky="w")
+            ttk.Label(frame, text="Sin checkpoint: TF-IDF. Solo datos públicos revisados con permiso de recuperación.\n"
+                      "Cada actualización crea otro archivo; no activa el índice del servidor ni entrena el modelo.",
+                      wraplength=740).grid(row=4, column=0, columnspan=3, sticky="w", pady=14)
+            status = tk.StringVar(value="Seleccione el dataset y una ruta nueva para el índice.")
+            ttk.Label(frame, textvariable=status, wraplength=740).grid(row=5, column=0, columnspan=3, sticky="w")
+            cancellation = threading.Event()
+            busy = False
+            def finish():
+                nonlocal busy
+                busy = False
+                for widget in inputs:
+                    widget.configure(state="normal")
+                device_box.configure(state="readonly")
+                start.configure(state="normal")
+                stop.configure(state="disabled")
+            def failure():
+                status.set("No se publicó el índice; revise el error y los permisos del dataset.")
+                finish()
+            def run():
+                nonlocal busy
+                if busy:
+                    return
+                dataset, output, checkpoint = [field.get().strip() for field in fields]
+                if not dataset or not output:
+                    messagebox.showerror("Conocimiento", "Seleccione dataset e índice de salida.", parent=window)
+                    return
+                selected_device = device.get()
+                cancellation.clear()
+                busy = True
+                for widget in (*inputs, device_box, start):
+                    widget.configure(state="disabled")
+                stop.configure(state="normal")
+                status.set("Validando e indexando… Cancelar detiene antes de publicar, entre fragmentos.")
+                def operation():
+                    from ai_home.knowledge import build_from_dataset
+                    return build_from_dataset(dataset, output, embedding_checkpoint=checkpoint or None,
+                                              device=selected_device, cancel=cancellation)
+                def success(report):
+                    status.set(f"Índice creado: {report['output']}\nVersión: {report['index_version']}\nDocumentos: {report['documents']}")
+                    finish()
+                self._background(operation, success, failure, is_current=lambda: bool(window.winfo_exists()))
+            start = ttk.Button(frame, text="Crear índice", command=run)
+            start.grid(row=6, column=1, sticky="w", pady=16)
+            stop = ttk.Button(frame, text="Cancelar", command=cancellation.set, state="disabled")
+            stop.grid(row=6, column=2)
+            window.bind("<Destroy>", lambda event: cancellation.set() if event.widget == window else None)
 
         def _knowledge_dialog(self) -> None:
             path = filedialog.askopenfilename(parent=self, title="Índice de conocimiento revisado",

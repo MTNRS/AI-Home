@@ -97,3 +97,21 @@ the matching checkpoint report an error instead of silently switching retrieval.
 Queries are limited to 32,000 UTF-8 bytes. Checkpoint/device controls are frozen
 while the background inspection runs. This explorer remains local and does not
 change the server's configured chat index or selected model.
+
+### Create knowledge versions from the desktop
+
+`Crear versión de conocimiento` accepts an authorized dataset JSON, a new index
+path, and optionally an own-model checkpoint with explicit CPU/CUDA selection.
+Without a checkpoint it creates TF-IDF; with one it stores neural vectors and
+checkpoint identity. The worker validates retrieval permission and public privacy
+review. Existing paths are rejected. Updates are new immutable versions and do
+not automatically change the server's knowledge configuration.
+
+Cancellation is checked between neural chunks and immediately before publishing;
+it cannot interrupt checkpoint loading or a running tensor operation. Closing the
+window requests cancellation. Complete bytes are flushed to a temporary file and
+published exclusively with a hard link, then the temporary name is removed. A
+filesystem without hard-link support reports failure; it does not fall back to
+partial publication. Cancellation racing after the publication boundary may leave
+a fully completed index. Abnormal process termination can leave a temporary file,
+but cannot expose a partially written target index.

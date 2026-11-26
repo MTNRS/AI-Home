@@ -739,3 +739,17 @@ the existing neural index/checkpoint, entered a query, invoked the search button
 verified returned neural identity/provenance, and checked controls re-enabled.
 That smoke used a synchronous callback harness; it does not prove background
 thread behavior or visual layout quality. No semantic-quality claim is added.
+
+### Knowledge creation/update flow in the desktop
+
+Added creation of a new immutable knowledge index from authorized JSON, optional
+own-model embeddings and CPU/CUDA selection, with cancellation and background
+completion/error handling. Publication now exposes only flushed complete bytes,
+uses exclusive hard-link creation and preserves existing versions. Permission and
+privacy checks precede embedding work. Tests cover cancelled jobs, publication
+failure cleanup, immutable destinations and cancellation after real CPU/CUDA
+embedding computation. Full suite: 268 passed, 5 PostgreSQL skips; final added
+embedding cancellation assertions: 2 passed. A real Tk smoke using actual worker
+threads/event callbacks built the eight-document neural artifact at
+`artifacts/ui-review/knowledge-acb6baf2e5774340ae1e4668d395d295.json`.
+This verifies the functional flow, not visual layout quality or retrieval gains.

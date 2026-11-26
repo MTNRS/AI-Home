@@ -64,6 +64,19 @@ def test_embeddings_cover_all_tokens_and_preserve_logits(tmp_path, device):
     inspected = inspect_knowledge(index_path, text, embedding_checkpoint=path, device=device)
     assert inspected["summary"]["embedding"] == embedder.identity
     assert inspected["results"][0]["text"] == text
+    import threading
+    cancellation = threading.Event()
+    original_embed = embedder.embed
+    def cancel_after_embedding(value):
+        result = original_embed(value)
+        cancellation.set()
+        return result
+    embedder.embed = cancel_after_embedding
+    cancelled_path = tmp_path / "cancelled.json"
+    with pytest.raises(ValueError, match="cancelled"):
+        build_index(records, cancelled_path, embedder=embedder, cancel=cancellation)
+    assert not cancelled_path.exists()
+    embedder.embed = original_embed
     from ai_home.knowledge import prepare_knowledge_context
     with pytest.raises(ValueError, match="too small for retrieved evidence"):
         prepare_knowledge_context([{"role": "user", "content": "Q"}],

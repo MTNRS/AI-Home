@@ -1,10 +1,39 @@
 import json
+import threading
 
 import pytest
 
 from test_chat_api import client, create_session
 
 from ai_home.knowledge import KnowledgeIndex, build_index, retrieval_messages, complete_with_knowledge
+
+
+def test_dataset_index_job_cancellation_and_exclusive_publication(tmp_path, monkeypatch):
+    from ai_home.knowledge import build_from_dataset
+    import ai_home.knowledge as knowledge
+    dataset = tmp_path / "dataset.json"
+    dataset.write_text(json.dumps({"format_version": 1, "records": records()}), encoding="utf-8")
+    output = tmp_path / "index.json"
+    cancellation = threading.Event()
+    cancellation.set()
+    with pytest.raises(ValueError, match="cancelled"):
+        build_from_dataset(dataset, output, cancel=cancellation)
+    assert not output.exists()
+    cancellation.clear()
+    original_link = knowledge.os.link
+    def fail_publication(*args):
+        raise OSError("Publication unavailable")
+    monkeypatch.setattr(knowledge.os, "link", fail_publication)
+    with pytest.raises(OSError, match="Publication"):
+        build_from_dataset(dataset, output)
+    assert not output.exists() and not list(tmp_path.glob("*.index.tmp"))
+    monkeypatch.setattr(knowledge.os, "link", original_link)
+    report = build_from_dataset(dataset, output)
+    original = output.read_bytes()
+    assert report["index_version"] == KnowledgeIndex(output).version
+    with pytest.raises(FileExistsError):
+        build_from_dataset(dataset, output)
+    assert output.read_bytes() == original
 
 
 def records():

@@ -2,8 +2,10 @@
 from collections import Counter
 import json
 import math
+import os
 from pathlib import Path
 import re
+import tempfile
 import unicodedata
 from urllib.parse import urlsplit
 
@@ -32,7 +34,11 @@ def _validate(records, *, purpose="retrieval"):
     return records
 
 
-def build_index(records, path, chunk_chars=800, *, embedder=None):
+def build_index(records, path, chunk_chars=800, *, embedder=None, cancel=None):
+    def check_cancel():
+        if cancel is not None and cancel.is_set():
+            raise ValueError("Knowledge indexing cancelled; no new index published")
+    check_cancel()
     if type(chunk_chars) is not int or not 100 <= chunk_chars <= 2000:
         raise ValueError("chunk_chars must be between 100 and 2000")
     records = _validate(records)
@@ -41,6 +47,7 @@ def build_index(records, path, chunk_chars=800, *, embedder=None):
         vectors = []
         for record in records:
             for offset in range(0, len(record["text"]), chunk_chars):
+                check_cancel()
                 vectors.append(embedder.embed(record["text"][offset:offset + chunk_chars]))
                 if len(vectors) * embedder.identity["dimensions"] > 200000:
                     raise ValueError("Neural index vector budget exceeded")
@@ -51,10 +58,37 @@ def build_index(records, path, chunk_chars=800, *, embedder=None):
         raise ValueError("Knowledge index budget exceeded")
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Exclusive creation makes each version immutable. Updates use a new path.
-    with path.open("xb") as output:
-        output.write(raw)
+    check_cancel()
+    # Publish complete bytes exclusively; interruptions cannot leave a partial index.
+    fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".index.tmp")
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(raw)
+            output.flush()
+            os.fsync(output.fileno())
+        check_cancel()
+        os.link(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
     return payload["version"]
+
+
+def build_from_dataset(dataset, output, *, embedding_checkpoint=None, device="cpu", chunk_chars=800, cancel=None):
+    from ai_home.foundation.data import load_records
+    if Path(output).exists():
+        raise FileExistsError("Choose a new index path; existing versions cannot be overwritten")
+    records, dataset_version = load_records(dataset, purpose="retrieval")
+    records = _validate(records)
+    embedder = None
+    if cancel is not None and cancel.is_set():
+        raise ValueError("Knowledge indexing cancelled")
+    if embedding_checkpoint:
+        from ai_home.foundation.embeddings import FoundationEmbedder
+        embedder = FoundationEmbedder(embedding_checkpoint, device=device)
+    version = build_index(records, output, chunk_chars, embedder=embedder, cancel=cancel)
+    return {"index_version": version, "dataset_version": dataset_version,
+            "output": str(Path(output).resolve()), "documents": len(records),
+            "embedding": embedder.identity if embedder else "sparse-tfidf"}
 
 
 class KnowledgeIndex:
