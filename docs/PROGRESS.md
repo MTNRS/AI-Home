@@ -1687,3 +1687,12 @@ tras ampliar comparacion monolitica y rechazo de otra cuenta, dos pruebas del
 coordinador aprobadas en 5,53 s. Flujo real HTTP en proceso con dos fragmentos y
 seis creditos, repetido sin duplicaciones. Pendiente smoke por sockets y CLI/UI;
 no se afirma evaluacion secreta ni capacidad linguistica general.
+
+### CLI del coordinador de evaluacion
+
+Entradas `plan` y `advance` con lectura acotada, consentimientos separados y
+credencial solo por entorno. Una pasada reanudable sin bucle implicito ni
+cancelacion automatica de trabajos al interrumpir el observador. Tres pruebas
+aprobadas en 12,00 s, incluida creacion real del plan en proceso Python separado
+y rechazo de advance sin credencial antes de contactar al servidor. Smoke por
+sockets y selector de escritorio siguen pendientes.

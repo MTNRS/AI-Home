@@ -95,3 +95,30 @@ def test_evaluation_plan_resumes_and_aggregates_verified_public_shards(client, t
     finally:
         coordinator.close()
         worker.close()
+
+
+def test_evaluation_cli_creates_real_plan_and_requires_credentials(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+    torch.set_num_threads(1)
+    parent, _, _, holdout = checkpoint_fixture(tmp_path)
+    shards, plan = tmp_path / "shards.json", tmp_path / "cli-plan.json"
+    shards.write_text(json.dumps([holdout[:2], holdout[2:]]), encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+    env.pop("AI_HOME_COORDINATOR_TOKEN", None)
+    command = [sys.executable, "-m", "ai_home.foundation.evaluation_coordinator"]
+    result = subprocess.run(command + ["plan", "--checkpoint", str(parent), "--shards", str(shards),
+        "--output", str(plan), "--server", "http://127.0.0.1", "--owner", "test-owner",
+        "--allow-public-node-processing", "--weights-public-and-redistributable"],
+        env=env, capture_output=True, text=True, timeout=45)
+    assert result.returncode == 0, result.stderr
+    summary = json.loads(result.stdout)
+    stored = json.loads(plan.read_text(encoding="utf-8"))
+    assert summary == {"state": "planned", "plan_sha256": stored["sha256"], "shards": 2}
+    failure = subprocess.run(command + ["advance", "--checkpoint", str(parent), "--plan", str(plan),
+        "--output", str(tmp_path / "report.json"), "--server", "http://127.0.0.1"],
+        env=env, capture_output=True, text=True, timeout=45)
+    assert failure.returncode != 0 and "Set AI_HOME_COORDINATOR_TOKEN" in failure.stderr
+    assert not (tmp_path / "report.json").exists()

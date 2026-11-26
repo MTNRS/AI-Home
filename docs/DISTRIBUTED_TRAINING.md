@@ -468,3 +468,18 @@ verifica reanudacion, seis creditos totales sin duplicacion y rechazo de otra
 cuenta. No demuestra multiples equipos fisicos. Los registros/linaje declarados
 no prueban parentesco semantico ni autoria. Un holdout publico puede conocerse;
 no se presenta como benchmark secreto o evaluacion independiente de capacidades.
+
+El coordinador dispone de CLI reproducible:
+
+```powershell
+python -m ai_home.foundation.evaluation_coordinator plan --checkpoint parent.pt --shards shards.json --owner USER_ID --server http://127.0.0.1:8000 --output evaluation-plan.json --reward-credits 3 --allow-public-node-processing --weights-public-and-redistributable
+python -m ai_home.foundation.evaluation_coordinator advance --checkpoint parent.pt --plan evaluation-plan.json --server http://127.0.0.1:8000 --output evaluation-report.json
+```
+
+`shards.json` es un array de listas de registros publicos, limitado a 1 MB en
+esta entrada. `advance` obtiene la credencial de `AI_HOME_COORDINATOR_TOKEN`,
+no de argumentos ni del plan; requiere la cuenta propietaria. Cada invocacion
+hace una pasada y devuelve `waiting` o `evaluated`. Repetirla tras ejecutar los
+trabajadores o tras reiniciar reanuda los mismos trabajos. Ctrl+C detiene el
+observador, no cancela reservas o tareas ya enviadas. No sigue redirecciones
+HTTP ni utiliza proxies ambientales. La interfaz grafica sigue pendiente.

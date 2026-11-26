@@ -112,3 +112,50 @@ def advance(client, plan_path, checkpoint, output):
             if source.read(len(raw) + 1) != raw:
                 raise ValueError("Existing evaluation report differs") from None
     return report
+
+
+def main():
+    import argparse
+    import os
+    import httpx
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    plan = commands.add_parser("plan", help="Create an immutable public evaluation plan")
+    plan.add_argument("--shards", type=Path, required=True, help="JSON array of record lists")
+    plan.add_argument("--owner", required=True)
+    plan.add_argument("--reward-credits", type=int, default=0)
+    plan.add_argument("--allow-public-node-processing", action="store_true")
+    plan.add_argument("--weights-public-and-redistributable", action="store_true")
+    resume = commands.add_parser("advance", help="Submit or collect once; safe to repeat after restart")
+    resume.add_argument("--plan", type=Path, required=True)
+    for command in (plan, resume):
+        command.add_argument("--checkpoint", type=Path, required=True)
+        command.add_argument("--server", required=True)
+        command.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    if args.command == "plan":
+        with args.shards.open("rb") as source:
+            raw = source.read(1_000_001)
+        if len(raw) > 1_000_000:
+            raise ValueError("Evaluation shards file exceeds input budget")
+        result = create_plan(args.checkpoint, json.loads(raw), args.output,
+            server=args.server, owner_user_id=args.owner, reward_credits=args.reward_credits,
+            allow_public_node_processing=args.allow_public_node_processing,
+            weights_public_and_redistributable=args.weights_public_and_redistributable)
+        print(json.dumps({"state": "planned", "plan_sha256": result["sha256"],
+                          "shards": len(result["payloads"])}))
+    else:
+        token = os.environ.get("AI_HOME_COORDINATOR_TOKEN", "")
+        if not token:
+            raise ValueError("Set AI_HOME_COORDINATOR_TOKEN for the authenticated owner")
+        with httpx.Client(base_url=normalize_base_url(args.server), timeout=60, trust_env=False,
+                          headers={"Authorization": f"Bearer {token}"}, follow_redirects=False) as client:
+            try:
+                result = advance(client, args.plan, args.checkpoint, args.output)
+            except KeyboardInterrupt:
+                result = {"state": "interrupted", "jobs_cancelled": False}
+            print(json.dumps(result, allow_nan=False))
+
+
+if __name__ == "__main__":
+    main()
