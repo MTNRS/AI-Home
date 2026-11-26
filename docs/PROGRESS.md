@@ -1743,3 +1743,12 @@ transporte sin recrear trabajos. Siete pruebas de ambos coordinadores aprobadas
 en 21,68 s: recorrido real previo, perdida de respuesta, terminacion, timeout y
 cancelacion. Errores HTTP no se reintentan y las tareas financiadas no se cancelan
 al detener la observacion.
+
+### Observador CLI concurrente con trabajadores reales
+
+El smoke por sockets inicia supervise antes de los trabajadores CPU/CUDA.
+Ejecucion completada con nueve observaciones, cero errores de transporte, dos
+jobs y tres creditos por trabajador. Informe final concordante con referencia
+local y repeticion idempotente desde otro proceso. Conservada evidencia en
+DISTRIBUTED_EVALUATION_OBSERVER_SMOKE.json. CI reutiliza el smoke ampliado;
+no se afirma que esta revision ya haya pasado remotamente.

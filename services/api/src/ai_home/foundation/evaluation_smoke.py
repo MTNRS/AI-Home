@@ -80,6 +80,7 @@ def run(output, devices):
             return client, user, token
         owner, user, token = account("evaluation-owner")
         clients = [owner]
+        observer = None
         try:
             with app.state.session_factory() as session, session.begin():
                 grant_credits(session, user_id=user["user_id"], amount=6,
@@ -88,17 +89,20 @@ def run(output, devices):
             create_plan(checkpoint, [validation[:2], validation[2:]], plan, server=url,
                         owner_user_id=user["user_id"], reward_credits=3,
                         allow_public_node_processing=True, weights_public_and_redistributable=True)
+            coordinator_command = python_command + ["-m", "ai_home.foundation.evaluation_coordinator",
+                "advance", "--checkpoint", str(checkpoint), "--plan", str(plan),
+                "--server", url, "--output", str(report_path)]
+            coordinator_environment = {**os.environ, "AI_HOME_COORDINATOR_TOKEN": token}
             def coordinate():
-                result = subprocess.run(python_command + ["-m", "ai_home.foundation.evaluation_coordinator",
-                    "advance", "--checkpoint", str(checkpoint), "--plan", str(plan),
-                    "--server", url, "--output", str(report_path)],
-                    env={**os.environ, "AI_HOME_COORDINATOR_TOKEN": token},
-                    capture_output=True, text=True, timeout=90)
+                result = subprocess.run(coordinator_command, env=coordinator_environment,
+                                        capture_output=True, text=True, timeout=90)
                 if result.returncode:
                     raise RuntimeError("Evaluation coordinator process failed: " + result.stderr[-2000:])
                 return json.loads(result.stdout)
             waiting = coordinate()
             assert waiting["state"] == "waiting" and len(waiting["jobs"]) == 2
+            observer = subprocess.Popen(coordinator_command + ["--wait-seconds", "60", "--poll-seconds", "1"],
+                env=coordinator_environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             worker_reports, balances = [], []
             for index, device in enumerate(devices):
                 client, _, _ = account(f"evaluation-worker-{index}")
@@ -116,7 +120,13 @@ def run(output, devices):
                 response = client.get("/api/v1/credits")
                 response.raise_for_status()
                 balances.append(response.json())
-            evaluated = coordinate()
+            observed_stdout, observed_stderr = observer.communicate(timeout=90)
+            if observer.returncode:
+                raise RuntimeError("Evaluation observer failed: " + observed_stderr[-2000:])
+            observed = json.loads(observed_stdout)
+            assert observed["state"] == "evaluated"
+            observation = {key: observed.pop(key) for key in ("attempts", "transport_errors")}
+            evaluated = observed
             assert coordinate() == evaluated
             assert evaluated["state"] == "evaluated" and evaluated["tokens"] == reference["tokens"]
             assert math.isclose(evaluated["mean_loss"], reference["loss"], rel_tol=1e-5, abs_tol=1e-6)
@@ -128,13 +138,16 @@ def run(output, devices):
             assert checkpoint_digest(checkpoint) == identity
             report = {"format": "ai-home-evaluation-smoke-v1", "transport": "real loopback HTTP",
                 "workers": worker_reports, "worker_balances": balances, "owner_balance": owner_balance,
-                "coordinator_processes": 3, "completed_jobs": len(jobs), "checkpoint_sha256": identity,
+                "coordinator_processes": 3, "observation": observation, "completed_jobs": len(jobs), "checkpoint_sha256": identity,
                 "training_embedding_delta_l2": trained["embedding_delta_l2"], "reference": reference,
                 "distributed_loss": evaluated["mean_loss"], "tokens": evaluated["tokens"],
                 "scope": "One machine, two worker processes; no multi-host or general capability claim"}
             (output / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
             return report
         finally:
+            if observer is not None and observer.poll() is None:
+                observer.terminate()
+                observer.communicate(timeout=10)
             for client in clients:
                 client.close()
     finally:

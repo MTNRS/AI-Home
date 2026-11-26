@@ -534,3 +534,10 @@ politica o estado se propagan. Devuelve `evaluated`, `timed_out` o `stopped`,
 contador de intentos y ultima observacion cuando procede. Parar o agotar la espera
 no cancela trabajos ni libera sus reservas. Una peticion HTTP en curso conserva
 su timeout propio, de modo que el plazo no es un limite duro de tiempo total.
+
+El smoke tambien inicia el observador CLI antes de lanzar los trabajadores, con
+`--wait-seconds 60 --poll-seconds 1`. La ejecucion CPU/CUDA observada hizo nueve
+pasadas, sin errores de transporte, antes de retornar el informe; el tercer
+proceso repitio la recogida sin duplicar jobs/creditos. [Informe de observacion](DISTRIBUTED_EVALUATION_OBSERVER_SMOKE.json).
+Si el smoke falla, cierra su proceso observador pendiente antes de desmontar el
+servidor. Los contadores son evidencia de esa ejecucion, no un benchmark de red.
