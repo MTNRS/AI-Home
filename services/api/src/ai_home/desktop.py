@@ -2023,8 +2023,11 @@ def main() -> None:
                 widget = (ttk.Combobox(frame, textvariable=value, values=("cpu", "cuda"), state="readonly", width=12)
                           if row == 8 else ttk.Entry(frame, textvariable=value, width=12))
                 widget.grid(row=row, column=1, sticky="w")
+            disk_sequences = tk.BooleanVar(value=False)
+            ttk.Checkbutton(frame, text="Guardar secuencias en disco para reducir RAM (ocupa espacio local)",
+                            variable=disk_sequences).grid(row=11, column=0, columnspan=3, sticky="w", pady=6)
             status = tk.StringVar(value="Entrena control y experimento, compara y propone una decisión. No activa modelos.")
-            ttk.Label(frame, textvariable=status, wraplength=820).grid(row=12, column=0, columnspan=3, sticky="w", pady=12)
+            ttk.Label(frame, textvariable=status, wraplength=820).grid(row=13, column=0, columnspan=3, sticky="w", pady=12)
             cancellation = threading.Event()
             events = queue.Queue()
             def stop():
@@ -2044,6 +2047,7 @@ def main() -> None:
                     status.set(str(error))
                     return
                 selected_device, selected_review = device.get(), reviewed.get()
+                selected_disk_sequences = disk_sequences.get()
                 cancellation.clear()
                 self.evolution_cancel = cancellation
                 start_button.configure(state="disabled")
@@ -2053,6 +2057,7 @@ def main() -> None:
                         from ai_home.foundation.evolution_job import run_evolution
                         result = run_evolution(*paths, reviewed_export=selected_review, device=selected_device,
                                                multiplier=rate, max_new_tokens=count, cancel=cancellation,
+                                               disk_sequences=selected_disk_sequences,
                                                on_progress=lambda item: events.put(("progress", item)))
                         events.put(("done", result))
                     except Exception as error:
@@ -2076,8 +2081,8 @@ def main() -> None:
                         start_button.configure(state="normal")
                 window.after(100, poll)
             start_button = ttk.Button(frame, text="Ejecutar experimento", command=start)
-            start_button.grid(row=11, column=1, sticky="w", pady=12)
-            ttk.Button(frame, text="Parar", command=stop).grid(row=11, column=2)
+            start_button.grid(row=12, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Parar", command=stop).grid(row=12, column=2)
             window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
             poll()
 

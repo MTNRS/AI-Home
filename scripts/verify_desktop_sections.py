@@ -55,6 +55,33 @@ def run(self,*args):
     assert not bool(self.getvar(disk.cget('variable')))
     disk.invoke()
     assert bool(self.getvar(disk.cget('variable')))
+    self._run_evolution_dialog()
+    evolution_window = next(w for w in self.winfo_children()
+                            if isinstance(w, tk.Toplevel) and w.title() == 'Experimento de evolución Foundation')
+    evolution_disk = next(w for w in descendants(evolution_window)
+                         if isinstance(w, ttk.Checkbutton) and 'secuencias en disco' in w.cget('text'))
+    assert not bool(self.getvar(evolution_disk.cget('variable')))
+    evolution_disk.invoke()
+    assert bool(self.getvar(evolution_disk.cget('variable')))
+    for entry in descendants(evolution_window):
+        if isinstance(entry, ttk.Entry) and int(entry.grid_info().get('row', -1)) < 7:
+            entry.insert(0, 'navigation-fixture')
+    # Stub only the job boundary: this smoke verifies UI argument transport.
+    # Real experiments are separately exercised by test_foundation_evolution.py.
+    from ai_home.foundation import evolution_job
+    original_run, captured = evolution_job.run_evolution, []
+    def capture_job(*paths, **options):
+        captured.append(options)
+        return {'decision': 'navigation fixture', 'reason': 'no training performed'}
+    evolution_job.run_evolution = capture_job
+    try:
+        next(w for w in descendants(evolution_window)
+             if isinstance(w, ttk.Button) and w.cget('text') == 'Ejecutar experimento').invoke()
+        self.evolution_worker.join(timeout=5)
+        assert not self.evolution_worker.is_alive()
+        assert len(captured) == 1 and captured[0]['disk_sequences'] is True
+    finally:
+        evolution_job.run_evolution = original_run
     self.destroy()
     print('Ten real Tk sections route correctly; Training opens existing form. No visual or training capability claim.')
 tk.Tk.mainloop=run

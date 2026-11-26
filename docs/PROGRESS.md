@@ -1613,3 +1613,13 @@ entrena dos candidatos reales en ambos modos y verifica los cinco caches de cada
 rama, conservando evaluacion, rechazo/promocion deshabilitada y cancelacion.
 Trece pruebas de evolucion/continuo aprobadas en 8,08 s. Selector visual pendiente;
 no se afirma una mejora de capacidad ni una nueva medicion de memoria.
+
+### Selector de disco en evolucion de escritorio
+
+Anadida casilla desactivada por defecto en el dialogo de evolucion; se captura
+su valor en el hilo Tk antes de iniciar el trabajo. Prueba con widgets Tk reales
+verifica valor inicial, activacion y transporte al limite del trabajo mediante
+un sustituto de captura (no entrena en ese smoke). Los experimentos reales siguen
+cubiertos por la prueba de evolucion. 43 pruebas escritorio/privacidad/evolucion
+aprobadas en 7,42 s y smoke Tk correcto. Revision visual del dialogo pendiente;
+no se afirma legibilidad verificada a diferentes tamanos o DPI.

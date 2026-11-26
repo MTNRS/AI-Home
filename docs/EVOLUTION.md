@@ -112,5 +112,6 @@ por probes conserva su recorrido habitual.
 No cambia las reglas de aceptacion ni publica pesos. Los caches pueden contener
 datos privados tokenizados y no deben tratarse como artefactos publicos. La opcion
 reduce materializacion de secuencias en RAM, sin garantizar una cota estricta.
-Por ahora se selecciona desde CLI/API Python; el dialogo de evolucion no expone
-un selector. El valor predeterminado conserva la preparacion en memoria.
+El dialogo de evolucion incluye la casilla «Guardar secuencias en disco»,
+desactivada por defecto. Su valor se captura antes de lanzar el trabajador.
+El valor predeterminado conserva la preparacion en memoria.
