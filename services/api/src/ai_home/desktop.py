@@ -466,6 +466,9 @@ def format_job_summary(job):
                   "min_claim_service_bytes_per_second": "Recepción mínima de servicio (bytes/s)",
                   "min_submit_service_bytes_per_second": "Envío mínimo de servicio (bytes/s)",
                   "max_heartbeat_service_seconds": "Heartbeat máximo de servicio (s)",
+                  "min_transfer_download_bytes_per_second": "Descarga mínima de sonda HTTP (bytes/s)",
+                  "min_transfer_upload_bytes_per_second": "Subida mínima de sonda HTTP (bytes/s)",
+                  "max_transfer_http_round_trip_seconds": "Ida y vuelta máxima de sonda HTTP (s)",
                   "profile_sha256": "Perfil de arquitectura/tokenizador/runtime"}
         lines.append("Requisitos de asignación:")
         lines.extend(f"{labels.get(key, key)}: {value}" for key, value in job.scheduling.items())

@@ -78,3 +78,25 @@ Smoke HTTP real `--publish` pasó con un payload 1 MiB (seis peticiones) en
 artifacts/network-probe-published-v1; reporte HTTP_TRANSFER_PUBLISHED_SMOKE.json.
 No hubo creación de trabajos/transacciones. La modalidad sin --publish conserva
 las dos transferencias originales y no envía telemetría.
+
+## Restricciones opcionales del scheduler
+
+GradientSchedulingRequirements admite `min_transfer_download_bytes_per_second`,
+`min_transfer_upload_bytes_per_second` y `max_transfer_http_round_trip_seconds`.
+El último compara el mínimo de las tres observaciones HTTP, no un percentil ni el
+peor caso. La elegibilidad exige muestra válida recibida hace como máximo 120 s y
+recalcula tasas desde los tiempos crudos. Ausente/caducada/inválida solo bloquea
+trabajos que pidan estos campos; los demás conservan las restricciones existentes.
+
+Se mantienen los requisitos de medida de gradiente comparable, recursos recientes
+y perfil del modelo, incluso si solo se especifica una restricción de transferencia.
+Por tanto se necesita primero un trabajo de cómputo sin restricciones y una sonda
+publicada explícitamente. No se ha activado sondeo automático. Los criterios se
+incluyen en la idempotencia/plan existentes y aparecen con nombres en el visor.
+Estas observaciones no atestadas pueden falsearse; no se usan para pagar créditos.
+
+14 pruebas distribuidas/coordinador/sonda pasaron en 5.76s: umbrales de ambas tasas
+y tiempo, muestra ausente/caducada y aceptación. PostgreSQL real local: siete
+pruebas pasaron en 4.77s, incluyendo predicado JSON de las nuevas restricciones.
+Pendiente demostración completa con sonda HTTP real seguida de asignación y
+entrenamiento; estas pruebas usan tiempos controlados para decidir los umbrales.

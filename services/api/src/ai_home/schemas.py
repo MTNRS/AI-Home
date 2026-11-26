@@ -512,6 +512,9 @@ class GradientSchedulingRequirements(BaseModel):
     min_claim_service_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
     min_submit_service_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
     max_heartbeat_service_seconds: float | None = Field(default=None, gt=0, le=600, allow_inf_nan=False)
+    min_transfer_download_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
+    min_transfer_upload_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
+    max_transfer_http_round_trip_seconds: float | None = Field(default=None, gt=0, le=60, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def nonempty(self):

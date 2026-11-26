@@ -247,7 +247,10 @@ def test_postgres_scheduler_measurement_json_predicate(postgres_engine):
             jobs = [create_gradient_job(session, owner_user_id=owner, idempotency_key=str(uuid4()),
                 payload=payloads[0], allow_public_node_processing=True, scheduling=constraint)
                 for constraint in (None, {'min_gradient_tokens_per_second':1.0},
-                                   {'min_gradient_tokens_per_second':100.0})]
+                                   {'min_gradient_tokens_per_second':100.0},
+                                   {'min_transfer_download_bytes_per_second':1.0,
+                                    'min_transfer_upload_bytes_per_second':1.0,
+                                    'max_transfer_http_round_trip_seconds':1.0})]
             sample = {'format':'ai-home-worker-service-measurement-v1', 'job_type':'foundation.gradient.v1',
                       'device':'cpu', 'heartbeat_service_seconds':0.01, 'claim_service_seconds':0.02,
                       'execution_seconds':1.0, 'submit_service_seconds':0.03,
@@ -258,6 +261,11 @@ def test_postgres_scheduler_measurement_json_predicate(postgres_engine):
                 'claim_service_bytes_per_second':50000.0,'submit_service_bytes_per_second':30000.0}})
             query=select(ComputeJob.job_id).where(ComputeJob.owner_user_id==owner)
             assert set(session.scalars(query.where(_measurement_eligibility(node, now)))) == {jobs[0].job_id,jobs[1].job_id}
+            from ai_home.network_probe import TransferMeasurement
+            node.hardware['transfer_measurement'] = TransferMeasurement(
+                format='ai-home-http-transfer-probe-v1', payload_bytes=65536,
+                empty_round_trip_seconds=[.01,.02,.03], download_seconds=.1, upload_seconds=.2).summary(now)
+            assert set(session.scalars(query.where(_measurement_eligibility(node, now)))) == {jobs[0].job_id,jobs[1].job_id,jobs[3].job_id}
             assert set(session.scalars(query.where(_measurement_eligibility(node, now+121)))) == {jobs[0].job_id}
         finally:
             session.rollback()

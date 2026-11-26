@@ -166,10 +166,15 @@ def test_scheduler_enforces_fresh_comparable_service_constraints(client):
         return response.json()
     for i, constraint in enumerate(({'min_gradient_tokens_per_second': 1e8},
             {'min_claim_service_bytes_per_second': 1e9}, {'min_submit_service_bytes_per_second': 1e9},
-            {'max_heartbeat_service_seconds': 0.001})):
+            {'max_heartbeat_service_seconds': 0.001},
+            {'min_transfer_download_bytes_per_second': 1e10},
+            {'min_transfer_upload_bytes_per_second': 1e10},
+            {'max_transfer_http_round_trip_seconds': .0001})):
         enqueue(f'blocked-{i}', constraint)
     acceptable = {'min_gradient_tokens_per_second': 1.0, 'min_claim_service_bytes_per_second': 1.0,
-                  'min_submit_service_bytes_per_second': 1.0, 'max_heartbeat_service_seconds': 1.0}
+                  'min_submit_service_bytes_per_second': 1.0, 'max_heartbeat_service_seconds': 1.0,
+                  'min_transfer_download_bytes_per_second': 1.0,
+                  'min_transfer_upload_bytes_per_second': 1.0, 'max_transfer_http_round_trip_seconds': 1.0}
     eligible = enqueue('eligible', acceptable)
     assert eligible['scheduling']['profile_sha256']
     assert enqueue('eligible', acceptable)['job_id'] == eligible['job_id']
@@ -197,12 +202,23 @@ def test_scheduler_enforces_fresh_comparable_service_constraints(client):
     client.post('/api/v1/node/heartbeat', headers=nh, json={**resource,'foundation_device':'cuda','cuda_free_bytes':2**30}).raise_for_status()
     assert client.post('/api/v1/node/jobs/claim', headers=nh).status_code == 204
     client.post('/api/v1/node/heartbeat', headers=nh, json=resource).raise_for_status()
+    assert client.post('/api/v1/node/jobs/claim', headers=nh).status_code == 204
+    transfer = {'format':'ai-home-http-transfer-probe-v1', 'payload_bytes':65536,
+        'empty_round_trip_seconds':[.01,.02,.03], 'download_seconds':.1, 'upload_seconds':.2}
+    client.post('/api/v1/node/transfer-measurement', headers=nh, json=transfer).raise_for_status()
     claim2 = client.post('/api/v1/node/jobs/claim', headers=nh).json()
     assert claim2['job_id'] == eligible['job_id']
     changed = copy.deepcopy(payloads[0]); changed['config']['context'] = 8
     enqueue('other-profile', acceptable, changed)
     assert client.post('/api/v1/node/jobs/claim', headers=nh).status_code == 204
     enqueue('later', acceptable)
+    with client.app.state.session_factory() as session, session.begin():
+        stored = session.get(ComputeNode, node['node_id'])
+        hardware = copy.deepcopy(stored.hardware)
+        hardware['transfer_measurement']['received_epoch'] = 0
+        hardware['transfer_measurement']['expires_epoch'] = 120
+        stored.hardware = hardware
+    assert client.post('/api/v1/node/jobs/claim', headers=nh).status_code == 204
     with client.app.state.session_factory() as session, session.begin():
         stored = session.get(ComputeNode, node['node_id'])
         hardware = copy.deepcopy(stored.hardware)

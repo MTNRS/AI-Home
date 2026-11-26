@@ -1327,3 +1327,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - 5 pruebas pasaron en 1.23s y smoke HTTP --publish real pasó (1 MiB), informe
   HTTP_TRANSFER_PUBLISHED_SMOKE.json. Son tiempos declarados, no atestados.
 - Scheduler todavía no usa esta muestra; vinculación a recibo verificable pendiente.
+
+## 2026-11-26 — Restricciones de transferencia en scheduler
+
+- Tres umbrales opcionales HTTP, muestras válidas y vigentes 120 s; mantienen
+  requisito previo de cómputo comparable/recursos/perfil. Sin sondas automáticas.
+- 14 pruebas pasaron en 5.76s y siete PostgreSQL reales en 4.77s, incluido JSON.
+- Flujo HTTP+sonda+asignación+entrenamiento completo pendiente; tiempos de prueba
+  controlados, telemetría no atestada y sin autoridad sobre créditos.

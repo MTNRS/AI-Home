@@ -521,4 +521,26 @@ def _measurement_eligibility(node, now):
     for name, value, maximum in metrics:
         threshold = ComputeJob.scheduling[name].as_float()
         terms.append(or_(threshold.is_(None), threshold >= value if maximum else threshold <= value))
+    transfer_names = ("min_transfer_download_bytes_per_second", "min_transfer_upload_bytes_per_second",
+                      "max_transfer_http_round_trip_seconds")
+    transfer_values = None
+    try:
+        from ai_home.network_probe import TransferMeasurement
+        transfer = node.hardware.get("transfer_measurement") or {}
+        if (0 <= now - transfer["received_epoch"] <= 120
+                and transfer["expires_epoch"] == transfer["received_epoch"] + 120):
+            fields = ("format", "payload_bytes", "empty_round_trip_seconds", "download_seconds", "upload_seconds")
+            validated = TransferMeasurement.model_validate({key: transfer[key] for key in fields})
+            derived = validated.summary(transfer["received_epoch"])
+            transfer_values = (derived["download_bytes_per_second"], derived["upload_bytes_per_second"],
+                               derived["minimum_http_round_trip_seconds"])
+    except (KeyError, TypeError, ValueError):
+        pass
+    for index, name in enumerate(transfer_names):
+        threshold = ComputeJob.scheduling[name].as_float()
+        if transfer_values is None:
+            terms.append(threshold.is_(None))
+        else:
+            value = transfer_values[index]
+            terms.append(or_(threshold.is_(None), threshold >= value if index == 2 else threshold <= value))
     return or_(unconstrained, and_(*terms))
