@@ -1,0 +1,142 @@
+{
+  "format": "ai-home-visual-evaluation-v1",
+  "prompt": "Color?",
+  "max_new_tokens": 8,
+  "temperature": 0,
+  "control": "all-white-rgb",
+  "normalization": "NFC-CRLF-strip-exact",
+  "dataset_sha256": "c73cd35b9f5f7e9f150d39ae200fcc1b1e9cdbcefa78b856b02a0b06b7a097dc",
+  "protocol_sha256": "36a64d6ee3bab8f0000c0595320c130f321d058e83cf057f56ba031f5d6fb87d",
+  "checkpoint_sha256": "c8b0d16bd0087ea42a8ac7c0c1d44784ac3558d67d12226b006e546150bc0a7b",
+  "tokenizer_sha256": "769dbe2ec99601423b2940e7f9a82c21b615ab4f02470482624e8c404e26b5fe",
+  "device": "cuda",
+  "torch_version": "2.14.1+cu130",
+  "cases": [
+    {
+      "image_sha256": "dc77e86193bbae5e9a28cab7867cb47cdaea1891057402c4183ab92752ee0ef6",
+      "expected": "red",
+      "image": {
+        "answer": "red",
+        "exact_match": true,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.2174377000046661
+      },
+      "white_control": {
+        "answer": "green",
+        "exact_match": false,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.007074299996020272
+      },
+      "answer_changed": true
+    },
+    {
+      "image_sha256": "9dae5d7c6cdf9c5515f13b1ff315fa36046bd95deac7be8a29ea9252b6c61092",
+      "expected": "red",
+      "image": {
+        "answer": "red",
+        "exact_match": true,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.008445799991022795
+      },
+      "white_control": {
+        "answer": "green",
+        "exact_match": false,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.00818289999733679
+      },
+      "answer_changed": true
+    },
+    {
+      "image_sha256": "a06b19f74e2070862ea89c6eb41daf9f9d0620dd0da565cd2b369244565c72f7",
+      "expected": "green",
+      "image": {
+        "answer": "green",
+        "exact_match": true,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.008962400010204874
+      },
+      "white_control": {
+        "answer": "green",
+        "exact_match": true,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.006173300003865734
+      },
+      "answer_changed": false
+    },
+    {
+      "image_sha256": "8b8bd9c4aa4d564736340d1e0a4a0a4141c6b019462a12b0f8e6dc2e8034c27c",
+      "expected": "green",
+      "image": {
+        "answer": "green",
+        "exact_match": true,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.006354500001179986
+      },
+      "white_control": {
+        "answer": "green",
+        "exact_match": true,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.008883200003765523
+      },
+      "answer_changed": false
+    },
+    {
+      "image_sha256": "3c96dcb9859af33f1bcbe9d6297a39c371be3d3d3ea16e5ec45bf2fc62cb1dd0",
+      "expected": "blue",
+      "image": {
+        "answer": "blue",
+        "exact_match": true,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.008922499997424893
+      },
+      "white_control": {
+        "answer": "green",
+        "exact_match": false,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.006641600004513748
+      },
+      "answer_changed": true
+    },
+    {
+      "image_sha256": "e462ebd3a37b19d9343e65addc6ff756a6e6b2bc9368e4862fe59d73651c8fa8",
+      "expected": "blue",
+      "image": {
+        "answer": "blue",
+        "exact_match": true,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.009109100006753579
+      },
+      "white_control": {
+        "answer": "green",
+        "exact_match": false,
+        "generated_tokens": 1,
+        "budget_exhausted": false,
+        "seconds": 0.009300200006691739
+      },
+      "answer_changed": true
+    }
+  ],
+  "split_pixel_check": {
+    "preprocessing": "rgb-exif-white-letterbox-bilinear-v1",
+    "image_size": 8,
+    "records_checked": 24,
+    "unique_pixel_hashes": 24
+  },
+  "exact_matches": 6,
+  "count": 6,
+  "white_control_exact_matches": 2,
+  "changed_answers": 4,
+  "training_dataset_matches": true,
+  "claim": "Heldout manifest caption probes only; white-control differences do not prove visual understanding"
+}

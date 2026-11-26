@@ -1280,3 +1280,10 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   canceló desde el botón y validó informe/checkpoint con paso coincidente.
 - Pasó localmente; artefactos visual-training-async-v1. Gate instalado/Xvfb añadido
   a CI y reporte conservado; resultado remoto de la adición pendiente.
+
+## 2026-11-26 — Evitar contaminación visual por reexportación
+
+- Preflight train/eval rechaza píxeles preprocesados idénticos entre particiones,
+  aunque difieran bytes/resolución/metadatos; carga una imagen a la vez.
+- 27 pruebas pasaron en 5.16s. Reevaluación CUDA de colores conserva 6/6 y control
+  2/6 tras verificar separación; VISUAL_COLOR_PIXEL_CHECK.json. No detecta near-duplicates.

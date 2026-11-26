@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("torch")
 Image = pytest.importorskip("PIL.Image")
 from ai_home.foundation.data import canonical_hash
-from ai_home.foundation.vision_data import FORMAT, load_visual_manifest, load_visual_record
+from ai_home.foundation.vision_data import FORMAT, load_visual_manifest, load_visual_record, verify_visual_split_pixels
 from ai_home.foundation.vision_images import PREPROCESSING
 
 
@@ -69,3 +69,24 @@ def test_duplicate_split_and_manifest_tampering(dataset):
         load_visual_manifest(path)
     with pytest.raises(ValueError, match="budget"):
         load_visual_manifest(path, max_bytes=10)
+
+
+def test_reencoded_identical_pixels_rejected_across_splits(dataset):
+    from PIL.PngImagePlugin import PngInfo
+    path, data = dataset
+    info = PngInfo()
+    info.add_text("Description", "Different container, identical model input")
+    other = path.parent / "blue.png"
+    Image.new("RGB", (16, 16), "red").save(other, pnginfo=info)
+    data["records"][1]["image_sha256"] = hashlib.sha256(other.read_bytes()).hexdigest()
+    publish(path, data)
+    records, _ = load_visual_manifest(path)  # File hashes differ and pass this check.
+    with pytest.raises(ValueError, match="identical preprocessed"):
+        verify_visual_split_pixels(path, records, 8)
+
+
+def test_distinct_model_pixels_pass(dataset):
+    path, _ = dataset
+    records, _ = load_visual_manifest(path)
+    report = verify_visual_split_pixels(path, records, 8)
+    assert report["records_checked"] == report["unique_pixel_hashes"] == 2

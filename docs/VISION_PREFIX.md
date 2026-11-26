@@ -423,3 +423,18 @@ Esto supera la limitación del harness síncrono anterior para actualización y
 cancelación; no inspecciona visualmente el layout. CI añade el mismo script con
 paquete instalado, Xvfb y Python -I, y conserva el informe. Resultado remoto de
 esta adición pendiente de comprobar.
+
+## Separación por píxeles efectivos
+
+Antes de entrenar o evaluar se decodifica cada imagen de una en una y se calcula
+el hash de los píxeles tras el mismo preprocesamiento que recibe el modelo. Se
+rechaza solapamiento train/validation aunque el archivo, resolución o metadatos
+sean distintos. Solo se conservan hashes durante esta comprobación, no el corpus
+completo de píxeles. Se repite la validación de hash de archivo al cargar ejemplos.
+No detecta similitud perceptual, recortes, cambios de color ni parentesco semántico;
+no sustituye una partición independiente por fuente/autor cuando sea necesaria.
+
+27 pruebas datasets/training/evaluation pasaron en 5.16s. Incluyen un PNG con nueva
+resolución y metadatos que colapsa al mismo input y debe rechazarse. Reevaluación
+real CUDA del candidato de colores pasó la comprobación y mantiene 6/6, control
+blanco 2/6; informe VISUAL_COLOR_PIXEL_CHECK.json. No se reentrenó el candidato.

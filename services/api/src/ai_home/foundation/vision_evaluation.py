@@ -11,7 +11,7 @@ from .data import canonical_hash
 from .evaluation import normalize
 from .training import select_device
 from .vision_checkpoint import load_vision_weights
-from .vision_data import load_visual_manifest, load_visual_record
+from .vision_data import load_visual_manifest, load_visual_record, verify_visual_split_pixels
 from .vision_inference import stream_vision_tokens
 
 
@@ -23,6 +23,7 @@ def evaluate_visual(checkpoint, manifest, *, prompt, max_new_tokens=64, device="
     device = select_device(device)
     records, dataset_hash = load_visual_manifest(manifest)
     model, tokenizer, payload = load_vision_weights(checkpoint, device)
+    split_check = verify_visual_split_pixels(manifest, records, model.vision_config.image_size)
     ids = tokenizer.conversation([{"role": "user", "content": prompt}])
     capacity = model.text.config.context - model.vision_config.patches
     if len(ids) > capacity:
@@ -54,7 +55,7 @@ def evaluate_visual(checkpoint, manifest, *, prompt, max_new_tokens=64, device="
     count = len(cases)
     return {**protocol, "protocol_sha256": canonical_hash(protocol),
         "checkpoint_sha256": model.checkpoint_sha256, "tokenizer_sha256": tokenizer.fingerprint,
-        "device": device, "torch_version": str(torch.__version__), "cases": cases,
+        "device": device, "torch_version": str(torch.__version__), "cases": cases, "split_pixel_check": split_check,
         "exact_matches": sum(c["image"]["exact_match"] for c in cases), "count": count,
         "white_control_exact_matches": sum(c["white_control"]["exact_match"] for c in cases),
         "changed_answers": sum(c["answer_changed"] for c in cases),

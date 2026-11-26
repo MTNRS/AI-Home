@@ -13,6 +13,7 @@ from .resources import available_training_bytes, estimate_training_bytes
 from .training import select_device
 from .vision import VisionPrefixModel
 from .vision_batches import VisualCaptionDataset
+from .vision_data import verify_visual_split_pixels
 from .vision_checkpoint import load_vision_weights, vision_weights_payload
 
 
@@ -32,6 +33,7 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
         raise ValueError("Visual training exceeds memory budget")
     train = VisualCaptionDataset(manifest, tokenizer, config, vision, split="train", prompt=prompt)
     validation = VisualCaptionDataset(manifest, tokenizer, config, vision, split="validation", prompt=prompt)
+    verify_visual_split_pixels(manifest, train.records + validation.records, vision.image_size)
     binding = {"training": asdict(training), "prompt": prompt, "dataset": train.dataset_sha256,
                "device": device, "torch_version": str(torch.__version__)}
     torch.manual_seed(training.seed)

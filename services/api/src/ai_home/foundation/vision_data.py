@@ -1,9 +1,11 @@
 """Reviewed local visual manifests; lazy pixel loading with hash binding."""
 
 import json
+import hashlib
 from pathlib import Path
 import re
 import unicodedata
+import torch
 
 from ai_home.privacy import contains_common_secret
 from .data import canonical_hash
@@ -83,3 +85,23 @@ def load_visual_record(manifest_path, record, image_size):
     image, metadata = load_image(_image_path(root, record["image"]), image_size,
                                 expected_sha256=record["image_sha256"])
     return image, record["caption"], metadata
+
+
+def verify_visual_split_pixels(manifest_path, records, image_size):
+    """Reject train/validation overlap after actual model preprocessing.
+
+    Decode one bounded image at a time; retain only digests, never the pixel corpus.
+    This catches metadata/re-encoding differences, not perceptual near-duplicates.
+    """
+    seen = {}
+    for record in records:
+        image, _, _ = load_visual_record(manifest_path, record, image_size)
+        # Preprocessing is RGB uint8 / 255; recover its exact byte representation.
+        pixels = image.mul(255).round().to(dtype=torch.uint8).flatten().tolist()
+        digest = hashlib.sha256(bytes(pixels)).hexdigest()
+        previous = seen.get(digest)
+        if previous is not None and previous != record["split"]:
+            raise ValueError("Train/validation images have identical preprocessed pixels")
+        seen[digest] = record["split"]
+    return {"preprocessing": PREPROCESSING, "image_size": image_size,
+            "records_checked": len(records), "unique_pixel_hashes": len(seen)}
