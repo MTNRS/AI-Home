@@ -139,3 +139,35 @@ de verificar el resultado. La demostración --reward-credits 5 completó cuatro
 trabajos neuronales y liquidó 10 créditos a cada worker. Las menciones anteriores
 a créditos pendientes corresponden al estado previo. Detalles de atomicidad,
 reembolso, migración y límites en CREDITS.md.
+
+
+## CPU/CUDA volunteer gradient execution
+
+`NodeAgent(..., allow_foundation_training=True, foundation_device="cuda")` and
+`execute_job(..., foundation_device="cuda")` explicitly opt into CUDA execution
+of the same bounded FP32 gradient task. CPU remains the default. CUDA requests
+fail if unavailable or the estimated device memory does not fit; there is no
+silent fallback. Public-data/weights restrictions and the 50,000-parameter task
+budget remain. The wire format stays device-independent. The coordinator still
+recomputes on CPU and uses the existing loss/gradient tolerances (unchanged).
+
+Reproduce the mixed-device demonstration with the CUDA Python environment:
+
+```powershell
+$env:PYTHONPATH='services/api/src'
+.venv-cuda\Scripts\python.exe -m ai_home.foundation.distributed_smoke --output-dir artifacts/distributed-mixed-new --rounds 2 --reward-credits 5 --worker-devices cpu cuda
+```
+
+`DISTRIBUTED_MIXED_CUDA.json` records two logical nodes over loopback HTTP,
+separate worker processes, two aggregate updates, embedding change 0.1838997
+and 10 verified internal test credits earned by each worker. The 28,192-parameter
+checkpoint was reloaded and generated incoherent text. A CUDA test also observes
+actual CUDA input tensors during worker forward calls, then CPU tensors during
+independent verification, and aggregates the result with a CPU shard.
+
+This is single-host heterogeneous execution, not multiple physical hosts or
+multiple GPUs. Device choice is worker-local; scheduler matching still uses
+supported task, RAM and PyTorch version. GPU throughput/VRAM/network-aware task
+ranking, larger shards, multi-host efficiency and independent scalable validation
+remain outstanding. Tiny CPU recomputation is intentionally expensive evidence,
+not a proposed production scaling strategy.

@@ -112,3 +112,24 @@ def test_gradient_jobs_run_through_scheduler_and_verify_results(client):
         "result": {**result, "token_count": 0}}).status_code == 422
     assert client.post(submit, headers=node_headers, json={"lease_token": claim["lease_token"],
         "result": result}).json()["status"] == "completed"
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA unavailable")
+def test_cuda_gradient_worker_is_independently_verified_on_cpu(monkeypatch):
+    model, tokenizer, _, payloads = setup_shards()
+    seen = []
+    original = FoundationModel.forward
+    def observed(self, tokens, *args, **kwargs):
+        seen.append(tokens.device.type)
+        return original(self, tokens, *args, **kwargs)
+    monkeypatch.setattr(FoundationModel, "forward", observed)
+    result = execute_job("foundation.gradient.v1", payloads[0],
+                         allow_foundation_training=True, foundation_device="cuda")
+    assert seen and set(seen) == {"cuda"}
+    seen.clear()
+    assert verified_gradient_result(payloads[0], result)
+    assert set(seen) == {"cpu"}
+    other = execute_gradient(payloads[1])
+    before = model.embedding.weight.detach().clone()
+    aggregate_gradients(model, tokenizer, [result, other], torch.optim.AdamW(model.parameters(), lr=.001))
+    assert not torch.equal(before, model.embedding.weight)

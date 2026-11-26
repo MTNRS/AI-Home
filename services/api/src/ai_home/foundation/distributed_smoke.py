@@ -36,6 +36,7 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--reward-credits", type=int, default=0)
+    parser.add_argument("--worker-devices", nargs=2, choices=("cpu", "cuda"), default=["cpu", "cpu"])
     args = parser.parse_args()
     if not 1 <= args.rounds <= 10:
         parser.error("Reference experiment permits 1-10 rounds")
@@ -120,16 +121,16 @@ def main():
                         "reward_credits": args.reward_credits})
                     response.raise_for_status()
                     ids.append(response.json()["job_id"])
-                for node in nodes:
+                for node, worker_device in zip(nodes, args.worker_devices):
                     environment = {**os.environ, "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2"}
                     worker = subprocess.run([sys.executable, "-m", "ai_home.foundation.node_smoke", "--worker"],
-                        input=json.dumps({"url": url, "token": node["node_token"], "allow_foundation_training": True}),
+                        input=json.dumps({"url": url, "token": node["node_token"], "allow_foundation_training": True, "foundation_device": worker_device}),
                         capture_output=True, text=True, check=True, timeout=60, env=environment,
                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
                     observed = json.loads(worker.stdout)
                     if not observed["completed"]:
                         raise RuntimeError("Worker did not complete a gradient shard")
-                    workers.append({"round": step, "node_id": node["node_id"], **observed})
+                    workers.append({"round": step, "node_id": node["node_id"], "device": worker_device, **observed})
                 response = client.get("/api/v1/jobs")
                 response.raise_for_status()
                 jobs = {job["job_id"]: job for job in response.json()}

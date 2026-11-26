@@ -648,3 +648,16 @@ dfa437b9c0a643f6897b01962b0f29f6. Layout has not been visually reviewed.
 The first suite run overlapped the Tk run and hit transient host RAM guards in
 three tests. Sequential rerun: 258 passed, 5 PostgreSQL skips (server stopped).
 No memory guard was relaxed and no other application was stopped.
+
+
+### Mixed CPU/CUDA distributed gradients
+
+Added explicit CUDA worker execution with device-memory checks, preserving the
+bounded public FP32 protocol and unchanged CPU verifier tolerances. Extended
+NodeAgent and the two-worker HTTP demonstration with explicit device choices.
+Actual mixed CPU/CUDA run completed two rounds, changed embeddings by 0.1838997,
+reloaded a checkpoint and settled 10 synthetic credits per worker. Generated
+text remains incoherent. CUDA tensor execution and CPU re-verification are tested.
+Full suite: 259 passed, 5 PostgreSQL skips (server stopped). Evidence is retained
+in DISTRIBUTED_MIXED_CUDA.json. No multi-host or multi-GPU performance claim;
+resource-aware scheduler ranking remains incomplete.

@@ -1,4 +1,4 @@
-"""Small CPU gradient shards: bounded tensors, no pickle or remote code."""
+"""Small CPU/CUDA gradient shards: bounded tensors, no pickle or remote code."""
 import base64
 from dataclasses import asdict
 import json
@@ -12,7 +12,8 @@ from .data import canonical_hash, prepare_records
 from .model import FoundationConfig, FoundationModel
 from .tasks import TokenizePayload
 from .tokenizer import ByteBPE
-from .training import _sequences
+from .training import _sequences, select_device
+from .resources import estimate_training_bytes, available_training_bytes
 
 GRADIENT_JOB = "foundation.gradient.v1"
 MAX_PARAMETERS = 50_000
@@ -88,13 +89,18 @@ def parameter_fingerprint(config, tokenizer, parameters):
     return canonical_hash({"config": config, "tokenizer": tokenizer, "parameters": parameters})
 
 
-def execute_gradient(payload):
+def execute_gradient(payload, *, device="cpu"):
+    if device not in {"cpu", "cuda"}:
+        raise ValueError("Gradient worker device must be cpu or cuda")
+    device = select_device(device)
     validated = GradientPayload.model_validate(payload)
     config = FoundationConfig(**validated.config)
+    if estimate_training_bytes(config, 2) > available_training_bytes(device):
+        raise ValueError("Insufficient available device memory for gradient task")
     # Allocate only after validation; never mutate the process-wide random seed.
     with torch.device("meta"):
         model = FoundationModel(config)
-    model.to_empty(device="cpu")
+    model.to_empty(device=device)
     if config.tied_embeddings:
         model.output.weight = model.embedding.weight
     model.train()
@@ -109,7 +115,7 @@ def execute_gradient(payload):
     tokens = int((labels != -100).sum())
     total_loss = 0.0
     for x, y in zip(inputs.split(2), labels.split(2)):
-        loss_sum = F.cross_entropy(model(x)[0].flatten(0, 1), y.flatten(), reduction="sum")
+        loss_sum = F.cross_entropy(model(x.to(device))[0].flatten(0, 1), y.to(device).flatten(), reduction="sum")
         (loss_sum / tokens).backward()
         total_loss += loss_sum.item()
     gradients = {name: p.grad for name, p in model.named_parameters()}

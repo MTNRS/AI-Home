@@ -113,14 +113,14 @@ def _parse_nvidia_smi(output: str) -> list[dict[str, int | str]]:
     return devices
 
 
-def execute_job(job_type: str, payload: dict, *, allow_foundation_training=False) -> dict[str, int | str]:
+def execute_job(job_type: str, payload: dict, *, allow_foundation_training=False, foundation_device="cpu") -> dict[str, int | str]:
     if job_type == "foundation.gradient.v1":
         if not allow_foundation_training:
             raise ValueError("Neural work requires explicit worker opt-in")
         if psutil.virtual_memory().available < 1024**3:
             raise ValueError("Insufficient available RAM for neural task")
         from ai_home.foundation.distributed import execute_gradient
-        return execute_gradient(payload)
+        return execute_gradient(payload, device=foundation_device)
     if job_type == "foundation.tokenize.v1":
         from ai_home.foundation.tasks import execute_tokenize
         if psutil.virtual_memory().available < 256 * 1024**2:
@@ -171,7 +171,11 @@ class NodeAgent:
         timeout_seconds: float = 30,
         transport: httpx.BaseTransport | None = None,
         allow_foundation_training: bool = False,
+        foundation_device: str = "cpu",
     ) -> None:
+        if foundation_device not in {"cpu", "cuda"}:
+            raise ValueError("Foundation worker device must be cpu or cuda")
+        self.foundation_device = foundation_device
         self.allow_foundation_training = allow_foundation_training
         server_url = normalize_base_url(server_url)
         self._client = httpx.Client(
@@ -191,7 +195,8 @@ class NodeAgent:
         response.raise_for_status()
 
         job = ClaimedJobResponse.model_validate(response.json())
-        result = execute_job(job.job_type, job.payload, allow_foundation_training=self.allow_foundation_training)
+        result = execute_job(job.job_type, job.payload, allow_foundation_training=self.allow_foundation_training,
+                             foundation_device=self.foundation_device)
         submitted = self._client.post(
             f"/api/v1/node/jobs/{job.job_id}/result",
             json={
