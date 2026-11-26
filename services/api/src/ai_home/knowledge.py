@@ -20,8 +20,8 @@ def terms(text):
     return re.findall(r"[^\W_]{2,}", text, re.UNICODE)
 
 
-def _validate(records):
-    records = prepare_records(records, purpose="retrieval")
+def _validate(records, *, purpose="retrieval"):
+    records = prepare_records(records, purpose=purpose)
     for record in records:
         parsed = urlsplit(record["url"])
         if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:

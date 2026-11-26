@@ -6,6 +6,8 @@ import argparse
 import bz2
 from datetime import datetime, timezone
 import json
+import hashlib
+import unicodedata
 from pathlib import Path
 import re
 from urllib.parse import urlsplit
@@ -77,11 +79,15 @@ def import_wikipedia_dump(
     temporary_corpus = Path(f"{corpus_path}.tmp")
     temporary_attribution = Path(f"{attribution_path}.tmp")
     temporary_manifest = Path(f"{manifest_path}.tmp")
+    records_path = Path(f"{corpus_path}.records.jsonl")
+    temporary_records = Path(f"{records_path}.tmp")
+    accessed_at = datetime.now(timezone.utc).isoformat()
     imported_pages = 0
 
     try:
         with (
             bz2.open(dump_path, "rb") as source,
+            temporary_records.open("w", encoding="utf-8", newline="\n") as records,
             temporary_corpus.open("w", encoding="utf-8", newline="\n") as corpus,
             temporary_attribution.open(
                 "w",
@@ -147,6 +153,18 @@ def import_wikipedia_dump(
                             )
                             + "\n"
                         )
+                        normalized = unicodedata.normalize("NFC", article_text).replace("\r\n", "\n").strip()
+                        records.write(json.dumps({
+                            "source": f"Wikipedia {language}: {title}",
+                            "url": f"https://{language}.wikipedia.org/w/index.php?oldid={revision_id}",
+                            "license": "CC BY-SA 4.0", "date": accessed_at,
+                            "language": language, "text": normalized,
+                            "sha256": hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
+                            "source_dump_url": source_url, "page_id": page_id,
+                            "revision_id": revision_id, "format": "wikitext-to-plain-text",
+                            "training_allowed": False, "retrieval_allowed": False,
+                            "privacy_reviewed": False, "visibility": "pending-review",
+                        }, ensure_ascii=False) + "\n")
                         imported_pages += 1
                 page.clear()
 
@@ -164,7 +182,8 @@ def import_wikipedia_dump(
             "purpose": "language_model_training",
             "imported_pages": imported_pages,
             "attribution_file": attribution_path.name,
-            "accessed_at": datetime.now(timezone.utc).isoformat(),
+            "accessed_at": accessed_at,
+            "pending_records_file": records_path.name,
             "notice": (
                 "Review page-specific exceptions and attribution/share-alike "
                 "obligations before distributing derived model weights."
@@ -176,12 +195,14 @@ def import_wikipedia_dump(
         )
         temporary_corpus.replace(corpus_path)
         temporary_attribution.replace(attribution_path)
+        temporary_records.replace(records_path)
         temporary_manifest.replace(manifest_path)
     except (OSError, ElementTree.ParseError, ValueError):
         for temporary_path in (
             temporary_corpus,
             temporary_attribution,
             temporary_manifest,
+            temporary_records,
         ):
             temporary_path.unlink(missing_ok=True)
         raise

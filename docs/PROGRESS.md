@@ -253,3 +253,15 @@ exports remain excluded. Index update tests verify immutable earlier versions an
 independent source metadata on the replacement version.
 
 Validation: CUDA-enabled full suite 181 passed, 4 PostgreSQL tests skipped.
+
+
+### Wikipedia structured connector (2026-11-26)
+
+Preserved the existing importer outputs and added pending structured article
+records. A review-template and approval CLI exports immutable versioned datasets
+with separate training/retrieval permissions and review identity/hash. Approval
+binds text and metadata; no automatic approval occurs. Verified a synthetic dump
+through review and retrieval, plus rejection cases. Full suite: 189 passed,
+4 PostgreSQL skipped; final connector-specific run: 9 passed. Documentation and
+reproducible commands are in KNOWLEDGE.md. Large-dump review and real-source
+license/privacy review remain operator work.

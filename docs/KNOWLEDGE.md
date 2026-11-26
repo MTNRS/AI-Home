@@ -64,7 +64,7 @@ authored synthetic fixture. Generated text is not a demonstrated factual answer.
 
 There is no network ingestion, online refresh scheduler, semantic neural encoder,
 or large-scale vector database in this increment.
-Existing Wikipedia ingestion remains separate. Arbitrary source connectors,
+Wikipedia dump ingestion now exports pending structured records for explicit review. Arbitrary source connectors,
 review workflows and semantic retrieval evaluation remain
 part of the full objective. The dataset validator distinguishes retrieval from training permission. Legacy
 records without `retrieval_allowed` retain the prior public-training permission
@@ -102,3 +102,46 @@ and accepts only the literal boolean true for retrieval. Version update tests
 prove that old index bytes remain unchanged and the new version retains its own
 source URL, date and document hash. Revoking access requires selecting an updated
 index or removing the old index from service; versioning itself is not revocation.
+
+
+## Wikipedia connector and reviewed promotion
+
+The existing offline Wikipedia importer retains its corpus, attribution JSONL and
+manifest outputs and additionally writes `<corpus>.records.jsonl`. Each pending
+record contains plain article text (not generated conversational examples),
+revision URL/ID, dump URL, language, import timestamp, transformation format,
+text hash and disabled use permissions. The license label inherited from the
+importer is provisional: review page-specific exceptions before approving it.
+The date is the import time, not a claim about the last article revision date.
+
+```powershell
+python -m ai_home.wikipedia_corpus --dump articles.xml.bz2 --output corpus.txt --source-url https://dumps.wikimedia.org/eswiki/REPLACE-WITH-ACTUAL-DUMP --language es
+python -m ai_home.knowledge_ingest template corpus.txt.records.jsonl review.json
+# Review each selected source and edit review.json before the next command.
+python -m ai_home.knowledge_ingest approve corpus.txt.records.jsonl review.json authorized.json --purpose retrieval
+python -m ai_home.knowledge build authorized.json knowledge-v2.json
+```
+
+The template grants no permissions. Supply reviewer ID and date, remove unapproved
+entries, and explicitly mark privacy/license review and each permitted use.
+Approvals bind both the text hash and the complete original record hash. Metadata
+edits require renewed review. At least two distinct approved documents are needed
+by the current dataset format. The default promotion purpose is retrieval; use
+`--purpose training` only with explicit training authorization. Exported datasets
+carry the reviewer, review date, review hash and dataset version. Existing outputs
+are never overwritten. The connector interface is pending JSONL plus per-record
+review; other source adapters can produce the same format.
+
+Review is an operator attestation, not an automated legal determination or a
+cryptographic reviewer identity. Common secret/email checks are not comprehensive
+PII detection. Inputs and approved datasets are bounded to 8 MB for this review
+path; large dumps must be curated into bounded selections. Importing a dump does
+not authorize training, retrieval or redistribution. The legacy corpus importer
+still has its original independent behavior; this gate governs new structured
+Foundation datasets, not every possible external training input.
+
+Validation uses authored synthetic XML, not downloaded Wikipedia articles. The
+pipeline tests cover pending-record rejection, review, indexing, independent use
+permissions, duplicate approvals, changed content/metadata and no-overwrite
+behavior. Full suite before the template helper: 189 passed, 4 PostgreSQL skipped;
+all 9 connector tests pass after adding the template helper.
