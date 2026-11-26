@@ -27,23 +27,33 @@ def dataset_shards(path, shard_count):
 def _payloads(checkpoint, shards):
     if not isinstance(shards, list) or not 1 <= len(shards) <= 8:
         raise ValueError("Require one to eight public evaluation shards")
+    prepared, seen = [], set()
+    for index, shard in enumerate(shards, start=1):
+        if not isinstance(shard, list) or not 2 <= len(shard) <= 32:
+            raise ValueError(f"Evaluation shard {index} requires two to 32 documents")
+        records = prepare_records(shard)
+        documents = {r["sha256"] for r in records}
+        if documents & seen:
+            raise ValueError(f"Evaluation shard {index} has duplicate documents across shards")
+        if sum(len(r["text"].encode("utf-8")) for r in records) > 4096:
+            raise ValueError(f"Evaluation shard {index} exceeds 4096 UTF-8 input bytes; repartition the holdout")
+        public = [PublicRecord.model_validate({key: value for key, value in r.items()
+                  if key in PublicRecord.model_fields}).model_dump() for r in records]
+        prepared.append((records, documents, public))
+        seen.update(documents)
     model, tokenizer, state = load_checkpoint(checkpoint, max_bytes=10_000_000)
     if state.get("data_visibility") != "public" or "training_document_hashes" not in state:
         raise ValueError("Evaluation requires a public checkpoint with training lineage")
     trained = set(state["training_document_hashes"])
     trained_groups = set(state.get("training_split_groups", []))
     parameters = encode_tensors(dict(model.named_parameters()))
-    payloads, seen = [], set()
-    for shard in shards:
-        records = prepare_records(shard)
-        documents = {r["sha256"] for r in records}
+    payloads = []
+    for records, documents, public in prepared:
         groups = {r["split_group_sha256"] for r in records if "split_group_sha256" in r}
         if groups and "training_split_groups" not in state:
             raise ValueError("Grouped evaluation requires checkpoint group lineage")
-        if documents & (trained | seen) or groups & trained_groups:
+        if documents & trained or groups & trained_groups:
             raise ValueError("Evaluation contamination or duplicate documents across shards")
-        seen.update(documents)
-        public = [{key: value for key, value in r.items() if key in PublicRecord.model_fields} for r in records]
         payload = {"shard": {"records": public, "tokenizer": tokenizer.to_dict()},
                    "config": asdict(model.config), "parameters": parameters,
                    "torch_version": str(torch.__version__), "weights_public_and_redistributable": True}

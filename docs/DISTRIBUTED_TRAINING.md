@@ -580,3 +580,10 @@ DISTRIBUTED_EVALUATION_DATASET_SMOKE.json registra la ejecucion CPU/CUDA local:
 468 tokens, dos trabajos y tres creditos liquidados por nodo. La CI reutiliza
 el mismo smoke con CPU/CPU desde el paquete instalado; esta revision no se
 declara validada remotamente hasta que termine su workflow.
+
+Antes de cargar el checkpoint, el coordinador valida los fragmentos publicos,
+la procedencia, los duplicados entre fragmentos, el numero de documentos y
+el limite de 4096 bytes UTF-8 de texto por fragmento. Los errores de tamano
+y duplicacion identifican el fragmento (numeracion desde uno). El texto no
+se recorta para hacerlo caber. Las comprobaciones del linaje y de los tensores
+siguen realizandose al cargar el modelo y validar los payloads completos.

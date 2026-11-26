@@ -1809,3 +1809,14 @@ antes de advance. Ejecucion CPU/CUDA completada: 468 tokens, perdida distribuida
 tres creditos por nodo, cero reservas pendientes y checkpoint intacto. Observador:
 nueve intentos, cero errores de transporte. Informe conservado en
 DISTRIBUTED_EVALUATION_DATASET_SMOKE.json. Un equipo, no prueba multihost.
+
+
+### Validacion de fragmentos antes de cargar pesos
+
+La planificacion comprueba primero registros publicos, procedencia, duplicados
+entre fragmentos, conteos y bytes UTF-8. Rechaza entradas incompatibles antes
+de cargar/codificar el checkpoint y conserva las verificaciones completas
+de payload y linaje. Los errores de tamano identifican el fragmento. Siete
+pruebas aprobadas en 26.01 segundos, incluido texto multibyte que excede bytes
+sin exceder caracteres y rechazo con checkpoint inexistente como evidencia
+del orden de validacion. Flujo real de evaluacion y creditos sigue aprobado.

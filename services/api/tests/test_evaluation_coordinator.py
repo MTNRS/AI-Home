@@ -174,3 +174,21 @@ def test_dataset_partition_preserves_public_holdout_and_rejects_invalid_input(tm
     path.write_text(json.dumps({"format_version": 1, "records": holdout}), encoding="utf-8")
     with pytest.raises(ValueError, match="public"):
         dataset_shards(path, 2)
+
+
+def test_invalid_shards_rejected_before_checkpoint_loading(tmp_path):
+    options = dict(server="http://127.0.0.1", owner_user_id="owner", allow_public_node_processing=True,
+                   weights_public_and_redistributable=True)
+    holdout = records("preflight")
+    oversized = copy.deepcopy(holdout[:2])
+    # Multibyte text: character count fits but UTF-8 bytes exceed the wire budget.
+    for index, row in enumerate(oversized):
+        row["text"] = str(index) + "\u00e9" * 1100
+    cases = [([oversized], "shard 1 exceeds 4096"),
+             ([holdout, holdout], "shard 2 has duplicate"),
+             ([holdout[:1]], "shard 1 requires"),
+             ([[{**row, "visibility": "private"} for row in holdout]], "public")]
+    for shards, message in cases:
+        with pytest.raises(ValueError, match=message):
+            create_plan(tmp_path / "absent.pt", shards, tmp_path / "plan.json", **options)
+        assert not (tmp_path / "plan.json").exists()
