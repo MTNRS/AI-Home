@@ -768,3 +768,14 @@ CLI approvals for two lifecycle-only test versions. The desktop itself retained
 100% approval and rejected the third candidate. An older smoke checkpoint was
 first rejected for missing required training lineage; that gate was not weakened.
 No production registry was touched. Functional UI testing is not a visual review.
+
+### Measured local model sizing
+
+Added a bounded synthetic-token compute benchmark with actual AdamW updates,
+synchronized CUDA timing, working-set preflight, device identity, sampled RSS,
+peak CUDA allocation/reservation and nonzero parameter-change evidence. Ran Nano
+(803,968 parameters) on CPU/CUDA and Micro (4,361,472) / Small (22,815,232) on CUDA
+in separate processes. Raw measurements and configurations are committed; see
+COMPUTE_BENCHMARKS.md for throughput, memory and scope limitations. No language
+capability, optimal sizing, sustained performance or multi-GPU support is inferred.
+Medium/Large sizing remains unresolved. Full suite: 270 passed, 5 PostgreSQL skips.
