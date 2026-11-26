@@ -1567,6 +1567,8 @@ def main() -> None:
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
             ttk.Button(routing, text="Explorar conocimiento local",
                        command=self._knowledge_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Ver evaluación o evolución",
+                       command=self._experiment_report_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Inspeccionar checkpoint local",
                        command=self._inspect_checkpoint_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ajustes de generación Foundation",
@@ -1649,6 +1651,42 @@ def main() -> None:
             button.pack(side="right", padx=(8, 0))
             query.bind("<Return>", lambda _: search())
             search()
+
+        def _experiment_report_dialog(self) -> None:
+            path = filedialog.askopenfilename(parent=self, title="Informe de evaluación o evolución",
+                                             filetypes=[("Informe JSON", "*.json")])
+            if not path:
+                return
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Foundation: evaluación y evolución")
+            window.geometry("820x580")
+            ttk.Label(window, text="Informe local: no verifica por sí solo la ejecución, los pesos ni la aprobación.",
+                      wraplength=760).pack(padx=12, pady=10)
+            summary = tk.StringVar(value="Cargando informe…")
+            ttk.Label(window, textvariable=summary, wraplength=760).pack(padx=12, pady=6)
+            frame = ttk.Frame(window)
+            frame.pack(fill="both", expand=True, padx=12, pady=12)
+            scrollbar = ttk.Scrollbar(frame)
+            scrollbar.pack(side="right", fill="y")
+            content = tk.Text(frame, wrap="word", state="disabled", yscrollcommand=scrollbar.set)
+            content.pack(fill="both", expand=True)
+            scrollbar.configure(command=content.yview)
+            def inspect():
+                from ai_home.foundation.reports import read_report
+                return read_report(path)
+            def display(document):
+                report = document["report"]
+                if report["format"] == "ai-home-evaluation-v1":
+                    passed = sum(row["passed"] for row in report["results"])
+                    summary.set(f"Evaluación: {passed}/{len(report['results'])} pruebas superadas. "
+                                f"Versión de suite: {report.get('suite_version', 'sin especificar')}")
+                else:
+                    summary.set(f"Evolución: {report['decision']}. {report['reason']} — Sin promoción automática.")
+                content.configure(state="normal")
+                content.insert("end", json.dumps(document, indent=2, ensure_ascii=False))
+                content.configure(state="disabled")
+            self._background(inspect, display, is_current=lambda: bool(window.winfo_exists()))
 
         def _inspect_checkpoint_dialog(self) -> None:
             path = filedialog.askopenfilename(parent=self, title="Checkpoint Foundation",

@@ -40,3 +40,19 @@ conocimiento, razonamiento, consistencia y robustez. Son fixtures de mecánica,
 no una certificación de esas capacidades. Primera ejecución CPU: todos los
 prompts caben en contexto 128, 0/10 aciertos en padre, control y experimento.
 Véase EVOLUTION.md para comandos y evidencia conservada.
+
+
+## Desktop report inspection
+
+The provider control page offers **Ver evaluación o evolución**. Select an
+`ai-home-evaluation-v1` report or `ai-home-evolution-result-v1` result. The window
+shows the exact probe pass count or experimental decision, followed by the full
+report including categories, generated responses, model/suite identities,
+configuration and timings when present. Loading is local and read-only; profile
+changes close the window and invalidate callbacks. No model promotion occurs.
+
+The bounded reader rejects non-finite numbers, unsupported formats, duplicate
+probe IDs, inconsistent category totals and truncation summaries. A report's
+file hash identifies its bytes; it does not authenticate who ran it or prove
+that the named checkpoint produced it. Evolution reports show recorded control
+and experimental categories; this viewer does not rerun the experiment.

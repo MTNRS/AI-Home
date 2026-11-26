@@ -469,3 +469,14 @@ vocabulary expansion followed by fresh CPU training with explicit holdout and
 auto-fit, checks changed weights, preserved parent, matching architecture and
 rejects conflicting resume/shrink options. Full suite: 240 passed, 4 PostgreSQL
 tests skipped because the server is unavailable.
+
+
+### Desktop evaluation/evolution report inspection
+
+Added local read-only report viewing with pass totals or experiment decision,
+full recorded metrics/configuration, bounded finite JSON loading and evaluation
+summary consistency checks. Tests read the retained real CPU experiment reports
+and reject inconsistent/oversized/invalid reports. A live Tk smoke loaded the
+actual baseline report into the text widget; layout has not been visually
+reviewed. Full suite: 245 passed, 4 PostgreSQL tests skipped. This provides report
+inspection, not yet desktop evaluation/experiment execution controls.
