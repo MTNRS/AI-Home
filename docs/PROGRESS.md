@@ -1163,3 +1163,12 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   3 pruebas entrenamiento pasaron en 3.79s.
 - FP32 explícito; sin calidad visual demostrada. Faltan CLI, smoke persistido,
   precisión mixta y evaluación independiente. Véase VISION_PREFIX.md.
+
+## 2026-11-26 — Smoke visual persistido CPU/CUDA
+
+- Ensayos reales fuera de pytest conservan imágenes propias, dataset, checkpoints,
+  métricas e inferencia. 28.544 parámetros, cuatro pasos, reanudación exacta CPU/CUDA.
+- Máximo cambio visual 0.0005627163; salida KKKKKKKK, sin comprensión visual probada.
+- Informes VISUAL_SMOKE_CPU.json / VISUAL_SMOKE_CUDA.json. Tiempo CUDA sincronizado.
+- CI configurado para repetir smoke CPU del paquete instalado y guardar artefactos;
+  resultado remoto aún pendiente de comprobación.

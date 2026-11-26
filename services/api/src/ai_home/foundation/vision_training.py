@@ -72,6 +72,8 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
             if step > start + 1:
                 last = save(step - 1)
             break
+        if device == "cuda":
+            torch.cuda.synchronize()
         began = time.perf_counter()
         model.train()
         optimizer.zero_grad(set_to_none=True)
@@ -92,6 +94,8 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
             tokens += targets.ne(-100).sum().item()
         torch.nn.utils.clip_grad_norm_(model.parameters(), training.clip, error_if_nonfinite=True)
         optimizer.step()
+        if device == "cuda":
+            torch.cuda.synchronize()
         elapsed = time.perf_counter() - began
         model.eval()
         validation_loss, validation_tokens = 0., 0

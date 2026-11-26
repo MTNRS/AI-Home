@@ -26,6 +26,7 @@ jobs:
       - run: python -m ai_home.foundation.smoke_package build artifacts/foundation-smoke artifacts/foundation-nano-smoke.zip --revision "$GITHUB_SHA"
       - run: python -m ai_home.foundation.smoke_package verify artifacts/foundation-nano-smoke.zip
       - run: python -m pip install . --no-deps --force-reinstall
+      - run: python -I -m ai_home.foundation.vision_smoke --output-dir artifacts/installed-visual --device cpu
       - name: Install virtual display for real Tk navigation
         run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk
       - name: Verify installed desktop control sections
@@ -46,3 +47,7 @@ jobs:
         with:
           name: foundation-smoke
           path: artifacts/foundation-smoke/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visual-smoke
+          path: artifacts/installed-visual/

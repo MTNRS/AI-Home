@@ -178,3 +178,27 @@ por cancelación, 3 pruebas entrenamiento pasaron en 3.79s. También se rechazan
 cambios de instrucción y precisiones no soportadas. La igualdad no se promete
 entre dispositivos o versiones distintos. Pendientes CLI de entrenamiento,
 smoke persistido fuera de pytest, precisión mixta y evaluación de capacidades.
+
+## Ensayo reproducible persistido
+
+```powershell
+python -m ai_home.foundation.vision_smoke --output-dir artifacts/visual-new --device cpu
+python -m ai_home.foundation.vision_smoke --output-dir artifacts/visual-cuda-new --device cuda
+```
+
+Cada comando exige un directorio nuevo. Conserva cuatro PNG procedurales propios,
+manifest JSON, candidatos continuos/interrumpidos/reanudados y report.json. BPE se
+entrena solo con captions de entrenamiento. El ensayo verifica cambios en pesos
+visuales, reanudación exacta y generación desde checkpoint vuelto a cargar.
+
+Ejecuciones locales reales: CPU `artifacts/vision-smoke-cpu-v1`, CUDA
+`artifacts/vision-smoke-cuda-v2`. Informes versionados: VISUAL_SMOKE_CPU.json y
+VISUAL_SMOKE_CUDA.json. Modelo 28.544 parámetros, cuatro pasos, máximo cambio
+visual 0.0005627163, reanudación exacta en ambos dispositivos. La salida fue
+`KKKKKKKK`; no hay descripción correcta ni comprensión visual demostrada.
+La segunda ejecución CUDA sincroniza antes/después del paso para medir su tiempo;
+la primera, anterior al ajuste, se conserva localmente pero no es el informe
+versionado. Las tasas de esta prueba diminuta no comparan rendimiento de hardware.
+
+CI incorpora el ensayo CPU con paquete instalado y Python -I, y publica sus
+artefactos; su resultado remoto debe verificarse después de este commit.
