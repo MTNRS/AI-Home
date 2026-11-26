@@ -2,8 +2,14 @@
 Uses empty development settings and does not train or access an account.
 """
 import tkinter as tk
+import argparse
 from tkinter import ttk
 from ai_home import desktop
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--require-installed', action='store_true')
+args = parser.parse_args()
+if args.require_installed:
+    assert 'site-packages' in desktop.__file__, 'Expected the installed wheel, not a source checkout'
 desktop.load_settings=lambda: {}
 desktop.load_memories=lambda *args: []
 original_top=tk.Toplevel

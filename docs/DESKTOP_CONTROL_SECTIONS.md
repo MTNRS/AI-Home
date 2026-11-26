@@ -32,3 +32,13 @@ inspection checked the selector, Chat and Training at 900×700, and selector/cha
 controls/composer at 720×560. Existing dialogs were not all visually re-reviewed;
 DPI/accessibility coverage remains incomplete. Windows/controller evidence is in
 [DESKTOP_VISUAL_REVIEW.md](DESKTOP_VISUAL_REVIEW.md).
+
+## Installed-wheel navigation gate
+
+The functional script accepts `--require-installed` to reject imports outside
+`site-packages`. It passed again on Windows using the isolated non-editable wheel
+and Python `-I`, rather than the development checkout. Linux Foundation CI now
+installs Tk/Xvfb and runs the same script with an isolated interpreter on a virtual
+display after installing the wheel. This is a widget/routing test, not a screenshot
+review; visual claims still come only from the explicit Windows observations.
+The first remote execution of this new gate is pending verification.

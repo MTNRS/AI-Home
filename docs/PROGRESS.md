@@ -1077,3 +1077,12 @@ bloqueantes observados. Ventanas cerradas. No revisión visual integral/DPI.
 32 pruebas relacionadas correctas (12,46 s). No repetida suite neuronal completa
 por la presión de RAM documentada; CI anterior aae8715 correcta. Detalles en
 DESKTOP_CONTROL_SECTIONS.md. Esto consolida navegación, no completa todo el dashboard.
+
+### Gate funcional de navegación desde wheel
+
+Script de diez secciones añade --require-installed y comprueba site-packages.
+Wheel reinstalado sin dependencias en venv CPU aislado: python -I ejecutó las diez
+rutas y abrió formulario real de training correctamente en Windows. Workflow
+Foundation añade Xvfb/Tk y misma prueba sobre wheel instalado en Linux. Resultado
+remoto pendiente; no sustituye revisión visual. No entrenamiento/red/cuenta en
+el smoke GUI. La suite neuronal no se repite por este ajuste de CI/script.
