@@ -1654,3 +1654,12 @@ CI confirmado en `01a7ba5`: Tests 45849234023 (Python 3.11/3.12) y Foundation
 45849234313, incluidos todos los pasos de escritorio instalado. El inventario
 distingue esa revision remota de los cambios de identidad comprobados localmente.
 El objetivo global permanece abierto, sin capacidades generales nuevas demostradas.
+
+### Base de evaluacion neuronal en nodos
+
+Implementado ejecutor acotado de perdida causal y verificador por recomputacion
+CPU. Extraida carga comun validada del ejecutor de gradientes sin cambiar su
+protocolo. Once pruebas de evaluacion/gradientes/rondas aprobadas en 6,69 s,
+incluidas ejecuciones CPU/CUDA, rechazos de alteraciones y privacidad. Pendiente
+conectar API, capacidades, scheduler, creditos y control de linaje del coordinador;
+no se declara disponible como tarea remota aun.

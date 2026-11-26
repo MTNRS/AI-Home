@@ -404,3 +404,23 @@ Pruebas locales: 18 de rondas/coordinador/nodos/gradientes aprobadas; después,
 ocho de nodos tras añadir conservación de grupos en tokenización y compatibilidad
 de serialización sin etiqueta (conjunto solapado). Los rechazos y una ronda
 permitida se verificaron con cálculo real de gradientes y checkpoint resultante.
+
+### Ejecutor experimental de evaluacion de perdida (integracion pendiente)
+
+`foundation.distributed_evaluation.execute_evaluation` calcula perdida causal
+sin backward ni optimizador para un payload publico con los mismos limites de
+arquitectura, tensores, runtime y datos que las tareas de gradientes. Devuelve
+conteo de tokens, perdida media, hashes de documentos/dataset y huella de pesos.
+No usa pickle ni ejecuta codigo del remitente. `verified_evaluation_result`
+recomputa en CPU y compara identidad y perdida (rtol 1e-5, atol 1e-6).
+
+Probado en CPU y CUDA con pesos propios: perdida concordante con el recorrido de
+gradientes, entrada y RNG CPU intactos, resultados alterados rechazados y
+restricciones de datos/pesos preservadas. La reserva de memoria es conservadora:
+reutiliza el presupuesto del entrenamiento de referencia.
+
+Este ejecutor aun no esta en la lista de tareas del scheduler ni tiene ruta HTTP,
+capacidad anunciada por nodos o liquidacion de creditos. El nombre reservado es
+`foundation.evaluate.v1`; no se afirma evaluacion distribuida operativa todavia.
+Tampoco demuestra capacidad linguistica ni ausencia de contaminacion: el payload
+no aporta linaje de entrenamiento y requiere un coordinador que valide el holdout.

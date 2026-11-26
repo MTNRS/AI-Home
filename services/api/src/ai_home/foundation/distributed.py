@@ -89,7 +89,7 @@ def parameter_fingerprint(config, tokenizer, parameters):
     return canonical_hash({"config": config, "tokenizer": tokenizer, "parameters": parameters})
 
 
-def execute_gradient(payload, *, device="cpu"):
+def load_public_task(payload, *, device="cpu"):
     if device not in {"cpu", "cuda"}:
         raise ValueError("Gradient worker device must be cpu or cuda")
     device = select_device(device)
@@ -112,6 +112,12 @@ def execute_gradient(payload, *, device="cpu"):
     tokenizer = ByteBPE.from_dict(validated.shard.tokenizer.model_dump())
     records = prepare_records([r.model_dump() for r in validated.shard.records])
     inputs, labels = _sequences(records, tokenizer, config.context)
+    return validated, model, tokenizer, records, inputs, labels
+
+
+def execute_gradient(payload, *, device="cpu"):
+    validated, model, tokenizer, records, inputs, labels = load_public_task(payload, device=device)
+    parameters = {k: v.model_dump() for k, v in validated.parameters.items()}
     tokens = int((labels != -100).sum())
     total_loss = 0.0
     for x, y in zip(inputs.split(2), labels.split(2)):
