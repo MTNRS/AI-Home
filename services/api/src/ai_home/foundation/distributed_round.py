@@ -37,15 +37,21 @@ def commit_round(parent, shards, output):
         return retained()
     documents = set(payload.get("training_document_hashes", []))
     validation = set(payload.get("validation_document_hashes", []))
+    groups = set(payload.get('training_split_groups', []))
+    validation_groups = set(payload.get('validation_split_groups', []))
     round_records = []
     for shard in shards:
         records = prepare_records(shard["payload"]["shard"]["records"])
         hashes = {record["sha256"] for record in records}
+        shard_groups = {r['split_group_sha256'] for r in records if 'split_group_sha256' in r}
+        if shard_groups & validation_groups:
+            raise ValueError('Distributed shard family overlaps fixed validation groups')
         if hashes & validation:
             raise ValueError("Distributed shard overlaps fixed validation data")
         if not verified_gradient_result(shard["payload"], shard["result"]):
             raise ValueError("Gradient shard failed independent verification")
         documents.update(hashes)
+        groups.update(shard_groups)
         round_records.extend(records)
     optimizer = torch.optim.AdamW(model.parameters())
     optimizer.load_state_dict(payload["optimizer"])
@@ -59,6 +65,7 @@ def commit_round(parent, shards, output):
                   parent_dataset_sha256=payload.get("dataset_sha256"),
                   dataset_sha256=canonical_hash(prepare_records(round_records)),
                   training_document_hashes=sorted(documents),
+                  training_split_groups=sorted(groups),
                   gradient_artifact_sha256=[shard["result"]["artifact_sha256"] for shard in shards])
     stream = io.BytesIO()
     torch.save(result, stream)

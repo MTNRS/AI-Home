@@ -18,6 +18,18 @@ def payload():
     return {"records": records, "tokenizer": tokenizer.to_dict()}
 
 
+def test_typed_token_shards_preserve_groups_without_changing_legacy_records():
+    value = payload()
+    assert TokenizePayload.model_validate(value).model_dump() == value
+    value['records'][0]['split_group_sha256'] = 'a' * 64
+    result = execute_tokenize(value)
+    documents = json.loads(result['artifact_json'])['documents']
+    assert [r['split_group_sha256'] for r in documents if 'split_group_sha256' in r] == ['a' * 64]
+    value['records'][0]['split_group_sha256'] = 'invalid'
+    with pytest.raises(ValueError):
+        TokenizePayload.model_validate(value)
+
+
 def test_two_capable_nodes_produce_verified_token_shards(client):
     register(client, "owner@example.com")
     owner = login(client, "owner@example.com")

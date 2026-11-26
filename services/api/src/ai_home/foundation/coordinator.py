@@ -33,7 +33,11 @@ def create_plan(parent, payloads, output, *, server, owner_user_id, reward_credi
         value = GradientPayload.model_validate(payload).model_dump()
         if parameter_fingerprint(value["config"], value["shard"]["tokenizer"], value["parameters"]) != current:
             raise ValueError("Shard does not match parent model/tokenizer")
-        documents = {record["sha256"] for record in prepare_records(value["shard"]["records"])}
+        records = prepare_records(value["shard"]["records"])
+        documents = {record["sha256"] for record in records}
+        groups = {r['split_group_sha256'] for r in records if 'split_group_sha256' in r}
+        if groups & set(state.get('validation_split_groups', [])):
+            raise ValueError('Shard family overlaps fixed validation groups')
         if documents & (seen | set(state.get("validation_document_hashes", []))):
             raise ValueError("Overlapping shards or fixed validation data")
         seen.update(documents)

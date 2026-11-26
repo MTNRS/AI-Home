@@ -3,7 +3,7 @@ import json
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator, model_serializer
 
 from ai_home.privacy import contains_common_secret
 from .data import canonical_hash, prepare_records
@@ -23,6 +23,14 @@ class PublicRecord(BaseModel):
     training_allowed: StrictBool
     privacy_reviewed: StrictBool
     visibility: Literal["public"]
+    split_group_sha256: StrictStr | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
+
+    @model_serializer(mode='wrap')
+    def serialize_record(self, handler):
+        result = handler(self)
+        if result.get('split_group_sha256') is None:
+            result.pop('split_group_sha256', None)
+        return result
 
 
 class TokenizerSpec(BaseModel):
@@ -68,7 +76,8 @@ def execute_tokenize(payload):
     records = prepare_records([r.model_dump() for r in validated.records])
     artifact = {"format": "ai-home-tokenized-shard-v1", "tokenizer_sha256": tokenizer.fingerprint,
                 "dataset_sha256": canonical_hash(records),
-                "documents": [{"sha256": r["sha256"], "tokens": [257, *tokenizer.encode(r["text"]), 258]}
+                "documents": [{"sha256": r["sha256"], "tokens": [257, *tokenizer.encode(r["text"]), 258],
+                               **({'split_group_sha256': r['split_group_sha256']} if 'split_group_sha256' in r else {})}
                               for r in records]}
     return {"token_count": sum(len(r["tokens"]) for r in artifact["documents"]),
             "artifact_sha256": canonical_hash(artifact),

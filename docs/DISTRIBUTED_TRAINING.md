@@ -383,3 +383,24 @@ Validación local: 25 pruebas de nodos/trabajos aprobadas y nueva ejecución del
 smoke completo CPU/Tk/HTTP con bloqueo de reutilización entre cuentas
 (`artifacts/desktop-node-lookup-v1`). CI Foundation 45839308567 de 28fc6c8 terminó
 correctamente, incluido el nodo de escritorio instalado en Linux bajo Xvfb.
+
+## Familias documentales en tareas distribuidas
+
+Los registros públicos tipados admiten `split_group_sha256` opcional y validado.
+Cuando falta se omite al serializar, conservando la representación de registros
+anteriores. Los artefactos de tokenización conservan la etiqueta cuando existe.
+Planificador y nodos deben estar actualizados para admitir trabajos etiquetados;
+no se elimina el campo para hacerlos pasar por un trabajador antiguo.
+
+`create_plan` rechaza familias presentes en `validation_split_groups` del padre
+antes de publicar trabajos. `commit_round` repite esa comprobación antes de
+agregar/publicar y conserva la unión de familias de entrenamiento. Los registros
+sin etiqueta y padres antiguos solo disponen de la información de linaje que
+aportan. La API genérica de trabajos no conoce el holdout de un checkpoint:
+estas comprobaciones pertenecen al plan y al commit de la ronda. No constituyen
+una certificación independiente de que las etiquetas de fuente sean correctas.
+
+Pruebas locales: 18 de rondas/coordinador/nodos/gradientes aprobadas; después,
+ocho de nodos tras añadir conservación de grupos en tokenización y compatibilidad
+de serialización sin etiqueta (conjunto solapado). Los rechazos y una ronda
+permitida se verificaron con cálculo real de gradientes y checkpoint resultante.

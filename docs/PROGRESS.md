@@ -1526,3 +1526,11 @@ Corregida pérdida de grupos en `expand_checkpoint`: conserva linaje, añade
 familias del nuevo corpus y rechaza familias del holdout anterior con texto
 distinto. Dieciocho pruebas de grupos/modelo aprobadas. Transporte de grupos en
 el protocolo distribuido todavía pendiente; no se afirma cobertura universal.
+
+### Familias en protocolo distribuido
+
+Transportada etiqueta opcional por registros tipados/artefactos de tokens,
+rechazada contaminación en planificación y commit, conservado linaje en nuevas
+rondas. 18 pruebas de flujos distribuidos y ocho de nodos posteriores aprobadas
+(con solapamiento). Incluye gradientes reales y compatibilidad de registros sin
+etiquetas. Clientes/nodos antiguos requieren actualización para nuevos campos.
