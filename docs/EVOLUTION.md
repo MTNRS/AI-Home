@@ -115,3 +115,17 @@ reduce materializacion de secuencias en RAM, sin garantizar una cota estricta.
 El dialogo de evolucion incluye la casilla «Guardar secuencias en disco»,
 desactivada por defecto. Su valor se captura antes de lanzar el trabajador.
 El valor predeterminado conserva la preparacion en memoria.
+
+### Igualdad de datos entre control y experimento
+
+Antes de evaluar los probes del candidato experimental, se comparan los hashes
+de datos preparados, validacion, replay y tokenizador de ambas ramas, junto con
+visibilidad, dispositivo, muestras de replay y modo de cache. Una diferencia
+escribe `invalid-experiment.json` y aborta sin `result.json` ni propuesta de
+aceptacion. Los checkpoints e informes individuales ya producidos se conservan
+para diagnostico; no constituyen un experimento controlado valido. Esta deteccion
+ocurre despues del entrenamiento de las ramas, no evita su coste computacional.
+
+Las pruebas sustituyen por separado nuevos datos, replay y holdout entre ramas,
+entrenan candidatos reales y verifican el rechazo. Los hashes identifican los
+registros preparados consumidos, no autentican su autoria o autorizacion.

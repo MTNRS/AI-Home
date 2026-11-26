@@ -1623,3 +1623,11 @@ un sustituto de captura (no entrena en ese smoke). Los experimentos reales sigue
 cubiertos por la prueba de evolucion. 43 pruebas escritorio/privacidad/evolucion
 aprobadas en 7,42 s y smoke Tk correcto. Revision visual del dialogo pendiente;
 no se afirma legibilidad verificada a diferentes tamanos o DPI.
+
+### Invariantes de datos en evolucion
+
+Cerrada la posibilidad de comparar control y experimento que consumieron archivos
+distintos bajo las mismas rutas. Se contrastan hashes y condiciones de ejecucion,
+se registra invalidacion y no se emite decision. Diez pruebas de evolucion
+aprobadas en 7,53 s, incluidas tres sustituciones entre ramas con entrenamiento
+real. Los candidatos ya entrenados se conservan; no hay promocion automatica.

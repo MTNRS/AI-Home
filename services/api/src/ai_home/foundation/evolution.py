@@ -110,6 +110,18 @@ def run_experiment(parent, output_dir, suite, validation, replay, *, dataset=Non
                 disk_sequences=disk_sequences)
             if reports[name]["parent_sha256"] != baseline["checkpoint_sha256"]:
                 raise RuntimeError("Parent changed after baseline evaluation")
+            if name == "experiment":
+                invariant_fields = ("dataset_sha256", "validation_sha256", "replay_sha256",
+                                    "tokenizer_sha256", "data_visibility", "device",
+                                    "replay_samples_per_batch", "disk_sequences")
+                differences = [field for field in invariant_fields
+                               if reports["control"][field] != reports["experiment"][field]]
+                if differences:
+                    save("invalid-experiment.json", {
+                        "format": "ai-home-evolution-invalid-v1", "promoted": False,
+                        "reason": "Control and experiment used different data or execution settings",
+                        "different_fields": differences})
+                    raise ValueError("Control and experiment invariants differ: " + ", ".join(differences))
             progress(name + "_evaluation")
             check_cancel()
             evaluations[name] = evaluate_checkpoint(output_dir / name / "candidate.pt", suite,
