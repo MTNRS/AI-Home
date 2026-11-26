@@ -18,11 +18,14 @@ def prepare_records(records, allow_reviewed=False, *, purpose="training"):
     if purpose == "retrieval" and allow_reviewed:
         raise ValueError("Private reviewed training exports cannot be retrieved")
     result = []
-    seen = set()
+    seen = {}
     for record in records:
         required = ("source", "url", "license", "date", "language", "text")
         if any(not isinstance(record.get(k), str) or not record[k].strip() for k in required):
             raise ValueError("Incomplete source provenance")
+        if 'split_group_sha256' in record and (not isinstance(record['split_group_sha256'], str)
+                or not re.fullmatch(r'[0-9a-f]{64}', record['split_group_sha256'])):
+            raise ValueError('Invalid split group fingerprint')
         permission = record.get("training_allowed")
         if purpose == "retrieval":
             # Legacy public datasets predate the separate retrieval permission.
@@ -47,8 +50,10 @@ def prepare_records(records, allow_reviewed=False, *, purpose="training"):
         if "sha256" in record and record["sha256"] != digest:
             raise ValueError("Document hash does not match normalized text")
         if digest in seen:
+            if seen[digest] != record.get('split_group_sha256'):
+                raise ValueError('Duplicate document has conflicting split groups')
             continue
-        seen.add(digest)
+        seen[digest] = record.get('split_group_sha256')
         result.append({**record, "text": text, "sha256": digest})
     if len(result) < 2:
         raise ValueError("At least two distinct documents required")
@@ -59,6 +64,16 @@ def split_records(records, validation_fraction=0.2, allow_reviewed=False):
     if not 0 < validation_fraction < 1:
         raise ValueError("Invalid validation fraction")
     records = prepare_records(records, allow_reviewed=allow_reviewed)
+    if any('split_group_sha256' in record for record in records):
+        train, validation = [], []
+        threshold = int(validation_fraction * 2**256)
+        for record in records:
+            group = record.get('split_group_sha256', record['sha256'])
+            target = validation if int(canonical_hash({'split_group': group}), 16) < threshold else train
+            target.append(record)
+        if not train or not validation:
+            raise ValueError('Group split requires nonempty training and validation; supply more groups or explicit partitions')
+        return train, validation
     count = max(1, min(len(records) - 1, round(len(records) * validation_fraction)))
     return records[count:], records[:count]
 

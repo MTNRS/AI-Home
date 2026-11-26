@@ -157,6 +157,10 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
     replay_records = prepare_records(replay_records) if replay_records else []
     train_hashes = {r["sha256"] for r in train_records + replay_records}
     validation_hashes = {r["sha256"] for r in validation_records}
+    train_groups = {r['split_group_sha256'] for r in train_records + replay_records if 'split_group_sha256' in r}
+    validation_groups = {r['split_group_sha256'] for r in validation_records if 'split_group_sha256' in r}
+    if train_groups & validation_groups:
+        raise ValueError('Evaluation contamination: training and validation share a split group')
     if train_hashes & validation_hashes:
         raise ValueError("Evaluation contamination: training and validation overlap")
     dataset_hash = canonical_hash({"train": train_records, "validation": validation_records,
@@ -210,6 +214,11 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
             raise ValueError(f"Estimated training bytes {estimated} exceed budget {budget}; reduce configuration")
         model = FoundationModel(config)
     if lineage is not None:
+        if (validation_groups & set(lineage.get('training_split_groups', [])) or
+                train_groups & set(lineage.get('validation_split_groups', []))):
+            raise ValueError('Evaluation contamination: split group crosses checkpoint lineage')
+        train_groups.update(lineage.get('training_split_groups', []))
+        validation_groups.update(lineage.get('validation_split_groups', []))
         if validation_hashes & set(lineage.get("training_document_hashes", [])):
             raise ValueError("Evaluation contamination: parent trained on validation data")
         if train_hashes & set(lineage.get("validation_document_hashes", [])):
@@ -312,6 +321,8 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
                        "parent_checkpoint_sha256": parent_sha256,
                        "training_document_hashes": sorted(train_hashes),
                        "validation_document_hashes": sorted(validation_hashes),
+                       "training_split_groups": sorted(train_groups),
+                       "validation_split_groups": sorted(validation_groups),
                        "replay_samples_per_batch": replay_count,
                        "dataset_provenance": sorted({(r.get("dataset_version", ""),
                                                        r.get("manifest_sha256", "")) for r in records}),

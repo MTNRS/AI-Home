@@ -326,3 +326,28 @@ Informe `DESKTOP_CACHED_TRAINING_SMOKE.json`; artefactos locales en
 `artifacts/desktop-cached-training-v2`. CI incorpora el mismo smoke con wheel
 instalado bajo Xvfb y retiene configuración/resultado. Su ejecución remota y la
 revisión visual del formulario siguen pendientes.
+
+## Separación explícita por familias documentales
+
+Un registro puede declarar `split_group_sha256` (64 caracteres hexadecimales en
+minúsculas), huella de una familia/fuente asignada por quien prepara el corpus.
+Las variantes relacionadas deben compartirla. La validación rechaza formatos
+inválidos y duplicados de texto con grupos contradictorios.
+
+Cuando existe alguna etiqueta de grupo, la partición automática asigna cada
+grupo por hash a train o validación, con umbral según `validation_fraction`.
+Documentos sin etiqueta usan su hash de contenido como grupo individual. Bajo
+este modo y una fracción fija, añadir documentos/grupos no reasigna los grupos
+anteriores. El tamaño real de validación puede diferir del porcentaje objetivo.
+Si queda vacía una partición, se exige ampliar grupos o aportar particiones
+explícitas; no se rompe una familia para rellenarla. Activar este modo en un
+corpus antes no agrupado puede cambiar su división: no es una migración automática
+del holdout previo. Sin etiquetas se conserva la división histórica.
+
+El entrenador rechaza grupos explícitos compartidos entre train/replay y
+validación, y conserva `training_split_groups`/`validation_split_groups` en
+checkpoints para impedir cruces futuros al continuar o reanudar. Checkpoints
+antiguos sin estos campos solo tienen la protección de hashes documentales.
+Estas etiquetas no prueban parentesco ni detectan duplicados semánticos: familias
+omitidas, mal etiquetadas o renombradas pueden escapar al control. La revisión
+del corpus y la evaluación independiente siguen siendo necesarias.

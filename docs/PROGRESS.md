@@ -1502,3 +1502,12 @@ Captura nativa del formulario a 850x580: campos, casilla y botones legibles sin
 solapamientos. Limitación: tamaño habitual/DPI actual. La activación por el
 controlador falló; se recuperó captura y se cerró la fixture interrumpiendo su
 sesión propia. No se atribuye esta inspección a una prueba funcional adicional.
+
+### Familias documentales y contaminación de evaluación
+
+Campo opcional `split_group_sha256`, partición estable por grupos y detección de
+cruces entre train/replay/validación y linaje de checkpoint. Se conserva el modo
+histórico sin etiquetas. Pruebas verifican estabilidad, grupos indivisibles,
+metadatos contradictorios y rechazo de continuación contaminada: 24 pruebas de
+grupos/tokenizador/modelo aprobadas. No detecta parentesco semántico automático;
+las familias deben declararse correctamente y checkpoints antiguos no las conocen.
