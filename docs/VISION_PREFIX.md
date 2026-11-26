@@ -356,3 +356,18 @@ in 5.45s**. FP16/BF16 con acumulación y gradient checkpointing: cuatro pasos co
 coinciden bit a bit con dos + reanudación en el mismo entorno. Estado scaler FP16
 presente y pesos maestros FP32 comprobados. Esto no mide ahorro de memoria ni
 mejora de velocidad/calidad. BF16 CPU no se ha medido en esta ampliación.
+
+## Validación adicional de reanudación
+
+Se corrigió un límite: reanudar desde paso 2 con stop_after=1 podía continuar al
+final del horizonte porque la igualdad con la parada nunca se alcanzaba. Ahora
+se rechaza antes de crear la salida. También se comprueba que cada parámetro tenga
+estado AdamW completo, momentos de la forma esperada y finitos, segundo momento
+no negativo, contador igual al paso guardado y política AdamW igual al protocolo.
+El LR se recalcula según el scheduler original. No se acepta alterar weight_decay
+o betas conservando la misma declaración de configuración de entrenamiento.
+
+Pruebas: 11 passed in 6.66s. Seis casos inválidos se rechazan sin directorio de
+salida; las reanudaciones reales CPU/CUDA FP32 y CUDA FP16/BF16 siguen siendo exactas.
+Estas comprobaciones detectan inconsistencia estructural, no autentican quién
+produjo el checkpoint ni prueban que los momentos procedan del entrenamiento declarado.

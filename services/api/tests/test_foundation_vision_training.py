@@ -10,6 +10,7 @@ from ai_home.foundation.training import TrainingConfig
 from ai_home.foundation.vision import VisionConfig
 from ai_home.foundation.vision_training import train_visual
 from ai_home.foundation.vision_checkpoint import load_vision_weights
+from ai_home.foundation.checkpoint import atomic_save
 
 
 @pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
@@ -62,3 +63,31 @@ def test_cancel_before_update_creates_no_checkpoint(dataset, tmp_path):
         heads=2, kv_heads=1, hidden=32, context=16, vocab_size=262), VisionConfig(8, 4),
         TrainingConfig(steps=1, warmup=0, objective="sft"), tmp_path / "cancel", prompt="Q", cancel=cancel)
     assert history == [] and path is None
+
+
+@pytest.mark.parametrize("change", ["stop", "shape", "negative", "step", "policy", "missing"])
+def test_invalid_resume_rejected_before_output(dataset, tmp_path, change):
+    manifest, _ = dataset
+    config = FoundationConfig(vocab_size=262, width=16, layers=1, heads=2, kv_heads=1, hidden=32, context=16)
+    training = TrainingConfig(steps=3, batch_size=1, warmup=1, objective="sft")
+    args = (manifest, ByteBPE(), config, VisionConfig(8, 4), training)
+    _, _, partial = train_visual(*args, tmp_path / "partial", prompt="Q", stop_after=2)
+    payload = torch.load(partial, weights_only=True)
+    states = payload["training_state"]["optimizer"]["state"]
+    first = next(iter(states.values()))
+    if change == "shape":
+        first["exp_avg"] = torch.zeros(1)
+    elif change == "negative":
+        first["exp_avg_sq"].fill_(-1)
+    elif change == "step":
+        first["step"].fill_(1)
+    elif change == "policy":
+        payload["training_state"]["optimizer"]["param_groups"][0]["weight_decay"] = 2.
+    elif change == "missing":
+        states.pop(next(iter(states)))
+    atomic_save(payload, partial)
+    destination = tmp_path / "rejected"
+    with pytest.raises(ValueError):
+        train_visual(*args, destination, prompt="Q", resume=partial,
+                     stop_after=1 if change == "stop" else None)
+    assert not destination.exists()

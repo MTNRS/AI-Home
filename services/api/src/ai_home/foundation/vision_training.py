@@ -54,10 +54,27 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
         start = state["step"]
         if type(start) is not int or not 0 <= start < training.steps:
             raise ValueError("Invalid visual resume step")
+        if stop_after is not None and stop_after <= start:
+            raise ValueError("No remaining steps before requested interruption")
+        expected_groups = optimizer.state_dict()["param_groups"]
         optimizer.load_state_dict(state["optimizer"])
-        for values in optimizer.state.values():
-            if any(isinstance(v, torch.Tensor) and not torch.isfinite(v).all() for v in values.values()):
-                raise ValueError("Non-finite visual optimizer state")
+        for expected, actual in zip(expected_groups, optimizer.state_dict()["param_groups"]):
+            for key, value in expected.items():
+                if key not in ("lr", "params") and actual.get(key) != value:
+                    raise ValueError("Visual optimizer policy differs from training protocol")
+        if len(optimizer.state) != len(list(model.parameters())):
+            raise ValueError("Incomplete visual optimizer state")
+        for parameter, values in optimizer.state.items():
+            if set(values) != {"step", "exp_avg", "exp_avg_sq"}:
+                raise ValueError("Malformed visual optimizer state")
+            for key in ("exp_avg", "exp_avg_sq"):
+                value = values[key]
+                if (not isinstance(value, torch.Tensor) or value.shape != parameter.shape
+                        or not torch.isfinite(value).all() or (key == "exp_avg_sq" and (value < 0).any())):
+                    raise ValueError("Malformed or non-finite visual optimizer moment")
+            step_value = values["step"]
+            if not isinstance(step_value, torch.Tensor) or step_value.numel() != 1 or step_value.item() != start:
+                raise ValueError("Visual optimizer step mismatch")
         sampler.set_state(state["sampler"])
         scaler.load_state_dict(state.get("scaler", {}))
         history = list(state["history"])

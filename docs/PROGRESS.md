@@ -1245,3 +1245,9 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - PostgreSQL 45832873887 success: Python 3.11/3.12, 340 passed/13 skipped cada uno.
 - FOUNDATION_STATUS.md actualizado con implementación visual y límites, diez
   secciones existentes y evidencia remota vigente; no es aceptación final.
+
+## 2026-11-26 — Límites y estado de reanudación visual
+
+- Corregido stop_after anterior al paso guardado: ahora falla antes de crear salida.
+- Validados momentos/formas, segundo momento no negativo, pasos y política AdamW.
+- 11 pruebas pasaron en 6.66s, incluidos seis rechazos y resume FP32/FP16/BF16.
