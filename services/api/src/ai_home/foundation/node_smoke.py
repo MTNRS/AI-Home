@@ -32,9 +32,10 @@ def main():
                           allow_foundation_training=config.get("allow_foundation_training", False),
                           foundation_device=config.get("foundation_device", "cpu"))
         try:
+            transfer = agent.measure_transfer(publish=True) if config.get("transfer_probe") else None
             completed = agent.run_once()
             print(json.dumps({"pid": os.getpid(), "completed": completed, "measurement": agent.last_run_metrics,
-                              "measurement_uploaded": agent.last_measurement_uploaded}))
+                              "measurement_uploaded": agent.last_measurement_uploaded, "transfer_measurement": transfer}))
         finally:
             agent.close()
         return

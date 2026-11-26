@@ -1335,3 +1335,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - 14 pruebas pasaron en 5.76s y siete PostgreSQL reales en 4.77s, incluido JSON.
 - Flujo HTTP+sonda+asignación+entrenamiento completo pendiente; tiempos de prueba
   controlados, telemetría no atestada y sin autoridad sobre créditos.
+
+## 2026-11-26 — Sonda HTTP → scheduler → entrenamiento distribuido
+
+- Smoke real CPU/CUDA dos rondas con reinicio coordinador: cuatro trabajos completos,
+  dos sondas publicadas, requisitos HTTP confirmados en DB para ronda 2.
+- Delta embeddings .1838996857, 31.368 s; seis créditos por worker por trabajo
+  verificado, ninguno por sondas. TRANSFER_SCHEDULING_SMOKE.json conservado.
+- Gate CI distribuido CPU ampliado; resultado remoto pendiente. Solo loopback.

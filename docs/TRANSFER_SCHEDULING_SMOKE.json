@@ -1,0 +1,262 @@
+{
+  "format": "ai-home-distributed-smoke-v1",
+  "torch_version": "2.14.1+cu130",
+  "transport": "loopback HTTP",
+  "device": "cpu",
+  "workers": [
+    {
+      "round": 1,
+      "node_id": "f635bfca-70fc-4073-847e-369068a9102a",
+      "device": "cpu",
+      "pid": 38484,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.009132199993473478,
+        "claim_service_seconds": 0.010615200008032843,
+        "execution_seconds": 2.4071366999996826,
+        "submit_service_seconds": 0.062007200001971796,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 14413105.724265372,
+        "submit_service_bytes_per_second": 2455666.4386580577,
+        "gradient_tokens_per_second": 13.293802549728156
+      },
+      "measurement_uploaded": true,
+      "transfer_measurement": null
+    },
+    {
+      "round": 1,
+      "node_id": "f72dfebb-6534-4f5f-9c99-22080ffd04f5",
+      "device": "cuda",
+      "pid": 40584,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.00808590000087861,
+        "claim_service_seconds": 0.007294399998500012,
+        "execution_seconds": 1.1822506000025896,
+        "submit_service_seconds": 0.1426956999930553,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152268,
+        "claim_service_bytes_per_second": 20974720.337719597,
+        "submit_service_bytes_per_second": 1067081.9093175936,
+        "gradient_tokens_per_second": 27.067019462650226
+      },
+      "measurement_uploaded": true,
+      "transfer_measurement": null
+    },
+    {
+      "round": 2,
+      "node_id": "f635bfca-70fc-4073-847e-369068a9102a",
+      "device": "cpu",
+      "pid": 7688,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.004221000010147691,
+        "claim_service_seconds": 0.009795900012250058,
+        "execution_seconds": 2.3481809999939287,
+        "submit_service_seconds": 0.04311329999472946,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152268,
+        "claim_service_bytes_per_second": 15618575.098630197,
+        "submit_service_bytes_per_second": 3531810.369853724,
+        "gradient_tokens_per_second": 13.627569595394366
+      },
+      "measurement_uploaded": true,
+      "transfer_measurement": {
+        "format": "ai-home-http-transfer-probe-v1",
+        "payload_bytes": 65536,
+        "empty_round_trip_seconds": [
+          0.0053626000008080155,
+          0.0019152000022586435,
+          0.001774700009264052
+        ],
+        "download_seconds": 0.0023668000067118555,
+        "upload_seconds": 0.0018967999931192026,
+        "download_bytes_per_second": 27689707.54358234,
+        "upload_bytes_per_second": 34550822.5631259,
+        "claim": "HTTP transfer service including authentication and server overhead; not physical bandwidth or network-only RTT",
+        "stored_measurement": {
+          "format": "ai-home-http-transfer-probe-v1",
+          "payload_bytes": 65536,
+          "empty_round_trip_seconds": [
+            0.0053626000008080155,
+            0.0019152000022586435,
+            0.001774700009264052
+          ],
+          "download_seconds": 0.0023668000067118555,
+          "upload_seconds": 0.0018967999931192026,
+          "received_epoch": 1795702524,
+          "expires_epoch": 1795702644,
+          "download_bytes_per_second": 27689707.54358234,
+          "upload_bytes_per_second": 34550822.5631259,
+          "minimum_http_round_trip_seconds": 0.001774700009264052,
+          "evidence": "client-reported HTTP service timings; not independently attested"
+        }
+      }
+    },
+    {
+      "round": 2,
+      "node_id": "f72dfebb-6534-4f5f-9c99-22080ffd04f5",
+      "device": "cuda",
+      "pid": 38776,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.006378399993991479,
+        "claim_service_seconds": 0.007551200003945269,
+        "execution_seconds": 1.173792899993714,
+        "submit_service_seconds": 0.042558399989502504,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 20261415.393588208,
+        "submit_service_bytes_per_second": 3577883.567933917,
+        "gradient_tokens_per_second": 27.26204937870332
+      },
+      "measurement_uploaded": true,
+      "transfer_measurement": {
+        "format": "ai-home-http-transfer-probe-v1",
+        "payload_bytes": 65536,
+        "empty_round_trip_seconds": [
+          0.01927370000339579,
+          0.001988899995922111,
+          0.0017292999982601032
+        ],
+        "download_seconds": 0.001960299996426329,
+        "upload_seconds": 0.0017279000021517277,
+        "download_bytes_per_second": 33431617.67049615,
+        "upload_bytes_per_second": 37928120.7930951,
+        "claim": "HTTP transfer service including authentication and server overhead; not physical bandwidth or network-only RTT",
+        "stored_measurement": {
+          "format": "ai-home-http-transfer-probe-v1",
+          "payload_bytes": 65536,
+          "empty_round_trip_seconds": [
+            0.01927370000339579,
+            0.001988899995922111,
+            0.0017292999982601032
+          ],
+          "download_seconds": 0.001960299996426329,
+          "upload_seconds": 0.0017279000021517277,
+          "received_epoch": 1795702528,
+          "expires_epoch": 1795702648,
+          "download_bytes_per_second": 33431617.67049615,
+          "upload_bytes_per_second": 37928120.7930951,
+          "minimum_http_round_trip_seconds": 0.0017292999982601032,
+          "evidence": "client-reported HTTP service timings; not independently attested"
+        }
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "round": 1,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.7676215171813965,
+      "validation": {
+        "loss": 5.679264545440674,
+        "tokens": 32,
+        "perplexity": 292.73405813645076
+      }
+    },
+    {
+      "round": 2,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.677713632583618,
+      "validation": {
+        "loss": 5.602051734924316,
+        "tokens": 32,
+        "perplexity": 270.98182031589835
+      }
+    }
+  ],
+  "baseline_validation": {
+    "loss": 5.765335559844971,
+    "tokens": 32,
+    "perplexity": 319.04608513076136
+  },
+  "embedding_delta_l2": 0.1838996857404709,
+  "generated_text": "\ufffd\u065f\u0666\ufffd\ufffdZ\ufffd96D%J\ufffd\ufffd",
+  "checkpoint_sha256": "031f976df31617160d5b28be04a6598a86ff39d87929eafb05ef3e347814ffe3",
+  "elapsed_seconds": 31.36808660000679,
+  "parameter_count": 28192,
+  "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim",
+  "coordinator_process_runs": [
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "4843a3b0-67e2-42b5-88c3-2ec33259ef56",
+          "status": "queued"
+        },
+        {
+          "id": "3c4b3555-91e2-4710-9580-5209d978e384",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "4843a3b0-67e2-42b5-88c3-2ec33259ef56",
+          "status": "queued"
+        },
+        {
+          "id": "3c4b3555-91e2-4710-9580-5209d978e384",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "6aa58d38e597365a941c377f302810efe61ad03863383f5de4fad25939c04a5d"
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "6aa58d38e597365a941c377f302810efe61ad03863383f5de4fad25939c04a5d"
+    }
+  ],
+  "isolated_python": false,
+  "database_setup": "packaged Alembic upgrade and schema check",
+  "measured_scheduling": true,
+  "transfer_scheduling": true,
+  "credits": {
+    "reward_per_job": 3,
+    "requester": {
+      "available": 0,
+      "reserved": 0,
+      "earned": 0
+    },
+    "workers": [
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      },
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      }
+    ],
+    "issuance": "Synthetic initial balance in disposable demo database; no money or cryptocurrency"
+  }
+}

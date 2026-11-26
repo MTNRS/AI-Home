@@ -41,6 +41,7 @@ def main():
     parser.add_argument("--worker-devices", nargs=2, choices=("cpu", "cuda"), default=["cpu", "cpu"])
     parser.add_argument("--restart-coordinator", action="store_true")
     parser.add_argument("--measured-scheduling", action="store_true")
+    parser.add_argument("--transfer-scheduling", action="store_true")
     args = parser.parse_args()
     if not 1 <= args.rounds <= 10:
         parser.error("Reference experiment permits 1-10 rounds")
@@ -48,6 +49,8 @@ def main():
         parser.error("Smoke reward must be between 0 and 100 internal test credits")
     if args.restart_coordinator and args.rounds < 2:
         parser.error("Coordinator restart requires at least two rounds")
+    if args.transfer_scheduling:
+        args.measured_scheduling = True
     if args.measured_scheduling and args.rounds < 2:
         parser.error("Measured scheduling requires a bootstrap and a constrained round")
     output = args.output_dir.resolve()
@@ -133,6 +136,9 @@ def main():
                 scheduling = ({"min_gradient_tokens_per_second": 1.0,
                     "min_claim_service_bytes_per_second": 1.0, "min_submit_service_bytes_per_second": 1.0,
                     "max_heartbeat_service_seconds": 1.0} if args.measured_scheduling and step > 1 else None)
+                if scheduling and args.transfer_scheduling:
+                    scheduling.update({"min_transfer_download_bytes_per_second": 1.0,
+                        "min_transfer_upload_bytes_per_second": 1.0, "max_transfer_http_round_trip_seconds": 1.0})
                 parameters = encode_tensors(dict(model.named_parameters()))
                 ids = []
                 round_payloads = []
@@ -163,7 +169,8 @@ def main():
                 for node, worker_device in zip(nodes, args.worker_devices):
                     environment = {**os.environ, "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2"}
                     worker = subprocess.run([sys.executable, *(["-I"] if sys.flags.isolated else []), "-m", "ai_home.foundation.node_smoke", "--worker"],
-                        input=json.dumps({"url": url, "token": node["node_token"], "allow_foundation_training": True, "foundation_device": worker_device}),
+                        input=json.dumps({"url": url, "token": node["node_token"], "allow_foundation_training": True, "foundation_device": worker_device,
+                                          "transfer_probe": args.transfer_scheduling and step == 2}),
                         capture_output=True, text=True, check=True, timeout=60, env=environment,
                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
                     observed = json.loads(worker.stdout)
@@ -223,6 +230,7 @@ def main():
             report["isolated_python"] = bool(sys.flags.isolated)
             report["database_setup"] = "packaged Alembic upgrade and schema check"
             report["measured_scheduling"] = args.measured_scheduling
+            report["transfer_scheduling"] = args.transfer_scheduling
             report["credits"] = {"reward_per_job": args.reward_credits,
                 "requester": client.get("/api/v1/credits").json(),
                 "workers": [client.get("/api/v1/credits", headers=h).json() for h in worker_sessions],

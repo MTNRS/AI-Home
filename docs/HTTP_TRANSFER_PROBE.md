@@ -100,3 +100,27 @@ y tiempo, muestra ausente/caducada y aceptación. PostgreSQL real local: siete
 pruebas pasaron en 4.77s, incluyendo predicado JSON de las nuevas restricciones.
 Pendiente demostración completa con sonda HTTP real seguida de asignación y
 entrenamiento; estas pruebas usan tiempos controlados para decidir los umbrales.
+
+## Flujo completo con gradientes reales
+
+```powershell
+python -m ai_home.foundation.distributed_smoke --output-dir artifacts/transfer-round-new --rounds 2 --reward-credits 3 --worker-devices cpu cuda --restart-coordinator --transfer-scheduling
+```
+
+Primera ronda sin restricciones obtiene medidas de cómputo. Antes de reclamar la
+segunda, cada worker realiza/publica una sonda HTTP real. La segunda ronda exige
+mínimos de transferencia de 1 byte/s y mínimo RTT HTTP <=1 s además de restricciones
+de cómputo. Son umbrales de demostración local, no recomendaciones de producción.
+El modo sondea una vez en la segunda ronda; no renueva muestras automáticamente
+para corridas largas que excedan su vigencia.
+
+Ejecución real CPU/CUDA en artifacts/transfer-scheduling-v1: cuatro procesos worker
+completaron cuatro trabajos; dos sondas publicadas. Consulta de SQLite confirmó
+los tres requisitos HTTP en ambos trabajos de la ronda 2, ambos completed.
+Coordinador reiniciado/reintentado mantuvo IDs y commit sin reservas duplicadas.
+Delta L2 embeddings .1838996857; duración 31.368 s. Cada worker ganó seis créditos
+por dos trabajos verificados; no por las sondas. Informe TRANSFER_SCHEDULING_SMOKE.json.
+Sigue siendo un único equipo/loopback, sin evidencia de ancho de banda multihost.
+
+CI incorpora --transfer-scheduling al smoke instalado de dos workers CPU;
+resultado remoto de esta ampliación pendiente.
