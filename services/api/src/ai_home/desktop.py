@@ -1660,10 +1660,10 @@ def main() -> None:
             window = tk.Toplevel(self)
             self.private_windows.append(window)
             window.title("Entrenar Foundation")
-            window.geometry("800x490")
+            window.geometry("850x580")
             frame = ttk.Frame(window, padding=14)
             frame.pack(fill="both", expand=True)
-            names = ("Dataset JSON", "Modelo JSON (opcional)", "Entrenamiento JSON", "Carpeta nueva", "Reanudar checkpoint (opcional)")
+            names = ("Dataset JSON", "Modelo JSON (opcional)", "Entrenamiento JSON", "Carpeta nueva", "Checkpoint de origen (opcional)", "Validación JSON (opcional)")
             values = {name: tk.StringVar() for name in names}
             for row, (name, value) in enumerate(values.items()):
                 ttk.Label(frame, text=name).grid(row=row, column=0, sticky="w", pady=6)
@@ -1677,11 +1677,17 @@ def main() -> None:
                         variable.set(path)
                 ttk.Button(frame, text="Elegir", command=choose).grid(row=row, column=2, padx=5)
             frame.columnconfigure(1, weight=1)
+            source_type = tk.StringVar(value="Dataset público")
+            mode = tk.StringVar(value="Desde cero")
+            ttk.Label(frame, text="Fuente").grid(row=6, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=source_type, values=("Dataset público", "Exportación revisada SFT"), state="readonly", width=30).grid(row=6, column=1, sticky="w")
+            ttk.Label(frame, text="Inicio").grid(row=7, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=mode, values=("Desde cero", "Reanudar exactamente", "Padre con optimizador nuevo"), state="readonly", width=30).grid(row=7, column=1, sticky="w")
             device = tk.StringVar(value="cpu")
-            ttk.Label(frame, text="Dispositivo").grid(row=5, column=0, sticky="w")
-            ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=12).grid(row=5, column=1, sticky="w")
-            status = tk.StringVar(value="Usa datos públicos autorizados. El entrenamiento crea un candidato; no lo activa.")
-            ttk.Label(frame, textvariable=status, wraplength=730).grid(row=7, column=0, columnspan=3, sticky="w", pady=12)
+            ttk.Label(frame, text="Dispositivo").grid(row=8, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=12).grid(row=8, column=1, sticky="w")
+            status = tk.StringVar(value="Datos autorizados o exportación SFT revisada. El candidato no se activa ni se distribuye.")
+            ttk.Label(frame, textvariable=status, wraplength=730).grid(row=10, column=0, columnspan=3, sticky="w", pady=12)
             cancellation = threading.Event()
             events = queue.Queue()
             def stop():
@@ -1696,6 +1702,10 @@ def main() -> None:
                 if any(not paths[index] for index in (0, 2, 3)):
                     status.set("Selecciona dataset, configuración de entrenamiento y una carpeta nueva.")
                     return
+                selected_mode, selected_source = mode.get(), source_type.get()
+                if (selected_mode == "Desde cero") != (not paths[4]):
+                    status.set("Selecciona un checkpoint para reanudar o continuar desde un padre; déjalo vacío para empezar de cero.")
+                    return
                 selected_device = device.get()
                 cancellation.clear()
                 self.training_cancel = cancellation
@@ -1705,7 +1715,11 @@ def main() -> None:
                     try:
                         from ai_home.foundation.training_job import run_training
                         result = run_training(paths[0], paths[1] or None, paths[2], paths[3],
-                                              device=selected_device, resume=paths[4] or None,
+                                              device=selected_device,
+                                              resume=paths[4] if selected_mode == "Reanudar exactamente" else None,
+                                              initial_checkpoint=paths[4] if selected_mode == "Padre con optimizador nuevo" else None,
+                                              reviewed_export=selected_source == "Exportación revisada SFT",
+                                              validation_dataset=paths[5] or None,
                                               cancel=cancellation, on_step=lambda item: events.put(("progress", dict(item))))
                         events.put(("done", result))
                     except Exception as error:
@@ -1728,8 +1742,8 @@ def main() -> None:
                         start_button.configure(state="normal")
                 window.after(100, poll)
             start_button = ttk.Button(frame, text="Entrenar", command=start)
-            start_button.grid(row=6, column=1, sticky="w", pady=12)
-            ttk.Button(frame, text="Parar y guardar", command=stop).grid(row=6, column=2)
+            start_button.grid(row=9, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Parar y guardar", command=stop).grid(row=9, column=2)
             window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
             poll()
 

@@ -48,6 +48,23 @@ def test_frozen_contributions_reach_real_sft_without_public_release(client, tmp_
     assert result["validation"]["tokens"] > 0
     assert load_checkpoint(output)[2]["data_visibility"] == "reviewed-training-only"
     assert result["status"] == "candidate"
+    from dataclasses import asdict
+    from ai_home.foundation.training_job import run_training
+    model_path, training_path = tmp_path / "model.json", tmp_path / "training.json"
+    model_path.write_text(json.dumps(result["config"]))
+    training_path.write_text(json.dumps(asdict(settings)))
+    job = run_training(path, model_path, training_path, tmp_path / "private-job", reviewed_export=True)
+    assert load_checkpoint(job["checkpoint"])[2]["data_visibility"] == "reviewed-training-only"
+    child = run_training(path, None, training_path, tmp_path / "private-child", reviewed_export=True,
+                         initial_checkpoint=job["checkpoint"])
+    assert child["embedding_delta_l2"] > 0
+    assert load_checkpoint(child["checkpoint"])[2]["data_visibility"] == "reviewed-training-only"
+    manifest = json.loads((tmp_path / "private-child" / "configuration.json").read_text())
+    assert manifest["source_type"] == "reviewed-training-only"
+    training_path.write_text(json.dumps(asdict(TrainingConfig(steps=2, warmup=1))))
+    with pytest.raises(ValueError, match="sft"):
+        run_training(path, model_path, training_path, tmp_path / "bad-objective", reviewed_export=True)
+    assert not (tmp_path / "bad-objective").exists()
     exported["records"][0]["messages"][1]["content"] = "tampered"
     path.write_text(json.dumps(exported), encoding="utf-8")
     with pytest.raises(ValueError, match="manifest"):

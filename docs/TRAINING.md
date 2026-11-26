@@ -207,7 +207,19 @@ Normal application close waits for the training worker to finish saving; forced
 process termination cannot guarantee a new checkpoint.
 
 Desktop evaluation and training workers exclude one another within this app
-instance. Other processes are not coordinated. This initial training form accepts
-public datasets; reviewed private SFT exports and fresh-parent fine-tuning remain
-available through the CLI. It does not automatically fit resource budgets or
-activate a checkpoint; configuration limits and trainer validation apply.
+instance. Other processes are not coordinated. The form does not automatically
+fit resource budgets or activate a checkpoint; configuration limits and trainer
+validation apply.
+
+The source selector also accepts an administrator-reviewed SFT export. Its
+consent, review checklist, manifest and restricted visibility are checked by the
+existing contribution importer; the training configuration must specify
+`objective: "sft"`. This does not grant public redistribution rights. Training
+artifacts must remain in a location appropriate for restricted data.
+
+The initialization selector distinguishes random initialization, exact resume
+and a parent with a fresh optimizer. Provide a checkpoint only for the latter
+two modes. An optional independent public validation dataset can be selected;
+lineage contamination checks still apply. Parent training preserves architecture
+and tokenizer, including an explicitly expanded vocabulary candidate. Run
+configuration records the source type, parent/resume path and validation digest.

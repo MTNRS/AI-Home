@@ -516,3 +516,16 @@ and a completed checkpoint under artifacts/ui-review. Functional cancellation
 and resume tests compare all tensors against uninterrupted training. Full suite:
 247 passed, 4 PostgreSQL skips. Dialog layout has not been visually reviewed.
 Private SFT and fresh-parent training are still CLI-only; no automatic promotion.
+
+
+### Desktop reviewed SFT and fresh-parent training
+
+Extended the training form/job to distinguish public corpora and reviewed SFT
+exports, random initialization/exact resume/fresh parent, and optional independent
+validation. Existing authorization, consent, manifest, holdout and restricted
+lineage checks remain enforced. The API-reviewed contribution integration test
+now runs the desktop job backend for real SFT and a restricted child, and rejects
+a causal configuration before creating a run directory. A live Tk smoke executed
+fresh-parent training from the form and verified changed weights. Full suite:
+247 passed, 4 PostgreSQL skips. Layout and private-SFT button interaction have
+not been visually reviewed; no dataset or model has been published.
