@@ -30,6 +30,7 @@ from ai_home.foundation.tokenizer import ByteBPE
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output-dir', type=Path, required=True)
 parser.add_argument('--device', choices=('cpu', 'cuda'), default='cpu')
+parser.add_argument('--task', choices=('gradient', 'evaluate'), default='gradient')
 parser.add_argument('--require-installed', action='store_true')
 args = parser.parse_args()
 if args.require_installed:
@@ -53,7 +54,8 @@ payload = {'shard': {'records': records, 'tokenizer': tokenizer.to_dict()},
 settings = Settings(_env_file=None, environment='test',
     database_url=f"sqlite+pysqlite:///{(output / 'jobs.db').as_posix()}",
     supabase_url=None, supabase_publishable_key='', supabase_jwks_url=None,
-    foundation_distributed_training_enabled=True)
+    foundation_distributed_training_enabled=args.task == 'gradient',
+    foundation_distributed_evaluation_enabled=args.task == 'evaluate')
 command.upgrade(migration_config(settings), 'head')
 api = create_app(settings)
 sock = socket.socket()
@@ -85,9 +87,9 @@ try:
         ledger.post(idempotency_key='desktop-smoke-issuance', operation='smoke_issuance',
                     postings={'smoke-issuance': -3, owner_account: 3})
         owner_headers = {'Authorization': f'Bearer {owner_token}'}
-        response = client.post('/api/v1/jobs/foundation/gradient', headers=owner_headers,
+        response = client.post('/api/v1/jobs/foundation/' + args.task, headers=owner_headers,
             json={'payload': payload, 'allow_public_node_processing': True,
-                  'idempotency_key': 'desktop-gradient', 'reward_credits': 3})
+                  'idempotency_key': 'desktop-' + args.task, 'reward_credits': 3})
         response.raise_for_status()
         job_id = response.json()['job_id']
         # Isolate only local persistence; registration, HTTP, Tk, worker and
@@ -109,7 +111,8 @@ try:
                 window.session_server_url = url
                 window.server_var.set(url)
                 window.consent_var.set(True)
-                window.node_training_var.set(True)
+                window.node_training_var.set(args.task == 'gradient')
+                window.node_evaluation_var.set(args.task == 'evaluate')
                 window.node_device_var.set(args.device)
                 window.transfer_probe_var.set(True)
                 window._start_contribution()
@@ -124,7 +127,7 @@ try:
                     if job['status'] == 'completed':
                         break
                     time.sleep(.05)
-                assert job and job['status'] == 'completed', 'Desktop worker did not complete gradient'
+                assert job and job['status'] == 'completed', 'Desktop worker did not complete neural task'
                 window._stop_contribution()
                 window.node_thread.join(timeout=10)
                 assert not window.node_thread.is_alive()
@@ -135,7 +138,9 @@ try:
                 assert owner_credits['available'] == 0 and owner_credits['reserved'] == 0
                 with api.state.session_factory() as session:
                     node = session.get(ComputeNode, window.settings['node_id'])
-                    assert 'foundation.gradient.v1' in node.supported_job_types
+                    assert 'foundation.' + args.task + '.v1' in node.supported_job_types
+                    other = 'gradient' if args.task == 'evaluate' else 'evaluate'
+                    assert 'foundation.' + other + '.v1' not in node.supported_job_types
                     assert node.hardware['resources']['foundation_device'] == args.device
                     assert 'transfer_measurement' in node.hardware
                     hardware = dict(node.hardware)
@@ -147,7 +152,7 @@ try:
                 window._drain_events()
                 assert previous_stop.is_set() and window.node_stop is None
                 assert window.status_var.get() == 'NEW-PROFILE'
-                assert not window.consent_var.get() and not window.node_training_var.get()
+                assert not window.consent_var.get() and not window.node_training_var.get() and not window.node_evaluation_var.get()
                 errors = []
                 messagebox.showerror = lambda *a, **kw: errors.append(a)
                 window.consent_var.set(True)
@@ -161,6 +166,7 @@ try:
                 assert window.node_thread is old_thread and not old_thread.is_alive()
                 report = {'format': 'ai-home-desktop-node-smoke-v1', 'device': args.device,
                     'transport': 'real loopback HTTP', 'job_status': job['status'],
+                    'job_type': job['job_type'],
                     'token_count': job['result']['token_count'], 'worker_credits': worker_credits,
                     'owner_credits': owner_credits,
                     'transfer_measurement': hardware['transfer_measurement'],
@@ -183,4 +189,4 @@ finally:
     sock.close()
     api.state.engine.dispose()
     assert not thread.is_alive()
-print('Real desktop node completed a verified Foundation gradient and earned 3 test credits.')
+print(f'Real desktop node completed a verified Foundation {args.task} task and earned 3 test credits.')

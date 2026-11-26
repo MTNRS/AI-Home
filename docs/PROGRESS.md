@@ -1716,3 +1716,12 @@ Tk reales de navegacion y cambio de perfil correctos. La prueba del limite del
 trabajador usa captura de argumentos; la evaluacion real por sockets esta cubierta
 por el smoke anterior. Revision visual del panel actualizado y formulario de
 coordinacion de evaluaciones siguen pendientes.
+
+### Evaluacion real desde Tk
+
+Extendido smoke de nodo con selector gradient/evaluate. Completadas evaluaciones
+CPU y CUDA con permiso independiente, registro real, HTTP loopback, recompensa de
+tres creditos y aislamiento al cambiar de cuenta. Repetido tambien gradiente CPU,
+correcto. Informes DESKTOP_EVALUATION_CPU/CUDA_SMOKE.json conservados. Anadido paso
+instalado CPU a CI, pendiente de confirmacion remota. No se afirma revision visual
+porque el smoke usa ventanas ocultas.

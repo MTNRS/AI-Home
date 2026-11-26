@@ -506,3 +506,19 @@ checkpoint intacto. [Informe](DISTRIBUTED_EVALUATION_SMOKE.json). Son medidas de
 servicio en un equipo, no ancho de banda fisico ni escalabilidad multihost. No
 miden calidad linguistica. CI incorpora el recorrido CPU/CPU desde el paquete
 instalado y publica su informe; confirmar su ejecucion remota antes de afirmarla.
+
+### Evaluacion desde el nodo de escritorio
+
+`scripts/verify_desktop_node.py --output-dir CARPETA_NUEVA --device cuda --task evaluate`
+verifica con Tk real el registro, capacidades, bucle del trabajador, perdida real,
+verificacion del servidor y tres creditos. El permiso de entrenamiento queda
+apagado y la capacidad de gradientes no se anuncia. Al cambiar de cuenta se
+borran ambos permisos, se descartan estados anteriores y se bloquea reutilizar
+el nodo de otra cuenta. Solo persistencia local/keyring se aislan en memoria.
+
+Ejecutado localmente con CUDA y CPU; repetido el recorrido previo de gradientes
+CPU para comprobar que conserva su funcionamiento. Informes:
+[CUDA](DESKTOP_EVALUATION_CUDA_SMOKE.json) y [CPU](DESKTOP_EVALUATION_CPU_SMOKE.json).
+Las ventanas del smoke permanecen ocultas: demuestra ejecucion funcional, no
+legibilidad ni distribucion visual. CI incorpora la variante instalada CPU;
+la confirmacion remota de ese nuevo paso queda pendiente.
