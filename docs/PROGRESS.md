@@ -1406,3 +1406,12 @@ propietario. Eliminada la restricción de los 100 nodos recientes para reutiliza
 credenciales; nodos ajenos/revocados/inexistentes comparten 404. 25 pruebas y
 smoke completo CPU/Tk/HTTP aprobados. CI Foundation de 28fc6c8 completado con
 éxito, incluido smoke de escritorio contra paquete instalado en Linux.
+
+### Generalización aritmética sintética medida
+
+Primer experimento fijo de suma de un dígito, 90.816 parámetros propios y 1.000
+pasos CUDA: 0/14 tras un paso → 13/14 tras 1.000. Particiones 70/16/14 separan
+pares y sus permutaciones; falla 0+0 (produce 1). No prueba matemáticas generales
+ni se promociona candidato. Protocolo, script, checkpoints locales e informe
+conservados; detalles en ARITHMETIC_EXPERIMENT.md. Suite local anterior completa:
+363 aprobadas y 7 PostgreSQL omitidas. Nueva prueba de particiones aprobada.
