@@ -169,3 +169,18 @@ legacy permission labeling and retrieval. A hidden Windows Tk check exercised th
 actual view and search controls, verified a fragment/provenance display and closed
 the window through profile switching. Full suite: 231 passed, 4 PostgreSQL skipped;
 no claim of full visual layout review for this new window is made.
+
+
+### Dataset integrity at load time (2026-11-26)
+
+The shared loader now verifies a declared dataset version against both the input
+records and their canonical prepared representation. Supplied document hashes must
+match normalized text, and an exported review hash must agree with every record.
+Content, license or permission edits after export invalidate the retained version.
+Reading is bounded while consuming the file, not only through a prior stat check.
+Legacy unversioned datasets remain supported with normal provenance/permission
+validation. Hashes establish consistency, not authenticated reviewer identity;
+a party able to rewrite all hashes can still construct a different dataset.
+
+Validation: 235 passed, 4 PostgreSQL skipped. Tests modify approved content,
+licenses, permissions and review binding, and exercise the actual read budget.

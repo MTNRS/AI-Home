@@ -44,6 +44,8 @@ def prepare_records(records, allow_reviewed=False, *, purpose="training"):
         if contains_common_secret(text) or re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", text):
             raise ValueError("Potential personal information or credential; review required")
         digest = hashlib.sha256(text.encode()).hexdigest()
+        if "sha256" in record and record["sha256"] != digest:
+            raise ValueError("Document hash does not match normalized text")
         if digest in seen:
             continue
         seen.add(digest)
@@ -62,11 +64,25 @@ def split_records(records, validation_fraction=0.2, allow_reviewed=False):
 
 
 def load_records(path, max_bytes=8_000_000, *, purpose="training"):
-    path = Path(path)
-    if path.stat().st_size > max_bytes:
+    if type(max_bytes) is not int or max_bytes < 1:
+        raise ValueError("Invalid dataset read budget")
+    with Path(path).open("rb") as source:
+        raw = source.read(max_bytes + 1)
+    if len(raw) > max_bytes:
         raise ValueError("Reference dataset loader budget exceeded")
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("format_version") != 1 or not isinstance(data.get("records"), list):
+    data = json.loads(raw.decode("utf-8"))
+    if not isinstance(data, dict) or data.get("format_version") != 1 or not isinstance(data.get("records"), list):
         raise ValueError("Invalid knowledge dataset")
+    declared_version = data.get("dataset_version")
+    if "dataset_version" in data and declared_version != canonical_hash(data["records"]):
+        raise ValueError("Dataset version integrity check failed")
     records = prepare_records(data["records"], purpose=purpose)
-    return records, canonical_hash(records)
+    digest = canonical_hash(records)
+    if "dataset_version" in data and declared_version != digest:
+        raise ValueError("Versioned dataset is not in canonical prepared form")
+    if "review_sha256" in data:
+        review_hash = data["review_sha256"]
+        if (not isinstance(review_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", review_hash)
+                or any(record.get("review_sha256") != review_hash for record in records)):
+            raise ValueError("Dataset review binding mismatch")
+    return records, digest

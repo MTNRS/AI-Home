@@ -417,3 +417,18 @@ permission inheritance. Search displays actual fragments with provenance and nev
 runs generation or sends a query remotely. Profile/window lifecycle guards apply.
 Validation: 231 passed, 4 skipped; hidden real Windows Tk index/search/profile-close
 check passed using authored fixtures. Visual inspection of the new dialog remains.
+
+
+### Dataset integrity at load time (2026-11-26)
+
+The shared loader now verifies a declared dataset version against both the input
+records and their canonical prepared representation. Supplied document hashes must
+match normalized text, and an exported review hash must agree with every record.
+Content, license or permission edits after export invalidate the retained version.
+Reading is bounded while consuming the file, not only through a prior stat check.
+Legacy unversioned datasets remain supported with normal provenance/permission
+validation. Hashes establish consistency, not authenticated reviewer identity;
+a party able to rewrite all hashes can still construct a different dataset.
+
+Validation: 235 passed, 4 PostgreSQL skipped. Tests modify approved content,
+licenses, permissions and review binding, and exercise the actual read budget.

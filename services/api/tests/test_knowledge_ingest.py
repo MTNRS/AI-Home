@@ -110,3 +110,29 @@ def test_template_grants_no_automatic_permissions(tmp_path):
         approve_records(pending, review, tmp_path / "not-approved.json")
     with pytest.raises(FileExistsError):
         create_review_template(pending, review)
+
+
+@pytest.mark.parametrize("field,value", [("text", "Changed approved content"),
+    ("license", "Changed license"), ("training_allowed", True)])
+def test_exported_dataset_version_rejects_post_approval_modification(tmp_path, field, value):
+    pending, review, _, _ = fixture(tmp_path)
+    output = tmp_path / "approved.json"
+    approve_records(pending, review, output)
+    data = json.loads(output.read_text(encoding="utf-8"))
+    data["records"][0][field] = value
+    output.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ValueError, match="version integrity"):
+        load_records(output, purpose="retrieval")
+
+
+def test_dataset_loader_checks_review_binding_and_actual_read_budget(tmp_path):
+    pending, review, _, _ = fixture(tmp_path)
+    output = tmp_path / "approved.json"
+    approve_records(pending, review, output)
+    with pytest.raises(ValueError, match="budget"):
+        load_records(output, max_bytes=10, purpose="retrieval")
+    data = json.loads(output.read_text(encoding="utf-8"))
+    data["review_sha256"] = "f" * 64
+    output.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ValueError, match="review binding"):
+        load_records(output, purpose="retrieval")
