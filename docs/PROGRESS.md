@@ -1371,3 +1371,12 @@ gradientes. Conserva el interruptor del servidor y la verificación de resultado
 La ruta requiere servidor actualizado. Pruebas locales: 37 de nodos/sondas/
 gradientes y 42 de gradientes/escritorio/privacidad (solapan); Tk real comprobó
 controles. Pendientes revisión visual y smoke del flujo completo de escritorio.
+
+### Nodo real de escritorio: CPU y CUDA
+
+El smoke `verify_desktop_node.py` pasó en CPU y CUDA mediante Tk real y HTTP
+loopback. Registra el nodo, configura consentimiento/capacidades, publica sonda,
+ejecuta un gradiente real verificado y liquida 3 créditos de prueba desde otra
+cuenta sintética. Informes CPU/CUDA retenidos en docs; payload y resultado en
+artifacts. Incorporado a CI para el paquete instalado. No prueba multihost ni
+reemplaza la revisión visual pendiente del panel ampliado.

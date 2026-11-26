@@ -326,3 +326,27 @@ Pruebas locales: 37 aprobadas de sondas/nodos/gradientes antes de ampliar la
 comprobación de opt-out; después, 42 de gradientes/escritorio/privacidad,
 incluida desactivación/reactivación efectiva en el scheduler. Tk real verificó
 los controles por defecto y su conmutación. Revisión visual pendiente.
+
+## Smoke del nodo desde Tk real
+
+`scripts/verify_desktop_node.py --output-dir NUEVO --device cpu` crea una API
+loopback con SQLite migrada, dos cuentas sintéticas y tres créditos de prueba.
+Usa la ventana Tk real, `_start_contribution`, detección de hardware, registro
+HTTP, actualización de capacidades, sonda opcional y bucle real del nodo.
+Un gradiente calculado con pesos propios inicializados desde cero debe superar
+la verificación del servidor y liquidar los tres créditos al trabajador.
+
+Solo se sustituyen la persistencia local de preferencias/memoria y keyring por
+almacenamiento efímero; no se modifican credenciales reales. Los errores de la
+interfaz hacen fallar el smoke sin dejar un diálogo modal esperando interacción.
+El script conserva payload, resultado, base de datos y reporte, sin publicar
+credenciales en el reporte. Es una verificación funcional con ventana oculta,
+no una revisión visual ni una demostración de entrenamiento en varios hosts.
+
+Ejecutado correctamente en Windows con CPU y RTX 4070 Super CUDA. Informes:
+`DESKTOP_NODE_CPU_SMOKE.json` y `DESKTOP_NODE_CUDA_SMOKE.json`. En ambos casos:
+trabajo completado, trabajador gana 3 créditos, solicitante disponible/reservado
+0, capacidades y dispositivo reportados correctos, sonda publicada. Una primera
+revisión del arnés falló por importar messagebox desde el módulo equivocado;
+se corrigió y las dos ejecuciones finales pasaron. CI incorpora ahora el mismo
+flujo CPU contra el paquete instalado bajo Xvfb; su ejecución queda pendiente.

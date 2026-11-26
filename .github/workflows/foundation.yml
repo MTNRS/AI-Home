@@ -36,6 +36,8 @@ jobs:
         run: xvfb-run -a python -I scripts/verify_visual_profile.py --require-installed
       - name: Verify real desktop visual training and cancellation
         run: xvfb-run -a python -I scripts/verify_visual_training.py --require-installed --dataset artifacts/installed-visual/dataset.json --output-dir artifacts/installed-visual-ui
+      - name: Verify desktop node registration and real gradient work
+        run: xvfb-run -a python -I scripts/verify_desktop_node.py --require-installed --output-dir artifacts/installed-desktop-node --device cpu
       - run: python -I scripts/verify_installed_api.py --output-dir artifacts/installed-api --checkpoint artifacts/foundation-smoke/foundation-nano.pt
       - run: python -I -m ai_home.foundation.distributed_smoke --output-dir artifacts/installed-distributed --rounds 2 --reward-credits 3 --worker-devices cpu cpu --restart-coordinator --transfer-scheduling
       - uses: actions/upload-artifact@v4
@@ -45,6 +47,7 @@ jobs:
             artifacts/installed-api/report.json
             artifacts/installed-distributed/report.json
             artifacts/installed-transfer-probe/report.json
+            artifacts/installed-desktop-node/report.json
             artifacts/installed-visual-ui/training/training-report.json
       - uses: actions/upload-artifact@v4
         with:

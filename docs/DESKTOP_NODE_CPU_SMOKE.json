@@ -1,0 +1,35 @@
+{
+  "format": "ai-home-desktop-node-smoke-v1",
+  "device": "cpu",
+  "transport": "real loopback HTTP",
+  "job_status": "completed",
+  "token_count": 60,
+  "worker_credits": {
+    "available": 3,
+    "reserved": 0,
+    "earned": 3
+  },
+  "owner_credits": {
+    "available": 0,
+    "reserved": 0,
+    "earned": 0
+  },
+  "transfer_measurement": {
+    "format": "ai-home-http-transfer-probe-v1",
+    "payload_bytes": 65536,
+    "empty_round_trip_seconds": [
+      0.002769400001852773,
+      0.0020936000073561445,
+      0.0020406999974511564
+    ],
+    "download_seconds": 0.0024867999891284853,
+    "upload_seconds": 0.0019109999993816018,
+    "received_epoch": 1795703258,
+    "expires_epoch": 1795703378,
+    "download_bytes_per_second": 26353546.84192656,
+    "upload_bytes_per_second": 34294086.876612976,
+    "minimum_http_round_trip_seconds": 0.0020406999974511564,
+    "evidence": "client-reported HTTP service timings; not independently attested"
+  },
+  "claim": "Real Tk registration and node loop; one host; synthetic accounts and test credits; no general capability claim"
+}
