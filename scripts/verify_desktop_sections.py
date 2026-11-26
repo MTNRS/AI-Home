@@ -49,6 +49,12 @@ def run(self,*args):
     buttons['Entrenar o reanudar'].invoke()
     windows=[w for w in self.winfo_children() if isinstance(w,tk.Toplevel)]
     assert any(w.title()=='Entrenar Foundation' for w in windows)
+    training_window = next(w for w in windows if w.title()=='Entrenar Foundation')
+    disk = next(w for w in descendants(training_window)
+                if isinstance(w, ttk.Checkbutton) and 'secuencias en disco' in w.cget('text'))
+    assert not bool(self.getvar(disk.cget('variable')))
+    disk.invoke()
+    assert bool(self.getvar(disk.cget('variable')))
     self.destroy()
     print('Ten real Tk sections route correctly; Training opens existing form. No visual or training capability claim.')
 tk.Tk.mainloop=run

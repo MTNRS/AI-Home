@@ -1481,3 +1481,10 @@ conteo y fusiones por bloques; el entrenador lo transmite y conserva la semánti
 de cancelación sin checkpoint parcial. Igualdad exacta de tokens/vocabularios
 con evento inactivo verificada. Suite local completa: 379 aprobadas, 7 PostgreSQL
 omitidas en 52,88 segundos. Operaciones nativas siguen sin límite duro de parada.
+
+### Caché disponible en entrenamiento de escritorio
+
+Casilla opcional desactivada por defecto; crea caché dentro del nuevo directorio
+y registra la decisión en configuración. Tk real verificó conmutación. Quince
+pruebas Foundation aprobadas, incluido trabajo con pausa/reanudación en disco y
+comparación con entrenamiento completo en memoria. Revisión visual pendiente.

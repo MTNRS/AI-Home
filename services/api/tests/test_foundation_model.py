@@ -228,12 +228,14 @@ def test_local_training_job_retains_configuration_and_resumes(tmp_path):
     architecture.write_text(json.dumps(asdict(config())))
     settings.write_text(json.dumps(asdict(TrainingConfig(steps=4, warmup=0))))
     cancellation = threading.Event()
-    paused = run_training(dataset, architecture, settings, tmp_path / "paused", cancel=cancellation,
+    paused = run_training(dataset, architecture, settings, tmp_path / "paused", cancel=cancellation, disk_sequences=True,
                           on_step=lambda metric: cancellation.set() if metric["step"] == 2 else None)
     assert paused["step"] == 2 and paused["stop_reason"] == "cancelled"
     assert (tmp_path / "paused" / "configuration.json").is_file()
+    assert json.loads((tmp_path / "paused/configuration.json").read_text())["disk_sequences"] is True
+    assert (tmp_path / "paused/sequence-cache/train/manifest.json").is_file()
     assert json.loads((tmp_path / "paused" / "result.json").read_text())["step"] == 2
-    resumed = run_training(dataset, None, settings, tmp_path / "resumed", resume=paused["checkpoint"])
+    resumed = run_training(dataset, None, settings, tmp_path / "resumed", resume=paused["checkpoint"], disk_sequences=True)
     complete = run_training(dataset, architecture, settings, tmp_path / "complete")
     assert resumed["training_complete"] and complete["training_complete"]
     left = load_checkpoint(resumed["checkpoint"])[0].state_dict()

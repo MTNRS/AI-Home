@@ -2111,8 +2111,11 @@ def main() -> None:
             device = tk.StringVar(value="cpu")
             ttk.Label(frame, text="Dispositivo").grid(row=8, column=0, sticky="w")
             ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=12).grid(row=8, column=1, sticky="w")
+            disk_sequences = tk.BooleanVar(value=False)
+            ttk.Checkbutton(frame, text="Guardar secuencias en disco para reducir RAM (ocupa espacio local)",
+                            variable=disk_sequences).grid(row=9, column=0, columnspan=3, sticky="w", pady=6)
             status = tk.StringVar(value="Datos autorizados o exportación SFT revisada. El candidato no se activa ni se distribuye.")
-            ttk.Label(frame, textvariable=status, wraplength=730).grid(row=10, column=0, columnspan=3, sticky="w", pady=12)
+            ttk.Label(frame, textvariable=status, wraplength=730).grid(row=11, column=0, columnspan=3, sticky="w", pady=12)
             cancellation = threading.Event()
             events = queue.Queue()
             def stop():
@@ -2132,6 +2135,7 @@ def main() -> None:
                     status.set("Selecciona un checkpoint para reanudar o continuar desde un padre; déjalo vacío para empezar de cero.")
                     return
                 selected_device = device.get()
+                selected_disk_sequences = disk_sequences.get()
                 cancellation.clear()
                 self.training_cancel = cancellation
                 start_button.configure(state="disabled")
@@ -2145,6 +2149,7 @@ def main() -> None:
                                               initial_checkpoint=paths[4] if selected_mode == "Padre con optimizador nuevo" else None,
                                               reviewed_export=selected_source == "Exportación revisada SFT",
                                               validation_dataset=paths[5] or None,
+                                              disk_sequences=selected_disk_sequences,
                                               cancel=cancellation, on_step=lambda item: events.put(("progress", dict(item))))
                         events.put(("done", result))
                     except Exception as error:
@@ -2167,8 +2172,8 @@ def main() -> None:
                         start_button.configure(state="normal")
                 window.after(100, poll)
             start_button = ttk.Button(frame, text="Entrenar", command=start)
-            start_button.grid(row=9, column=1, sticky="w", pady=12)
-            ttk.Button(frame, text="Parar y guardar", command=stop).grid(row=9, column=2)
+            start_button.grid(row=10, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Parar y guardar", command=stop).grid(row=10, column=2)
             window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
             poll()
 

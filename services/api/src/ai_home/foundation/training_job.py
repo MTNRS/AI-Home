@@ -19,7 +19,7 @@ def read_config(path):
 
 def run_training(dataset, model_config, training_config, output_dir, *, device="cpu",
                  resume=None, cancel=None, on_step=None, reviewed_export=False,
-                 initial_checkpoint=None, validation_dataset=None):
+                 initial_checkpoint=None, validation_dataset=None, disk_sequences=False):
     if resume and initial_checkpoint:
         raise ValueError("Choose exact resume or fresh parent training")
     if reviewed_export:
@@ -41,12 +41,14 @@ def run_training(dataset, model_config, training_config, output_dir, *, device="
                 "resume": str(Path(resume).resolve()) if resume else None,
                 "source_type": "reviewed-training-only" if reviewed_export else "public",
                 "initial_checkpoint": str(Path(initial_checkpoint).resolve()) if initial_checkpoint else None,
-                "validation_dataset_sha256": canonical_hash(validation) if validation else None}
+                "validation_dataset_sha256": canonical_hash(validation) if validation else None,
+                "disk_sequences": disk_sequences}
     (output_dir / "configuration.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     result = train(records, output_dir / "model.pt", config, settings, device=device,
                    resume=resume, cancel=cancel, on_step=on_step,
                    reviewed_export=dataset if reviewed_export else None,
-                   initial_checkpoint=initial_checkpoint, validation_records=validation)
+                   initial_checkpoint=initial_checkpoint, validation_records=validation,
+                   sequence_cache_dir=output_dir / 'sequence-cache' if disk_sequences else None)
     summary = {"checkpoint": str((output_dir / "model.pt").resolve()), "step": result["step"],
                "training_complete": result["training_complete"], "stop_reason": result["stop_reason"],
                "parameters": result["parameter_count"], "validation": result["validation"],

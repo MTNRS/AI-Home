@@ -297,3 +297,16 @@ La limitación histórica del BPE se ha reducido: el entrenador transmite ahora
 cancelación a aprendizaje/codificación BPE y comprueba bloques durante conteo y
 fusión. Ver TOKENIZER.md. Persisten operaciones nativas no interrumpibles; no se
 promete una latencia máxima de parada.
+
+### Caché desde el escritorio
+
+El formulario «Entrenar Foundation» incluye «Guardar secuencias en disco para
+reducir RAM», desmarcado por defecto. Al iniciar captura el valor en el hilo de
+interfaz y lo entrega al trabajo local. Crea `sequence-cache` dentro de la nueva
+carpeta de ejecución y registra `disk_sequences` en `configuration.json`.
+Reanudar utiliza una carpeta/caché nueva; no reutiliza archivos previos.
+
+Tk real comprobó presencia, estado inicial y conmutación. La prueba del trabajo
+local ahora pausa y reanuda con caché y compara los pesos con una ejecución
+completa en memoria. La disposición visual del formulario modificado queda
+pendiente de inspección; esta comprobación Tk fue funcional con ventana oculta.
