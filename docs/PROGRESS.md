@@ -1095,3 +1095,12 @@ correctos / 15 omisiones opcionales; entrenamiento, paquete, API instalada,
 distribuido y subida de artefactos correctos. PostgreSQL Python 3.11/3.12 también
 correctos en 45827171504. Resultado observado, no inferido de configuración.
 La ejecución Foundation duplicada de PR aún corría al registrar esta evidencia.
+
+## 2026-11-26 — Conexión neuronal visual experimental
+
+- Proyección propia de parches RGB inicializada desde cero y prefijo causal sobre
+  el decoder existente; posiciones, contexto y KV cache incluyen los parches.
+- 19 pruebas locales CPU/CUDA pasaron en 17.52s: condicionamiento, causalidad,
+  cache, gradientes, actualización real y regresión del modelo textual.
+- Alcance y límites en [VISION_PREFIX.md](VISION_PREFIX.md). Sin comprensión visual
+  demostrada ni integración aún con checkpoints, datasets o chat multimodales.

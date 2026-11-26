@@ -132,14 +132,19 @@ class FoundationModel(nn.Module):
         """Final normalized contextual states, without the vocabulary projection."""
         if tokens.ndim != 2 or tokens.shape[1] < 1:
             raise ValueError("Expected nonempty [batch, tokens]")
+        return self.hidden_embeddings(self.embedding(tokens), past, use_cache)
+
+    def hidden_embeddings(self, x, past=None, use_cache=False):
+        """Decode continuous inputs; positions and context include every prefix item."""
+        if x.ndim != 3 or x.shape[0] < 1 or x.shape[1] < 1 or x.shape[2] != self.config.width:
+            raise ValueError("Expected nonempty [batch, positions, width]")
         if past is not None and (len(past) != len(self.blocks) or not use_cache):
             raise ValueError("Invalid KV cache")
         offset = 0 if past is None else past[0][0].shape[-2]
-        if offset + tokens.shape[1] > self.config.context:
+        if offset + x.shape[1] > self.config.context:
             raise ValueError("Context budget exceeded")
         if self.training and self.config.gradient_checkpointing and use_cache:
             raise ValueError("KV cache is incompatible with gradient checkpointing")
-        x = self.embedding(tokens)
         caches = []
         for i, block in enumerate(self.blocks):
             if self.training and self.config.gradient_checkpointing:
