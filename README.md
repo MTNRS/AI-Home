@@ -1,5 +1,7 @@
 # AI@Home
 
+Estado experimental Foundation: [inventario de implementación, pruebas y pendientes](docs/FOUNDATION_STATUS.md). [PR de desarrollo #1](https://github.com/MTNRS/AI-Home/pull/1), todavía en borrador. Las pruebas de entrenamiento propio no demuestran calidad conversacional ni multimodalidad.
+
 AI@Home es un proyecto comunitario de inteligencia artificial abierta, con el
 objetivo de permitir investigación colaborativa y computación voluntaria sin
 comprometer la privacidad de sus participantes.

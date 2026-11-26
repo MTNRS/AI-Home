@@ -1,5 +1,7 @@
 # Verificación Foundation — 2026-11-26
 
+Estado vigente: Linux/Python 3.11 y 3.12 con PostgreSQL verificaron 267 pruebas correctas y 8 omisiones CUDA; Foundation CPU verificó 262 y 13 omisiones opcionales, además del entrenamiento smoke. Revisión `2e3d4c4`. Enlaces, diferencias con Windows/CUDA y alcance en [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md). Los resultados posteriores de este documento son históricos.
+
 ## Ejecución actual
 
 Python 3.11.9 y PyTorch 2.15.0+cpu en Windows.

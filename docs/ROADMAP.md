@@ -1,5 +1,7 @@
 # Hoja de ruta
 
+Estado vigente: consulte [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md). Las fases y notas que siguen conservan la planificación y el historial; las menciones antiguas a funciones pendientes no sustituyen el inventario actual. El objetivo Foundation completo sigue abierto.
+
 Las fases son objetivos secuenciales; no implican que estén implementadas. Cada
 fase debe cerrar con código ejecutable, pruebas pertinentes, documentación y
 un estado honesto en [PROGRESS.md](PROGRESS.md). Los 36 criterios de aceptación

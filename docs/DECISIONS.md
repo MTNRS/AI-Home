@@ -109,3 +109,11 @@ evaluation, explicit approval gates, transactional activation history and rollba
 Foundation API serving can select the active approved registry version. Direct
 checkpoint mode remains available and is not an approval claim. See
 [Model registry](MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.
+
+### Inventario vigente frente a historial
+
+Se conserva el historial de decisiones y resultados, pero FOUNDATION_STATUS.md
+actúa como punto de entrada al alcance vigente y sus pruebas. Los resultados
+locales CPU/CUDA, PostgreSQL y CI no son intercambiables: cada informe identifica
+entorno, revisión y omisiones. Una PR borrador publicada no implica aceptación ni
+finalización; no se fusiona automáticamente por pasar la suite técnica.

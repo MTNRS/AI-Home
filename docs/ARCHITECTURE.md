@@ -1,5 +1,7 @@
 # Arquitectura inicial
 
+Implementación actual y límites: [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md). La dirección inicial y los incrementos históricos siguientes deben leerse junto a ese inventario; no representan una plataforma multimodal o comunitaria completa.
+
 ## Objetivo y límites
 
 AI@Home busca crecer hacia una plataforma de IA colaborativa, multimodal y

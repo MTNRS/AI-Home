@@ -779,3 +779,15 @@ in separate processes. Raw measurements and configurations are committed; see
 COMPUTE_BENCHMARKS.md for throughput, memory and scope limitations. No language
 capability, optimal sizing, sustained performance or multi-GPU support is inferred.
 Medium/Large sizing remains unresolved. Full suite: 270 passed, 5 PostgreSQL skips.
+
+### Estado consolidado y entrega remota
+
+El inventario vigente está en FOUNDATION_STATUS.md: conserva todas las áreas del
+objetivo, diferencia evidencia de limitaciones y enumera las próximas líneas de
+implementación. README, ROADMAP, TESTING y ARCHITECTURE enlazan ese inventario para
+no presentar notas históricas como estado actual. El objetivo no está completado.
+La rama se publicó en la PR borrador #1; main permanece intacta. CI de código
+2e3d4c4 verificada: Python 3.11/3.12 con PostgreSQL, 267 correctas y 8 omisiones por
+CUDA por versión; Foundation CPU, 262 correctas y 13 omisiones opcionales, más
+smoke real y artefacto. Se corrigieron dependencia torch ausente en la matriz y
+una carrera del test de cancelación, sin relajar gates ni omitir esos tests.
