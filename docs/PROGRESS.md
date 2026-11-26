@@ -1488,3 +1488,10 @@ Casilla opcional desactivada por defecto; crea caché dentro del nuevo directori
 y registra la decisión en configuración. Tk real verificó conmutación. Quince
 pruebas Foundation aprobadas, incluido trabajo con pausa/reanudación en disco y
 comparación con entrenamiento completo en memoria. Revisión visual pendiente.
+
+### Entrenamiento con caché desde formulario real
+
+Smoke Tk asíncrono pasó: cuatro actualizaciones CPU, checkpoint cargable,
+cambio real de pesos, cachés completas y resultado mostrado en interfaz. Se
+incorpora a CI instalado/Xvfb; informe retenido en docs. Prueba funcional con
+ventana oculta, no revisión visual ni evidencia de calidad lingüística.

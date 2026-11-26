@@ -38,6 +38,8 @@ jobs:
         run: xvfb-run -a python -I scripts/verify_visual_training.py --require-installed --dataset artifacts/installed-visual/dataset.json --output-dir artifacts/installed-visual-ui
       - name: Verify desktop node registration and real gradient work
         run: xvfb-run -a python -I scripts/verify_desktop_node.py --require-installed --output-dir artifacts/installed-desktop-node --device cpu
+      - name: Verify desktop training with disk sequence cache
+        run: xvfb-run -a python -I scripts/verify_desktop_training.py --require-installed --output-dir artifacts/installed-desktop-training
       - run: python -I scripts/verify_installed_api.py --output-dir artifacts/installed-api --checkpoint artifacts/foundation-smoke/foundation-nano.pt
       - run: python -I -m ai_home.foundation.distributed_smoke --output-dir artifacts/installed-distributed --rounds 2 --reward-credits 3 --worker-devices cpu cpu --restart-coordinator --transfer-scheduling
       - uses: actions/upload-artifact@v4
@@ -48,6 +50,8 @@ jobs:
             artifacts/installed-distributed/report.json
             artifacts/installed-transfer-probe/report.json
             artifacts/installed-desktop-node/report.json
+            artifacts/installed-desktop-training/run/result.json
+            artifacts/installed-desktop-training/run/configuration.json
             artifacts/installed-visual-ui/training/training-report.json
       - uses: actions/upload-artifact@v4
         with:

@@ -310,3 +310,19 @@ Tk real comprobó presencia, estado inicial y conmutación. La prueba del trabaj
 local ahora pausa y reanuda con caché y compara los pesos con una ejecución
 completa en memoria. La disposición visual del formulario modificado queda
 pendiente de inspección; esta comprobación Tk fue funcional con ventana oculta.
+
+### Smoke del formulario con caché
+
+`scripts/verify_desktop_training.py --output-dir NUEVO` crea un corpus propio y
+configuraciones pequeñas, abre Tk real con ventana oculta, rellena el formulario,
+activa la casilla y pulsa Entrenar. Usa el hilo y sondeo de eventos reales. Exige
+cuatro pasos completos, checkpoint cargable, cambio de embeddings, manifiestos
+y tamaños correctos de ambas cachés, botón rehabilitado y ruta final mostrada.
+Solo aísla preferencias/memoria locales; no sustituye el entrenador ni sus pesos.
+
+Ejecución CPU Windows aprobada: 6.672 parámetros, cambio L2 de embeddings
+0.0358241, pérdida de validación 5.60127. No es una prueba de calidad del modelo.
+Informe `DESKTOP_CACHED_TRAINING_SMOKE.json`; artefactos locales en
+`artifacts/desktop-cached-training-v2`. CI incorpora el mismo smoke con wheel
+instalado bajo Xvfb y retiene configuración/resultado. Su ejecución remota y la
+revisión visual del formulario siguen pendientes.
