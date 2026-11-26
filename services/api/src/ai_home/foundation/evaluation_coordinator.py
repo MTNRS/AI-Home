@@ -8,10 +8,20 @@ import torch
 from ai_home.immutable_artifacts import publish_bytes
 from ai_home.urls import normalize_base_url
 from .checkpoint import load_checkpoint
-from .data import canonical_hash, prepare_records
+from .data import canonical_hash, load_records, prepare_records
 from .distributed import GradientPayload, encode_tensors
 from .distributed_evaluation import verified_evaluation_result
 from .tasks import PublicRecord
+
+
+def dataset_shards(path, shard_count):
+    """Partition a public holdout deterministically, without sampling or truncation."""
+    if type(shard_count) is not int or not 1 <= shard_count <= 8:
+        raise ValueError("Require one to eight evaluation shards")
+    records, _ = load_records(path, max_bytes=1_000_000)
+    if not 2 * shard_count <= len(records) <= 32 * shard_count:
+        raise ValueError("Each evaluation shard requires two to 32 distinct documents")
+    return [records[index::shard_count] for index in range(shard_count)]
 
 
 def _payloads(checkpoint, shards):
@@ -127,7 +137,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     plan = commands.add_parser("plan", help="Create an immutable public evaluation plan")
-    plan.add_argument("--shards", type=Path, required=True, help="JSON array of record lists")
+    inputs = plan.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--shards", type=Path, help="JSON array of record lists")
+    inputs.add_argument("--dataset", type=Path, help="Authorized public holdout knowledge dataset")
+    plan.add_argument("--shard-count", type=int, help="Number of shards for --dataset (1 to 8)")
     plan.add_argument("--owner", required=True)
     plan.add_argument("--reward-credits", type=int, default=0)
     plan.add_argument("--allow-public-node-processing", action="store_true")
@@ -142,11 +155,19 @@ def main():
         command.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "plan":
-        with args.shards.open("rb") as source:
-            raw = source.read(1_000_001)
-        if len(raw) > 1_000_000:
-            raise ValueError("Evaluation shards file exceeds input budget")
-        result = create_plan(args.checkpoint, json.loads(raw), args.output,
+        if args.dataset is not None:
+            if args.shard_count is None:
+                parser.error("--dataset requires --shard-count")
+            shards = dataset_shards(args.dataset, args.shard_count)
+        else:
+            if args.shard_count is not None:
+                parser.error("--shard-count requires --dataset")
+            with args.shards.open("rb") as source:
+                raw = source.read(1_000_001)
+            if len(raw) > 1_000_000:
+                raise ValueError("Evaluation shards file exceeds input budget")
+            shards = json.loads(raw)
+        result = create_plan(args.checkpoint, shards, args.output,
             server=args.server, owner_user_id=args.owner, reward_credits=args.reward_credits,
             allow_public_node_processing=args.allow_public_node_processing,
             weights_public_and_redistributable=args.weights_public_and_redistributable)

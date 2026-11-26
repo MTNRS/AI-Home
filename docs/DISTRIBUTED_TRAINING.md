@@ -541,3 +541,31 @@ pasadas, sin errores de transporte, antes de retornar el informe; el tercer
 proceso repitio la recogida sin duplicar jobs/creditos. [Informe de observacion](DISTRIBUTED_EVALUATION_OBSERVER_SMOKE.json).
 Si el smoke falla, cierra su proceso observador pendiente antes de desmontar el
 servidor. Los contadores son evidencia de esa ejecucion, no un benchmark de red.
+
+
+### Plan de evaluacion desde un dataset
+
+El coordinador admite un dataset Knowledge publico como alternativa al JSON
+manual de fragmentos. Debe contener solo el holdout autorizado; no se extraen
+ni descartan silenciosamente documentos entrenados. Ejemplo en PowerShell:
+
+```powershell
+python -m ai_home.foundation.evaluation_coordinator plan `
+  --checkpoint artifacts/model.pt --dataset artifacts/holdout.json `
+  --shard-count 2 --owner OWNER_ID --server http://127.0.0.1:8000 `
+  --output artifacts/evaluation-plan.json --reward-credits 3 `
+  --allow-public-node-processing --weights-public-and-redistributable
+```
+
+La particion es determinista por hash de documento, independiente del orden
+del archivo. Distribuye todos los documentos normalizados y deduplicados en
+1 a 8 fragmentos (2 a 32 documentos por fragmento). No equilibra tiempos de
+GPU ni cambia el texto para ajustarlo: si se exceden los limites del protocolo,
+la creacion del plan falla. La lectura del dataset tiene presupuesto de 1 MB.
+Se conservan licencia, permisos y linaje de grupos; el plan rechaza coincidencias
+con documentos o familias entrenadas. Las familias pueden aparecer en varios
+fragmentos del mismo holdout; esto no crea particiones train/test nuevas.
+
+`--dataset` exige `--shard-count`; `--shards` mantiene el formato manual anterior
+y no admite esa opcion. Crear el plan es local y no reserva creditos; `advance`
+conserva la autenticacion, envio y verificacion descritos anteriormente.

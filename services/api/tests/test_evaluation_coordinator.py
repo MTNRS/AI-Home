@@ -97,7 +97,8 @@ def test_evaluation_plan_resumes_and_aggregates_verified_public_shards(client, t
         worker.close()
 
 
-def test_evaluation_cli_creates_real_plan_and_requires_credentials(tmp_path):
+@pytest.mark.parametrize("input_kind", ["shards", "dataset"])
+def test_evaluation_cli_creates_real_plan_and_requires_credentials(tmp_path, input_kind):
     import os
     import subprocess
     import sys
@@ -109,7 +110,11 @@ def test_evaluation_cli_creates_real_plan_and_requires_credentials(tmp_path):
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
     env.pop("AI_HOME_COORDINATOR_TOKEN", None)
     command = [sys.executable, "-m", "ai_home.foundation.evaluation_coordinator"]
-    result = subprocess.run(command + ["plan", "--checkpoint", str(parent), "--shards", str(shards),
+    input_args = ["--shards", str(shards)]
+    if input_kind == "dataset":
+        shards.write_text(json.dumps({"format_version": 1, "records": holdout}), encoding="utf-8")
+        input_args = ["--dataset", str(shards), "--shard-count", "2"]
+    result = subprocess.run(command + ["plan", "--checkpoint", str(parent)] + input_args + [
         "--output", str(plan), "--server", "http://127.0.0.1", "--owner", "test-owner",
         "--allow-public-node-processing", "--weights-public-and-redistributable"],
         env=env, capture_output=True, text=True, timeout=45)
@@ -149,3 +154,23 @@ def test_evaluation_observer_retries_transport_and_reports_timeout_or_cancel(mon
     monkeypatch.setattr(coordinator, "advance", lambda *a: {"state": "waiting"})
     result = coordinator.supervise(None, None, None, None, wait_seconds=2, poll_seconds=1, cancel=Wait())
     assert result["state"] == "timed_out" and result["jobs_cancelled"] is False
+
+
+def test_dataset_partition_preserves_public_holdout_and_rejects_invalid_input(tmp_path):
+    from ai_home.foundation.evaluation_coordinator import dataset_shards
+    from ai_home.foundation.data import prepare_records
+    torch.set_num_threads(1)
+    _, _, _, holdout = checkpoint_fixture(tmp_path)
+    path = tmp_path / "holdout.json"
+    path.write_text(json.dumps({"format_version": 1, "records": holdout}), encoding="utf-8")
+    shards = dataset_shards(path, 2)
+    assert sorted(r["sha256"] for shard in shards for r in shard) == sorted(r["sha256"] for r in prepare_records(holdout))
+    path.write_text(json.dumps({"format_version": 1, "records": list(reversed(holdout))}), encoding="utf-8")
+    assert dataset_shards(path, 2) == shards
+    for count in (0, 3, 9, True):
+        with pytest.raises(ValueError):
+            dataset_shards(path, count)
+    holdout[0]["visibility"] = "private"
+    path.write_text(json.dumps({"format_version": 1, "records": holdout}), encoding="utf-8")
+    with pytest.raises(ValueError, match="public"):
+        dataset_shards(path, 2)

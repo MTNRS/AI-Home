@@ -1777,3 +1777,14 @@ y documentos; mantiene el aviso de que la lectura no verifica la ejecucion.
 Conservado el informe real CPU/CUDA de 468 tokens. Pruebas del lector y
 escritorio: 43 aprobadas (0.87 s), incluyendo informes alterados, booleanos
 y enteros fuera de rango. No se atribuyen capacidades linguisticas al resultado.
+
+
+### Planes de evaluacion desde datasets autorizados
+
+El CLI acepta --dataset y --shard-count, conservando --shards para particiones
+manuales. Reutiliza el lector Knowledge y las comprobaciones de consentimiento,
+privacidad y contaminacion del coordinador. Particion determinista sin muestreo
+ni truncado; limites explicitos de documentos y lectura. Seis pruebas aprobadas
+(16.66 s): CLI real con ambas entradas, checkpoint entrenado, resultados reales
+agregados, creditos, reanudacion, particion estable y rechazo de datos privados.
+Documentado el comando reproducible en DISTRIBUTED_TRAINING.md.
