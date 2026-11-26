@@ -84,3 +84,21 @@ closed and absence verified. No training/network/account action was triggered.
 All ten routes and the existing training form were additionally checked with
 hidden real-Tk widgets. The visual check does not cover every section/dialog,
 other DPI settings, keyboard-only navigation or screen readers.
+
+## 2026-11-26 — Ventana de inferencia visual
+
+Inspección directa mediante Computer Use de la ventana real `visual_desktop` en
+760×560 y en su mínimo 600×450 (área cliente). En ambos tamaños se observaron
+completos el aviso de privacidad, selectores checkpoint/PNG-JPEG, instrucción,
+CPU/CUDA, Generar/Cancelar, estado y área de respuesta con scrollbar. No se
+observaron solapamientos ni controles inaccesibles. El primer snapshot estaba
+oculto por otra app; se activó la ventana correcta y solo se evaluaron las capturas
+posteriores. El intento de redimensionar por arrastre no cambió su tamaño, por lo
+que se abrió otra instancia de prueba configurada al mínimo antes de inspeccionarla.
+
+Fixtures locales sin cuenta ni red: artifacts/ui-review/visual.py y
+visual-minimum.py. Se cerraron por la UI; ambos procesos terminaron con código 0.
+No se modificó el diseño porque la inspección no encontró un defecto en estos
+estados. No se revisaron otros DPI, lector de pantalla, diálogos de archivos,
+mensajes de error ni una respuesta larga durante esta inspección. Las pruebas
+funcionales de generación y aislamiento están documentadas aparte en VISION_PREFIX.

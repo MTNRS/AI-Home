@@ -371,3 +371,10 @@ Pruebas: 11 passed in 6.66s. Seis casos inválidos se rechazan sin directorio de
 salida; las reanudaciones reales CPU/CUDA FP32 y CUDA FP16/BF16 siguen siendo exactas.
 Estas comprobaciones detectan inconsistencia estructural, no autentican quién
 produjo el checkpoint ni prueban que los momentos procedan del entrenamiento declarado.
+
+## Revisión visual de ventana
+
+Inspeccionada con Computer Use en 760×560 y 600×450: controles y textos completos,
+respuesta visible y desplazable, sin defectos observados en esos estados. Ambas
+instancias de prueba cerradas y procesos terminados. Detalles y límites en
+DESKTOP_VISUAL_REVIEW.md; otros DPI/accesibilidad siguen pendientes.

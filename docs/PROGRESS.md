@@ -1251,3 +1251,10 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - Corregido stop_after anterior al paso guardado: ahora falla antes de crear salida.
 - Validados momentos/formas, segundo momento no negativo, pasos y política AdamW.
 - 11 pruebas pasaron en 6.66s, incluidos seis rechazos y resume FP32/FP16/BF16.
+
+## 2026-11-26 — Revisión visual de inferencia local
+
+- Ventana real inspeccionada en 760×560 y mínimo 600×450; controles legibles y
+  accesibles, sin solapamientos observados. Sin cambio de diseño necesario.
+- Instancias cerradas y procesos finalizados. Evidencia y alcance limitado a DPI
+  actual en DESKTOP_VISUAL_REVIEW.md. Otros DPI/accesibilidad pendientes.
