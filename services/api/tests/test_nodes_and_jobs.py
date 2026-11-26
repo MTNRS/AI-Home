@@ -607,3 +607,27 @@ def test_measurement_bound_to_verified_node_completion_and_expiry(client, monkey
         assert saved['sample'] == sample
     monkeypatch.setattr(job_service.time, 'time', lambda: first.json()['completed_epoch'] + 121)
     assert client.post(url, headers=headers, json=sample).status_code == 404
+
+def test_owned_job_summary_omits_payloads_results_and_reaches_desktop(client):
+    from ai_home.desktop import server_job_summaries, format_job_summary
+    register(client, 'summary-owner@example.com')
+    owner = login(client, 'summary-owner@example.com')
+    register(client, 'summary-other@example.com')
+    other = login(client, 'summary-other@example.com')
+    created = create_job(client, owner, values=[1, 2]).json()
+    create_job(client, other, values=[3, 4])
+    assert client.get('/api/v1/jobs/summary').status_code == 401
+    def forward(request):
+        response = client.get(request.url.path, headers={'Authorization':request.headers['Authorization']})
+        return httpx.Response(response.status_code, content=response.content, request=request)
+    summaries = server_job_summaries('http://localhost', owner, transport=httpx.MockTransport(forward))
+    assert len(summaries) == 1 and summaries[0].job_id == created['job_id']
+    raw = client.get('/api/v1/jobs/summary', headers=user_headers(owner)).json()[0]
+    assert not {'payload','result','lease_token','owner_user_id'} & set(raw)
+    assert 'Sin umbrales' in format_job_summary(summaries[0])
+    constrained = summaries[0].model_copy(update={'scheduling':{'min_gradient_tokens_per_second':5.0}})
+    detail = format_job_summary(constrained)
+    assert '5.0' in detail and '120 s' in detail and 'no identifica' in detail
+    huge = httpx.MockTransport(lambda request: httpx.Response(200,content=b' '*2_000_001))
+    with pytest.raises(ValueError, match='límite'):
+        server_job_summaries('http://localhost', owner, transport=huge)

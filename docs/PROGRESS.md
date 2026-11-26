@@ -1023,3 +1023,16 @@ sobre checkpoint/shards de scheduling-v1 también correcta (solo planificación,
 sin envío HTTP). Suite 297 correctas, 6 PostgreSQL omitidas, 39,51 s. CI del
 scheduler 10ff5e4 pasó Foundation y PostgreSQL 3.11/3.12; ejecución duplicada
 Foundation aún en curso al documentarlo. El objetivo global sigue incompleto.
+
+### Visor de trabajos distribuidos propios
+
+Nueva consulta resumida proyecta solo columnas necesarias (sin payload/resultados)
+y mantiene aislamiento por propietario. Escritorio añade Mis trabajos distribuidos
+en página de nodo: últimos 100, estado, intentos, fallo y restricciones con unidades
+reales. GET acotado 2 MB, solo lectura, refresco manual/callbacks por sesión/ventana,
+aviso de datos anteriores tras fallo. No atribuye causa de espera solo por queued.
+Pruebas API/adaptador/aislamiento/límite y smoke Tk real oculto correctos; no revisión
+visual. Suite completa: 298 correctas, 6 PostgreSQL omitidas (44,26 s); ajuste final
+de avisos/buffer vuelto a comprobar con pruebas de nodos y Tk. CI previa df0bd9e
+pasó Foundation y matriz PostgreSQL 3.11/3.12. Pendiente crear/cancelar/paginar desde
+esta vista y diagnosticar disponibilidad; no se declara interfaz integral terminada.

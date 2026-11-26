@@ -47,6 +47,7 @@ from ai_home.privacy import contains_common_secret
 from ai_home.schemas import (
     KnowledgeReference,
     FoundationGeneration,
+    JobSummaryResponse,
     NodeCredentialResponse,
     SessionResponse,
     TrainingContributionExportResponse,
@@ -433,6 +434,44 @@ def server_chat_result(
 
 
 DEFAULT_SERVER_VERSION = "Versión activa del servidor"
+
+
+def server_job_summaries(server_url, user_token, *, transport=None):
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
+                      headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
+        with client.stream("GET", "/api/v1/jobs/summary") as response:
+            response.raise_for_status()
+            raw = bytearray()
+            for chunk in response.iter_bytes(chunk_size=65_536):
+                raw.extend(chunk)
+                if len(raw) > 2_000_000:
+                    raise ValueError("El resumen de trabajos supera el límite de lectura.")
+    data = json.loads(raw)
+    if not isinstance(data, list) or len(data) > 100:
+        raise ValueError("Lista de trabajos inválida.")
+    return [JobSummaryResponse.model_validate(row) for row in data]
+
+
+def format_job_summary(job):
+    lines = [f"Trabajo: {job.job_id}", f"Tipo: {job.job_type}", f"Estado: {job.status}",
+             f"Creado: {job.created_at.isoformat()}", f"Intentos: {job.attempt_count}",
+             f"Código de fallo: {job.failure_code or 'ninguno'}", ""]
+    if job.scheduling:
+        labels = {"min_gradient_tokens_per_second": "Gradientes mínimos (tokens/s)",
+                  "min_claim_service_bytes_per_second": "Recepción mínima de servicio (bytes/s)",
+                  "min_submit_service_bytes_per_second": "Envío mínimo de servicio (bytes/s)",
+                  "max_heartbeat_service_seconds": "Heartbeat máximo de servicio (s)",
+                  "profile_sha256": "Perfil de arquitectura/tokenizador/runtime"}
+        lines.append("Requisitos de asignación:")
+        lines.extend(f"{labels.get(key, key)}: {value}" for key, value in job.scheduling.items())
+        lines.append("\nExigen muestras y recursos recientes (120 s), mismo dispositivo y perfil compatible. "
+                     "Las tasas incluyen trabajo del servidor; no son ancho de banda físico.")
+    else:
+        lines.append("Sin umbrales de rendimiento; siguen aplicándose memoria, compatibilidad y consentimiento.")
+    if job.status == "queued":
+        lines.append("\nEn cola no identifica por sí solo la causa de espera. Este resumen no confirma "
+                     "que haya nodos disponibles. Los nodos nuevos necesitan trabajo sin restricciones para obtener una muestra.")
+    return "\n".join(lines)
 
 
 def server_model_versions(server_url, user_token, *, transport=None):
@@ -2407,7 +2446,65 @@ def main() -> None:
                 parent=self,
             )
 
+        def _show_compute_jobs(self) -> None:
+            if self.session_token is None or self.session_server_url is None:
+                messagebox.showerror("AI@Home", "Inicia sesión para consultar tus trabajos.", parent=self)
+                return
+            from tkinter.scrolledtext import ScrolledText
+            server_url, token = self.session_server_url, self.session_token
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Mis trabajos distribuidos")
+            window.geometry("860x640")
+            window.minsize(640, 480)
+            frame = ttk.Frame(window, padding=12)
+            frame.pack(fill="both", expand=True)
+            notice = tk.StringVar(value="Consultando los 100 trabajos más recientes de esta cuenta…")
+            ttk.Label(frame, textvariable=notice, wraplength=600).pack(anchor="w", pady=6)
+            controls = ttk.Frame(frame)
+            controls.pack(fill="x")
+            listing_frame = ttk.Frame(frame)
+            listing_frame.pack(fill="x", pady=8)
+            listing = tk.Listbox(listing_frame, height=8, exportselection=False)
+            scroll = ttk.Scrollbar(listing_frame, orient="vertical", command=listing.yview)
+            listing.configure(yscrollcommand=scroll.set)
+            scroll.pack(side="right", fill="y")
+            listing.pack(side="left", fill="both", expand=True)
+            detail = ScrolledText(frame, wrap="word", state="disabled", height=10)
+            detail.pack(fill="both", expand=True)
+            records = []
+            def selected(*args):
+                indices = listing.curselection()
+                detail.configure(state="normal")
+                detail.delete("1.0", "end")
+                if indices:
+                    detail.insert("end", format_job_summary(records[indices[0]]))
+                detail.configure(state="disabled")
+            listing.bind("<<ListboxSelect>>", selected)
+            def refresh():
+                button.configure(state="disabled")
+                notice.set("Actualizando; los datos visibles pueden pertenecer a la consulta anterior.")
+                def success(result):
+                    records[:] = result
+                    listing.delete(0, "end")
+                    for job in records:
+                        listing.insert("end", f"{job.status} | {job.job_type} | {job.job_id}")
+                    if records:
+                        listing.selection_set(0)
+                    selected()
+                    notice.set(f"{len(records)} trabajos recientes de tu cuenta (máximo 100). Vista de solo lectura.")
+                    button.configure(state="normal")
+                def failure():
+                    notice.set("No se pudo actualizar. Los datos visibles, si los hay, pertenecen a la consulta anterior.")
+                    button.configure(state="normal")
+                self._background(lambda: server_job_summaries(server_url, token), success,
+                    failure, is_current=lambda: bool(window.winfo_exists()))
+            button = ttk.Button(controls, text="Actualizar", command=refresh)
+            button.pack(anchor="w")
+            refresh()
+
         def _build_node_tab(self, ttk, parent) -> None:
+            ttk.Button(parent, text="Mis trabajos distribuidos", command=self._show_compute_jobs).pack(anchor="w", pady=6)
             ttk.Label(
                 parent,
                 text=(

@@ -434,15 +434,18 @@ class MathSumJobPayload(BaseModel):
         return self
 
 
-class JobResponse(BaseModel):
+class JobSummaryResponse(BaseModel):
     job_id: str
     job_type: str
     scheduling: dict | None = None
     status: str
-    result: dict | None
     failure_code: str | None
     attempt_count: int
     created_at: datetime
+
+
+class JobResponse(JobSummaryResponse):
+    result: dict | None
 
 
 class ClaimedJobResponse(BaseModel):

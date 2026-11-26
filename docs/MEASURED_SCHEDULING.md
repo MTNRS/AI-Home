@@ -87,3 +87,26 @@ without contacting a service. API tests separately verified that CLI-created
 requirements reach both jobs and are retained across retries. Those tests also
 check BOM input, malformed/empty requirements, and oversized-file rejection
 without changing the original published plan.
+
+## Desktop job summaries
+
+The node page now includes **Mis trabajos distribuidos**. The authenticated
+read-only window lists up to the newest 100 jobs owned by the current account,
+with status/type/ID, creation time, attempts, failure code and scheduling limits.
+It does not display prompts, gradient artifacts, payloads, lease credentials or
+other accounts' jobs. `GET /api/v1/jobs/summary` projects only summary columns in
+the database; existing full-result job endpoints remain available to their owners.
+The desktop helper bounds the response to 2 MB and validates the typed summaries.
+
+Refresh is manual, disables duplicate requests and marks previously displayed
+information as potentially stale while loading or after failure. Session/window
+validity guards discard late callbacks; the private window closes with profile
+changes through the existing account isolation mechanism. A queued state is not
+a diagnosed cause: the dialog explicitly explains that it does not confirm node
+availability and that bootstrap work may be needed for new nodes.
+
+Tests cover authentication/account isolation, omitted payload/result fields,
+HTTP-helper parsing/limits and constraint rendering. A hidden real-Tk functional
+smoke verified list population, selection, displayed requirements and read-only
+text. This is not visual, DPI or accessibility validation. The view does not yet
+create/cancel jobs, browse older pages or diagnose all reasons for waiting.

@@ -80,6 +80,7 @@ from ai_home.schemas import (
     CreateTokenizeJobRequest,
     CreateGradientJobRequest,
     JobResponse,
+    JobSummaryResponse,
     LoginRequest,
     NodeCredentialResponse,
     NodeResponse,
@@ -1401,6 +1402,13 @@ def create_app(
             session.rollback()
             raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
         return job
+
+    @app.get("/api/v1/jobs/summary", response_model=list[JobSummaryResponse])
+    def get_own_job_summaries(current_user: AuthenticatedUser = Depends(get_current_user),
+                              session: Session = Depends(get_db)):
+        fields = [getattr(ComputeJob, name) for name in JobSummaryResponse.model_fields]
+        return list(session.execute(select(*fields).where(ComputeJob.owner_user_id == current_user.user_id)
+            .order_by(ComputeJob.created_at.desc(), ComputeJob.job_id.desc()).limit(100)).mappings())
 
     @app.get("/api/v1/credits")
     def get_own_credits(current_user: AuthenticatedUser = Depends(get_current_user),
