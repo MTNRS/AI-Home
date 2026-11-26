@@ -1153,3 +1153,13 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   en 3.12s. PNG real -> DataLoader -> pérdida -> gradientes -> AdamW cambia pesos
   visuales tanto en CPU como en CUDA.
 - Pendientes entrenamiento persistente/reanudable, métricas y evaluación visual.
+
+## 2026-11-26 — Entrenamiento visual reanudable FP32
+
+- Bucle local auténtico de caption SFT con AdamW, acumulación, warmup/coseno,
+  clipping, validación reservada y checkpoint con optimizador/protocolo/sampler.
+- CPU y CUDA: cuatro pasos continuos coinciden exactamente con dos + reanudación.
+  14 pruebas entrenamiento/checkpoints pasaron en 4.24s; tras refactor de guardado,
+  3 pruebas entrenamiento pasaron en 3.79s.
+- FP32 explícito; sin calidad visual demostrada. Faltan CLI, smoke persistido,
+  precisión mixta y evaluación independiente. Véase VISION_PREFIX.md.

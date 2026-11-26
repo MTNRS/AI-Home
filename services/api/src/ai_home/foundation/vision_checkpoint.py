@@ -1,6 +1,7 @@
 """Versioned visual inference weights, intentionally separate from text checkpoints.
 
-This envelope is not a resumable training checkpoint or an approval certificate.
+Weight exports alone are not resumable. The visual trainer adds training_state.
+Neither form is an approval certificate.
 """
 
 from dataclasses import asdict
@@ -43,15 +44,19 @@ def _validate_state(model, state):
 
 def save_vision_weights(model, tokenizer, path, *, provenance):
     """Save explicit local candidate weights. Never promotes or publishes them."""
+    atomic_save(vision_weights_payload(model, tokenizer, provenance=provenance), path)
+
+
+def vision_weights_payload(model, tokenizer, *, provenance):
     provenance = _provenance(provenance)
     if model.text.config.vocab_size != tokenizer.vocab_size:
         raise ValueError("Checkpoint vocabulary mismatch")
     state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     _validate_state(model, state)
-    atomic_save({"format": FORMAT, "config": model.text.config.to_dict(),
+    return {"format": FORMAT, "config": model.text.config.to_dict(),
                  "vision_config": asdict(model.vision_config),
                  "tokenizer": tokenizer.to_dict(), "tokenizer_sha256": tokenizer.fingerprint,
-                 "model_state": state, "provenance": provenance, "status": "candidate"}, path)
+                 "model_state": state, "provenance": provenance, "status": "candidate"}
 
 
 def load_vision_weights(path, device="cpu", max_bytes=64_000_000):

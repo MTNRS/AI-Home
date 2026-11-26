@@ -147,3 +147,34 @@ Validación: 15 pruebas batches/dataset pasaron en 2.95s; tras añadir ejecució
 manifiesto, DataLoader, forward, cross-entropy, backward y AdamW, y comprueba que
 cambian los pesos visuales. Es un paso técnico, sin medición de comprensión visual.
 Falta el bucle persistente con validación, métricas y reanudación del optimizador.
+
+## Entrenamiento visual FP32 reanudable
+
+`foundation.vision_training.train_visual` conecta el manifiesto con el modelo
+inicializado desde cero, AdamW, acumulación, warmup/coseno, clipping y validación
+teacher-forced sobre la partición reservada. Usa `TrainingConfig(objective='sft',
+precision='fp32')`; otras precisiones se rechazan por ahora. La estimación de RAM/
+VRAM existente se amplía con la proyección visual; sigue siendo una heurística.
+
+Guarda candidatos `visual-step-N.pt` periódicos y finales con `training_state`:
+optimizador, generador de selección de ejemplos, paso, historial y protocolo
+(configuración completa, instrucción, hash del dataset, dispositivo y PyTorch).
+La reanudación exige coincidencia del protocolo, arquitectura y tokenizador.
+`stop_after` interrumpe sin cambiar el horizonte original del scheduler. Cancelar
+antes del primer paso no produce checkpoint; después de una actualización guarda
+el estado al llegar al límite del paso. No interrumpe kernels individuales.
+Los archivos de pesos exportados sin `training_state` siguen sin ser reanudables.
+
+El historial registra pérdidas train/validation, tokens supervisados, tiempo del
+paso de entrenamiento y su tasa. La validación se excluye de ese tiempo. Menor
+pérdida no acredita comprensión visual. Este trainer no usa ni publica nodos,
+créditos o promociones automáticas. El directorio de salida debe ser propio de la
+corrida: el guardado atómico reemplaza un archivo del mismo nombre si existe.
+
+Evidencia local CPU/CUDA: 14 pruebas entrenamiento/checkpoints pasaron en 4.24s.
+Cuatro pasos continuos y dos + reanudación producen pesos y pérdidas train
+exactamente iguales en cada dispositivo probado. Tras refactorizar el guardado
+por cancelación, 3 pruebas entrenamiento pasaron en 3.79s. También se rechazan
+cambios de instrucción y precisiones no soportadas. La igualdad no se promete
+entre dispositivos o versiones distintos. Pendientes CLI de entrenamiento,
+smoke persistido fuera de pytest, precisión mixta y evaluación de capacidades.
