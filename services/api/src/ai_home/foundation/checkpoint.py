@@ -26,7 +26,8 @@ def atomic_save(payload, path):
         Path(temporary).unlink(missing_ok=True)
 
 
-def load_checkpoint(path, device="cpu", max_bytes=2_000_000_000):
+def read_checkpoint_payload(path, max_bytes=2_000_000_000):
+    """Read bounded tensor-only data, hashing the same handle before and after."""
     path = Path(path)
     if type(max_bytes) is not int or max_bytes < 1:
         raise ValueError("Invalid checkpoint file budget")
@@ -47,6 +48,11 @@ def load_checkpoint(path, device="cpu", max_bytes=2_000_000_000):
         payload = torch.load(source, map_location="cpu", weights_only=True)
         if digest(source) != source_sha256:
             raise ValueError("Checkpoint changed while loading")
+    return payload, source_sha256
+
+
+def load_checkpoint(path, device="cpu", max_bytes=2_000_000_000):
+    payload, source_sha256 = read_checkpoint_payload(path, max_bytes)
     if not isinstance(payload, dict) or payload.get("format") != FORMAT:
         raise ValueError("Not an AI@Home Foundation checkpoint")
     tokenizer = ByteBPE.from_dict(payload["tokenizer"])

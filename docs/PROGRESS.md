@@ -1104,3 +1104,14 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   cache, gradientes, actualización real y regresión del modelo textual.
 - Alcance y límites en [VISION_PREFIX.md](VISION_PREFIX.md). Sin comprensión visual
   demostrada ni integración aún con checkpoints, datasets o chat multimodales.
+
+## 2026-11-26 — Pesos visuales candidatos con carga validada
+
+- Formato visual independiente con configuración, BPE, pesos FP32 y procedencia
+  declarada del dataset; guardado atómico y carga con límites, hash y validación.
+- Prueba de entrenamiento/guardado/carga con logits idénticos; rechazo de corrupción,
+  permisos ausentes e incompatibilidad con el cargador textual.
+- Suite conjunta visual/checkpoints/modelo: 30 passed in 17.47s, CPU y CUDA.
+  Tras eliminar dependencia NumPy de la nueva prueba: 11 passed in 2.82s.
+- No incluye aún reanudación del optimizador ni acredita permisos por sí mismo.
+  Detalles: [VISION_PREFIX.md](VISION_PREFIX.md).

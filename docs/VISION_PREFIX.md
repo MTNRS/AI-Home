@@ -26,8 +26,26 @@ límites de píxeles/contexto, reproducción exacta mediante state_dict y equiva
 de la ruta textual. Las imágenes son tensores procedurales de prueba sin datos
 personales. No constituyen una evaluación de comprensión visual.
 
-Pendiente: formato seguro de checkpoint multimodal con procedencia, carga y
-preprocesamiento de imágenes, datasets autorizados, entrenamiento reproducible con
+Los pesos visuales se guardan con `save_vision_weights` y se cargan con
+`load_vision_weights` de `foundation.vision_checkpoint`. El formato independiente
+`ai-home-vision-weights-v1` conserva configuración visual/textual, BPE y su hash,
+pesos FP32 y procedencia declarada del dataset (SHA256, visibilidad, permiso de
+entrenamiento y revisión de privacidad). Es un candidato local: esas declaraciones
+no son una certificación de licencia o consentimiento. El guardado atómico puede
+reemplazar el destino local indicado; no publica ni promueve el modelo.
+
+La carga usa `weights_only=True`, presupuesto de archivo/modelo de 64 MB por
+defecto, hash del mismo descriptor antes/después, construcción meta previa a la
+reserva de parámetros, validación de claves/formas/finitud y coherencia de pesos
+compartidos. El SHA256 real queda en `model.checkpoint_sha256`. El formato textual
+rechaza estos archivos. No se incluye estado del optimizador ni reanudación.
+
+Prueba adicional: `test_foundation_vision_checkpoint.py` entrena un paso real,
+guarda/carga y reproduce exactamente los logits; rechaza nueve alteraciones de
+pesos/metadatos, presupuestos insuficientes y guardado sin procedencia.
+
+Pendiente: carga y preprocesamiento de imágenes, datasets autorizados,
+entrenamiento reproducible con
 reanudación, inferencia de alto nivel, evaluación independiente e interfaz. El
 formato actual de checkpoint textual no acepta este wrapper. No se publica ni
 activa automáticamente, y no se conecta a contribuciones o nodos voluntarios.
