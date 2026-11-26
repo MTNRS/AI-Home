@@ -1296,3 +1296,12 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - PostgreSQL 45835023167: Python 3.11/3.12, 349 passed/13 skipped cada uno.
 - README enlaza vía visual con límites explícitos; primer hito marcado histórico.
   FOUNDATION_STATUS actualizado, sin declarar completado el objetivo.
+
+## 2026-11-26 — Sonda HTTP de transferencia separada del cómputo
+
+- Endpoint autenticado de nodo y cliente explícito para GET vacíos y subida/bajada
+  verificadas, hasta 1 MiB de bytes públicos sin créditos ni ejecución remota.
+- 2 pruebas pasaron en 2.64s (TestClient, no benchmark de red). Métricas incluyen
+  servidor/HTTP; no son ancho de banda físico ni RTT puro. Integración automática,
+  persistencia/scheduler y ejecución entre equipos siguen pendientes.
+- Alcance en HTTP_TRANSFER_PROBE.md.

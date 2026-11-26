@@ -1290,6 +1290,26 @@ def create_app(
             ) from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @app.get("/api/v1/node/transfer-probe")
+    def node_transfer_download(size: int = Query(default=65536, ge=0, le=1048576),
+                               current_node: ComputeNode = Depends(get_current_node)):
+        # Fixed public bytes, no job data, account contents or arbitrary execution.
+        return Response(content=bytes(range(256)) * (size // 256) + bytes(range(size % 256)),
+                        media_type="application/octet-stream",
+                        headers={"Cache-Control": "no-store", "Content-Encoding": "identity"})
+
+    @app.post("/api/v1/node/transfer-probe")
+    async def node_transfer_upload(request: Request, current_node: ComputeNode = Depends(get_current_node)):
+        total, digest = 0, hashlib.sha256()
+        if request.headers.get("content-encoding", "identity") != "identity":
+            raise HTTPException(status_code=415, detail="Encoded probe bodies are unsupported.")
+        async for chunk in request.stream():
+            total += len(chunk)
+            if total > 1048576:
+                raise HTTPException(status_code=413, detail="Probe exceeds 1 MiB.")
+            digest.update(chunk)
+        return {"bytes": total, "sha256": digest.hexdigest()}
+
     @app.post("/api/v1/node/heartbeat")
     def node_heartbeat(
         payload: NodeResources | None = None,

@@ -193,6 +193,11 @@ class NodeAgent:
             transport=transport,
         )
 
+    def measure_transfer(self, size=65536):
+        """Explicit HTTP transfer probe; does not claim jobs or change credits."""
+        from ai_home.network_probe import measure_transfer
+        return measure_transfer(self._client, size=size)
+
     def run_once(self) -> bool:
         # Only publish a sample after the server accepts a result; never reuse it
         # after an idle/failed attempt. Timings include service processing.
