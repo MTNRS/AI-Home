@@ -271,6 +271,7 @@ class HardwareReport(BaseModel):
     logical_cores: int = Field(ge=1, le=4096)
     ram_total_bytes: int = Field(gt=0, le=2**63 - 1)
     gpus: list[GPUDevice] = Field(default_factory=list, max_length=32)
+    foundation_torch_version: StrictStr | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
     def require_unique_gpu_indices(self) -> "HardwareReport":
@@ -285,8 +286,15 @@ class RegisterNodeRequest(BaseModel):
 
     name: str = Field(min_length=1, max_length=120)
     hardware: HardwareReport
-    supported_job_types: list[Literal["math.sum.v1", "foundation.tokenize.v1"]] = Field(
-        default_factory=lambda: ["math.sum.v1"], min_length=1, max_length=2)
+    supported_job_types: list[Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1"]] = Field(
+        default_factory=lambda: ["math.sum.v1"], min_length=1, max_length=3)
+    foundation_torch_version: StrictStr | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="after")
+    def require_gradient_runtime(self):
+        if "foundation.gradient.v1" in self.supported_job_types and not self.foundation_torch_version:
+            raise ValueError("Gradient workers must declare their PyTorch runtime")
+        return self
 
     @field_validator("name")
     @classmethod
@@ -355,7 +363,7 @@ class JobResponse(BaseModel):
 
 class ClaimedJobResponse(BaseModel):
     job_id: str
-    job_type: Literal["math.sum.v1", "foundation.tokenize.v1"]
+    job_type: Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1"]
     payload: dict
     lease_token: str
     lease_expires_epoch: int
@@ -388,5 +396,18 @@ class CreateTokenizeJobRequest(BaseModel):
         if not self.allow_public_node_processing:
             raise ValueError("Public node processing requires explicit consent")
         self.payload = TokenizePayload.model_validate(self.payload).model_dump()
+        return self
+
+
+class CreateGradientJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    payload: dict
+    allow_public_node_processing: StrictBool
+    idempotency_key: str = Field(min_length=1, max_length=160)
+
+    @model_validator(mode="after")
+    def require_consent(self):
+        if not self.allow_public_node_processing:
+            raise ValueError("Public node processing requires explicit consent")
         return self
 

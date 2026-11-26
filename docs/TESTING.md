@@ -40,3 +40,7 @@ Entorno `.venv-cuda` con PyTorch 2.14.1+cu130: `python -m pytest -q` obtiene 139
 ## Nodos Foundation
 
 Suite completa en entorno CUDA: 146 aprobadas, 4 omitidas (PostgreSQL), 18,63 segundos. Tras endurecer booleanos de consentimiento: 7 pruebas Foundation nodes aprobadas en 1,21 segundos. Se verifican dos nodos, compatibilidad/RAM, idempotencia, manipulación de resultados, aislamiento de listado, rechazo de datos restringidos/secretos y límites de expansión BPE. Smoke adicional real: dos procesos worker, HTTP loopback, 2 shards y 56 tokens; reporte en NODE_TOKENIZATION_SMOKE.json.
+
+## Gradientes neuronales entre nodos
+
+Suite completa en entorno CUDA: 150 aprobadas, 4 omitidas (PostgreSQL), 14,76 segundos. Tras normalizar configuración y eliminar dependencia NumPy del codec: 4 pruebas distribuidas aprobadas, 3,99 segundos. Se verifica equivalencia matemática con actualización monolítica, rechazo de bases antiguas, documentos solapados, artefactos alterados, opt-in y runtime incompatible, y desactivación de nuevas asignaciones. Smoke HTTP real: dos rondas y cuatro trabajos neuronales aceptados; checkpoint recargado e inferencia real. Informe en DISTRIBUTED_GRADIENT_SMOKE.json.

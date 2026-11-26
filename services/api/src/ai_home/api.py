@@ -45,6 +45,7 @@ from ai_home.jobs import (
     claim_job,
     create_math_sum_job,
     create_tokenize_job,
+    create_gradient_job,
     find_existing_math_sum_job,
     heartbeat_node,
     is_job_idempotency_violation,
@@ -69,6 +70,7 @@ from ai_home.schemas import (
     ChatCompletionResponse,
     CreateMathSumJobRequest,
     CreateTokenizeJobRequest,
+    CreateGradientJobRequest,
     JobResponse,
     LoginRequest,
     NodeCredentialResponse,
@@ -1000,6 +1002,7 @@ def create_app(
             name=payload.name,
             hardware=payload.hardware,
             supported_job_types=payload.supported_job_types,
+            foundation_torch_version=payload.foundation_torch_version,
         )
         session.commit()
         response.headers["Cache-Control"] = "no-store"
@@ -1126,6 +1129,34 @@ def create_app(
             raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
         return job
 
+    @app.post("/api/v1/jobs/foundation/gradient", response_model=JobResponse, status_code=201)
+    def create_foundation_gradient_job(
+        payload: CreateGradientJobRequest, request: Request,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeJob:
+        if not request.app.state.settings.foundation_distributed_training_enabled:
+            raise HTTPException(status_code=503, detail="Experimental gradient jobs are disabled.")
+        arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing)
+        try:
+            try:
+                job = create_gradient_job(session, **arguments)
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                if not is_job_idempotency_violation(error):
+                    raise
+                job = create_gradient_job(session, **arguments)
+                session.commit()
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
+        except (ValueError, ImportError):
+            session.rollback()
+            raise HTTPException(status_code=422, detail="Invalid or unsupported gradient task.") from None
+        return job
+
     @app.get("/api/v1/jobs", response_model=list[JobResponse])
     def get_jobs(
         current_user: AuthenticatedUser = Depends(get_current_user),
@@ -1138,12 +1169,14 @@ def create_app(
         response_model=ClaimedJobResponse,
     )
     def get_node_job(
+        request: Request,
         current_node: ComputeNode = Depends(get_current_node),
         session: Session = Depends(get_db),
     ) -> ClaimedJobResponse | Response:
         heartbeat_node(session, current_node)
         try:
-            claim = claim_job(session, current_node)
+            claim = claim_job(session, current_node,
+                              allow_foundation_training=request.app.state.settings.foundation_distributed_training_enabled)
         except NodeNotFound:
             session.rollback()
             raise HTTPException(

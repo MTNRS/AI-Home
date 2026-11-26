@@ -77,3 +77,7 @@ contradictorios. La finalización bloquea la fila en PostgreSQL y verifica lease
 nodo y artefacto antes de marcar completado. Los resultados solo aparecen en
 la lista del propietario. No hay recompensas todavía. Detalles y demo real en
 DISTRIBUTED_TRAINING.md.
+
+## Trabajo neuronal opcional
+
+foundation.gradient.v1 exige activación del operador, opt-in del worker, runtime PyTorch declarado compatible y presupuesto de RAM. Se conserva el protocolo de leases/idempotencia/propiedad. El servidor verifica gradientes por recomputación antes de aceptar. Los clientes antiguos continúan recibiendo solo sus tipos anunciados. Detalles, límites y evidencia en DISTRIBUTED_TRAINING.md.

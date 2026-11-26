@@ -296,3 +296,7 @@ siguen pendientes (el generador neuronal ya soporta ambos localmente).
 ## Validación GPU completada — 2026-11-26
 
 Entrenamiento, reanudación e inferencia propios verificados en RTX 4070 SUPER con FP32/FP16/BF16. Suite del entorno CUDA: 139 aprobadas, 4 omitidas (PostgreSQL). Checkpoint y métricas reales conservados. No se atribuye calidad conversacional. Comandos y límites: [docs/CUDA_VALIDATION.md](docs/CUDA_VALIDATION.md).
+
+## Entrenamiento experimental en nodos
+
+Existe una demostración reproducible de gradientes reales aportados por dos identidades de nodo mediante procesos separados y HTTP loopback. Agrega gradientes, actualiza pesos, guarda checkpoints y genera texto. Solo se ha verificado en un equipo y CPU; no se reclama rendimiento distribuido multihost. Véase [DISTRIBUTED_TRAINING.md](docs/DISTRIBUTED_TRAINING.md).

@@ -234,3 +234,7 @@ siguen pendientes (el generador neuronal ya soporta ambos localmente).
 ## Trabajo Foundation tipado
 
 foundation.tasks define el contrato acotado de tokenización pública. API, jobs y NodeAgent reutilizan autenticación, idempotencia y leases. El servidor reejecuta para verificar; no se añade un intérprete remoto ni se distribuyen exportaciones restringidas. La asignación exige capacidad declarada y un mínimo conservador de RAM.
+
+## Entrenamiento por shards experimental
+
+foundation.distributed define tensores FP32 acotados y gradientes causales por shard. API/jobs asignan solo a nodos compatibles con opt-in; el servidor recalcula antes de aceptar. El coordinador aplica promedio ponderado por tokens, clipping y AdamW. Los checkpoints candidatos preservan trazabilidad y artefactos de ronda. El protocolo de referencia es CPU, no una solución eficiente para GPUs heterogéneas o redes domésticas.

@@ -28,7 +28,8 @@ def main():
     args = parser.parse_args()
     if args.worker:
         config = json.load(sys.stdin)
-        agent = NodeAgent(server_url=config["url"], node_token=config["token"])
+        agent = NodeAgent(server_url=config["url"], node_token=config["token"],
+                          allow_foundation_training=config.get("allow_foundation_training", False))
         try:
             completed = agent.run_once()
             print(json.dumps({"pid": os.getpid(), "completed": completed}))

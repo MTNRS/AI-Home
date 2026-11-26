@@ -50,8 +50,83 @@ artifacts/foundation-node-smoke-v1, excluidos de Git.
 
 ## Pendiente
 
-Entrenamiento neuronal y agregación entre nodos, validación de actualizaciones,
+Validación de entrenamiento neuronal entre equipos distintos,
 recompensas con créditos, scheduling por GPU/VRAM/red/rendimiento, renovación de
 leases para entrenamientos largos y prueba entre equipos. Tokenizar datos no
 es entrenar pesos. PostgreSQL concurrente sigue pendiente de servidor de prueba;
 SQLite no demuestra garantías de concurrencia de producción.
+
+## Gradientes neuronales reales — 2026-11-26
+
+Añadido `foundation.gradient.v1`, activado solo mediante
+`AI_HOME_FOUNDATION_DISTRIBUTED_TRAINING_ENABLED=true`. Desactivarlo impide crear
+y asignar nuevos trabajos de gradientes. Un lease ya emitido puede finalizar;
+no se interrumpe remotamente un cálculo en curso.
+
+El nodo debe anunciar ese tipo y `foundation_torch_version`, tener al menos
+1 GiB de RAM total declarada y usar la misma versión de PyTorch que el
+coordinador. NodeAgent requiere `allow_foundation_training=True`; los workers
+de escritorio actuales no se inscriben automáticamente en trabajo neuronal.
+El worker comprueba 1 GiB de RAM disponible. La tarea de referencia usa CPU FP32;
+no promete compatibilidad de entrenamiento remoto con cualquier GPU.
+
+Endpoint: `POST /api/v1/jobs/foundation/gradient`, con `idempotency_key`,
+`allow_public_node_processing: true` y payload:
+
+- `shard`: corpus público/tokenizador con el contrato de tokenización.
+- `config`: FoundationConfig propia, máximo 2 capas, anchura 64, contexto 128,
+  hidden 128 y 512 tokens; máximo 50.000 parámetros.
+- `parameters`: tensores FP32 base64 con nombres y formas comprobados.
+- `torch_version`: versión exacta del runtime.
+- `weights_public_and_redistributable: true`: declaración explícita del operador.
+
+No se acepta pickle, URL de código ni programas enviados por el cliente. Se
+limita el shard a 4.096 bytes de texto, se validan forma/longitud/finitud antes
+de cargar pesos y se conserva el límite HTTP de artefacto. Permisos y licencia
+siguen requiriendo revisión del operador; la declaración no constituye una
+verificación jurídica ni demuestra ausencia de datos memorizados en pesos.
+No usar checkpoints derivados de conversaciones restringidas.
+
+El nodo calcula pérdida causal y gradientes medios sobre su shard. El artefacto
+liga gradientes, tokens y documentos al hash del modelo/tokenizador. El servidor
+recalcula y compara cada resultado (tolerancias 1e-6/1e-5), dentro del lease,
+antes de marcarlo completado. Esta verificación duplica trabajo neuronal: sirve
+para validar el protocolo, no para ahorrar cómputo ni resistir cargas masivas.
+
+El coordinador agrega gradientes ponderados por tokens, recorta la norma y
+actualiza con AdamW. Rechaza bases antiguas, shards duplicados y documentos
+solapados. Solo consumir resultados completados y verificados de la API;
+el hash del artefacto por sí solo no autentica al productor. Una prueba compara
+la actualización agregada con la obtenida sobre el conjunto completo.
+
+### Experimento reproducible
+
+```powershell
+$env:PYTHONPATH="services/api/src"
+$env:OMP_NUM_THREADS="2"
+$env:MKL_NUM_THREADS="2"
+python -m ai_home.foundation.distributed_smoke --output-dir artifacts/distributed-gradient-smoke-v3
+```
+
+Usar un directorio nuevo. Dos identidades de nodo, procesos worker distintos,
+HTTP real en loopback y dos rondas; cada nodo procesa un shard por ronda.
+Los workers se lanzan secuencialmente para esta prueba SQLite. No se reclama
+paralelismo eficiente ni una demostración en dos máquinas. El modelo tiene
+28.192 parámetros inicializados desde cero; validación reservada:
+5,765336 antes y 5,602052 después. Cambio L2 de embeddings: 0,183900.
+Cada ronda conserva checkpoint, estado AdamW, hashes y artefactos de gradientes.
+Se recarga el checkpoint final y se genera texto neuronal todavía incoherente.
+Informe: `DISTRIBUTED_GRADIENT_SMOKE.json`.
+
+El script crea corpus y pesos propios públicos, servidor efímero local y base
+SQLite; transmite credenciales a los workers por stdin y apaga el servidor al
+terminar. Artefactos de la ejecución en artifacts/distributed-gradient-smoke-v2.
+
+### Límites restantes
+
+No hay renovación de leases largos, reanudación del coordinador entre rondas,
+integración de créditos, distribución GPU, medidas de red, verificación remota
+eficiente ni prueba multihost. El checkpoint puede cargarse para inferencia y
+conserva el optimizador, pero el CLI de entrenamiento local no lo trata como
+resume de su propio scheduler. Continúan pendientes las garantías concurrentes
+de PostgreSQL y el endurecimiento de producción.

@@ -81,3 +81,7 @@ El primer ciclo compara tasa de aprendizaje con un control del mismo presupuesto
 ## 2026-11-26: capacidad declarada y artefactos verificados en nodos
 
 Clientes antiguos conservan solo suma. Los nuevos anuncian tokenización explícitamente; el servidor no asigna tareas por suponer que todo nodo soporta Foundation. Se reejecuta el trabajo acotado para verificar integridad, aceptando su coste duplicado hasta disponer de un protocolo independiente más escalable. No se remuneran tareas autodeclaradas ni se reinterpretan permisos de conversaciones.
+
+## 2026-11-26: gradientes verificables antes de escalar
+
+La primera modalidad neuronal usa CPU, modelos de hasta 50.000 parámetros y shards públicos pequeños. Se elige recomputación central con tolerancias explícitas para comprobar trabajo real antes de investigar verificación escalable. La tarea requiere tres decisiones explícitas: activación del operador, permiso de distribución y opt-in del worker. No se activan automáticamente los nodos existentes.
