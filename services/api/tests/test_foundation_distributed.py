@@ -105,6 +105,22 @@ def test_gradient_jobs_run_through_scheduler_and_verify_results(client):
     client.app.state.settings.foundation_distributed_training_enabled = False
     assert client.post("/api/v1/node/jobs/claim", headers=node_headers).status_code == 204
     client.app.state.settings.foundation_distributed_training_enabled = True
+    heartbeat = "/api/v1/node/heartbeat"
+    assert client.post(heartbeat, headers=node_headers, json={"ram_available_bytes": 2**30,
+                       "foundation_device": "cuda"}).status_code == 422
+    for snapshot in ({"ram_available_bytes": 1, "foundation_device": "cpu"},
+                     {"ram_available_bytes": 2**30, "foundation_device": "cuda", "cuda_free_bytes": 1}):
+        assert client.post(heartbeat, headers=node_headers, json=snapshot).status_code == 200
+        assert client.post("/api/v1/node/jobs/claim", headers=node_headers).status_code == 204
+    healthy = {"ram_available_bytes": 2**30, "foundation_device": "cpu"}
+    assert client.post(heartbeat, headers=node_headers, json=healthy).status_code == 200
+    from ai_home.models import ComputeNode
+    with client.app.state.session_factory() as session, session.begin():
+        node = session.get(ComputeNode, workers[1]["node_id"])
+        node.hardware = {**node.hardware, "resources_epoch": 0}
+    # Claim's liveness heartbeat cannot silently freshen an old resource snapshot.
+    assert client.post("/api/v1/node/jobs/claim", headers=node_headers).status_code == 204
+    assert client.post(heartbeat, headers=node_headers, json=healthy).status_code == 200
     claim = client.post("/api/v1/node/jobs/claim", headers=node_headers).json()
     result = execute_gradient(claim["payload"])
     submit = f"/api/v1/node/jobs/{claim['job_id']}/result"

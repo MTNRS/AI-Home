@@ -81,6 +81,7 @@ from ai_home.schemas import (
     LoginRequest,
     NodeCredentialResponse,
     NodeResponse,
+    NodeResources,
     RegisterNodeRequest,
     RegisterRequest,
     SessionResponse,
@@ -1249,10 +1250,11 @@ def create_app(
 
     @app.post("/api/v1/node/heartbeat")
     def node_heartbeat(
+        payload: NodeResources | None = None,
         current_node: ComputeNode = Depends(get_current_node),
         session: Session = Depends(get_db),
     ) -> dict[str, int]:
-        last_heartbeat = heartbeat_node(session, current_node)
+        last_heartbeat = heartbeat_node(session, current_node, resources=payload)
         session.commit()
         return {"last_heartbeat_epoch": last_heartbeat}
 

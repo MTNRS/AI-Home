@@ -186,7 +186,14 @@ class NodeAgent:
         )
 
     def run_once(self) -> bool:
-        heartbeat = self._client.post("/api/v1/node/heartbeat")
+        resources = {"ram_available_bytes": psutil.virtual_memory().available,
+                     "foundation_device": self.foundation_device}
+        if self.foundation_device == "cuda":
+            import torch
+            if not torch.cuda.is_available():
+                raise ValueError("CUDA worker requested but CUDA is unavailable")
+            resources["cuda_free_bytes"] = torch.cuda.mem_get_info()[0]
+        heartbeat = self._client.post("/api/v1/node/heartbeat", json=resources)
         heartbeat.raise_for_status()
 
         response = self._client.post("/api/v1/node/jobs/claim")

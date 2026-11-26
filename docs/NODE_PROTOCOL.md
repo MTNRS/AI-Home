@@ -81,3 +81,22 @@ DISTRIBUTED_TRAINING.md.
 ## Trabajo neuronal opcional
 
 foundation.gradient.v1 exige activación del operador, opt-in del worker, runtime PyTorch declarado compatible y presupuesto de RAM. Se conserva el protocolo de leases/idempotencia/propiedad. El servidor verifica gradientes por recomputación antes de aceptar. Los clientes antiguos continúan recibiendo solo sus tipos anunciados. Detalles, límites y evidencia en DISTRIBUTED_TRAINING.md.
+
+
+## Live resource heartbeat
+
+POST `/api/v1/node/heartbeat` accepts an optional JSON body with strict integer
+`ram_available_bytes`, `foundation_device` (`cpu` or `cuda`) and, for CUDA only,
+`cuda_free_bytes`. NodeAgent sends this snapshot immediately before every claim,
+using psutil and CUDA memory reporting. The server timestamps it; claim liveness
+updates do not freshen an old resource snapshot. Registration cannot set a trusted
+resource timestamp. Owner node listings expose the last snapshot and timestamp.
+
+When a snapshot exists, admission uses the smaller of installed and available
+RAM. Stale snapshots block tokenization/gradient work until refreshed. Gradient
+work requires at least 1 GiB RAM and CUDA-mode workers must report at least
+256 MiB free VRAM (a conservative threshold for the bounded reference task).
+Legacy nodes without snapshots retain the prior installed-RAM admission checks;
+new workers still check actual memory locally before executing. This is advisory
+self-reported eligibility, not hardware attestation, reservation of memory or
+performance ranking. Independent artifact verification remains mandatory.

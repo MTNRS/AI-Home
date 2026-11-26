@@ -300,7 +300,24 @@ class GPUDevice(BaseModel):
     memory_total_bytes: int = Field(gt=0, le=2**63 - 1)
 
 
+class NodeResources(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    ram_available_bytes: int = Field(ge=0, le=2**63 - 1)
+    foundation_device: Literal["cpu", "cuda"] = "cpu"
+    cuda_free_bytes: int | None = Field(default=None, ge=0, le=2**63 - 1)
+
+    @model_validator(mode="after")
+    def cuda_memory_required(self):
+        if self.foundation_device == "cuda" and self.cuda_free_bytes is None:
+            raise ValueError("CUDA workers must report available device memory")
+        if self.foundation_device == "cpu" and self.cuda_free_bytes is not None:
+            raise ValueError("CPU workers must not report CUDA memory")
+        return self
+
+
 class HardwareReport(BaseModel):
+    resources: NodeResources | None = None
+    resources_epoch: int | None = None
     model_config = ConfigDict(extra="forbid")
 
     platform: str = Field(min_length=1, max_length=80)

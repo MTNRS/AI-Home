@@ -661,3 +661,17 @@ text remains incoherent. CUDA tensor execution and CPU re-verification are teste
 Full suite: 259 passed, 5 PostgreSQL skips (server stopped). Evidence is retained
 in DISTRIBUTED_MIXED_CUDA.json. No multi-host or multi-GPU performance claim;
 resource-aware scheduler ranking remains incomplete.
+
+
+### Live worker memory admission
+
+NodeAgent now sends available RAM and optional CUDA free memory before claims.
+Authenticated heartbeats validate snapshots and timestamp them on the server.
+Scheduler admission considers installed/available RAM, stale snapshots and a
+bounded-task CUDA memory floor. Legacy nodes retain prior behavior; workers
+still enforce local memory guards and results remain independently verified.
+Tests cover malformed CUDA reports, insufficient RAM/VRAM, stale resource
+snapshots despite live claim heartbeats and successful refreshed admission.
+Full suite before the added assertions: 259 passed, 5 PostgreSQL skips; final
+node/distributed suites: 29 passed. Performance/network-aware ranking remains
+outstanding; these are advisory snapshots, not reserved or attested resources.

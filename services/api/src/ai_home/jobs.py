@@ -85,7 +85,7 @@ def register_node(
         owner_user_id=owner_user_id,
         name=name.strip(),
         credential_hash=_token_hash(node_token),
-        hardware={**hardware.model_dump(mode="json"), "foundation_torch_version": foundation_torch_version},
+        hardware={**hardware.model_dump(mode="json"), "foundation_torch_version": foundation_torch_version, "resources": None, "resources_epoch": None},
         supported_job_types=sorted(set(supported_job_types)),
         last_heartbeat_epoch=int(time.time()),
     )
@@ -106,9 +106,11 @@ def authenticate_node(session: Session, node_token: str) -> ComputeNode:
     return node
 
 
-def heartbeat_node(session: Session, node: ComputeNode) -> int:
+def heartbeat_node(session: Session, node: ComputeNode, *, resources=None) -> int:
     now = int(time.time())
     node.last_heartbeat_epoch = now
+    if resources is not None:
+        node.hardware = {**node.hardware, "resources": resources.model_dump(), "resources_epoch": now}
     session.flush()
     return now
 
@@ -265,9 +267,17 @@ def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=
     )
 
     compatible = list(node.supported_job_types)
-    if node.hardware.get("ram_total_bytes", 0) < TOKENIZE_MIN_RAM_BYTES:
+    available_ram = node.hardware.get("ram_total_bytes", 0)
+    snapshot = node.hardware.get("resources")
+    if snapshot is not None:
+        available_ram = min(available_ram, snapshot["ram_available_bytes"])
+        if (node.hardware.get("resources_epoch") or 0) < now - NODE_HEARTBEAT_TIMEOUT_SECONDS:
+            available_ram = 0
+        if snapshot["foundation_device"] == "cuda" and snapshot["cuda_free_bytes"] < 256 * 1024**2:
+            compatible = [name for name in compatible if name != GRADIENT_JOB_TYPE]
+    if available_ram < TOKENIZE_MIN_RAM_BYTES:
         compatible = [name for name in compatible if name != FOUNDATION_JOB_TYPE]
-    if not allow_foundation_training or node.hardware.get("ram_total_bytes", 0) < 1024**3:
+    if not allow_foundation_training or available_ram < 1024**3:
         compatible = [name for name in compatible if name != GRADIENT_JOB_TYPE]
     job = session.scalar(
         select(ComputeJob)
