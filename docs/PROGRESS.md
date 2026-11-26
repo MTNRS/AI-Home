@@ -1752,3 +1752,11 @@ jobs y tres creditos por trabajador. Informe final concordante con referencia
 local y repeticion idempotente desde otro proceso. Conservada evidencia en
 DISTRIBUTED_EVALUATION_OBSERVER_SMOKE.json. CI reutiliza el smoke ampliado;
 no se afirma que esta revision ya haya pasado remotamente.
+
+### Revision visual del nodo con permiso de evaluacion
+
+Panel inspeccionado en Windows a 720x560 y 900x700. Permisos separados y dispositivo
+legibles sin solapamientos; en minimo, Revocar es accesible mediante scroll; en
+normal, todos los controles visibles. Fixtures cerradas correctamente. No hubo
+cambios de permisos ni actividad de red. Evidencia limitada al DPI actual;
+actualizado DESKTOP_VISUAL_REVIEW.md, sin cambios de codigo necesarios.

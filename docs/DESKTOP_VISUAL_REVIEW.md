@@ -135,3 +135,20 @@ también falló al activarla. Se interrumpió únicamente el proceso de fixture
 iniciado por esta tarea mediante su sesión de ejecución (salida 1); no se
 interactuó con otras aplicaciones. La evidencia funcional de entrenamiento
 proviene del smoke separado de Tk, no de esta inspección visual.
+
+### Panel de nodos con permiso de evaluacion (revision 513f3cd)
+
+Inspeccion nativa de la aplicacion real con configuracion vacia y persistencia
+local aislada, mediante Computer Use. En 720x560 se leen por completo los permisos
+separados de entrenamiento/evaluacion y el selector Foundation. El boton Revocar
+queda inicialmente bajo el area visible, pero un desplazamiento del panel lo
+muestra completo. No se observaron solapamientos. En 900x700 todos los controles
+y explicaciones son visibles sin desplazamiento. No fue necesario modificar
+el layout. Ambas ventanas de prueba se cerraron y sus procesos terminaron con
+codigo cero. No se activaron permisos ni se registraron nodos durante esta revision.
+
+La primera captura mostro otra superficie activa; se descarto y se volvio a
+seleccionar/activar exclusivamente la ventana de prueba antes de evaluar el panel.
+La evidencia corresponde al DPI actual de este escritorio, no a escalas distintas
+ni a una auditoria completa de accesibilidad. Los smokes funcionales CPU/CUDA
+siguen documentados por separado.
