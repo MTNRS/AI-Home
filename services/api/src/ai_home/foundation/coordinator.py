@@ -99,29 +99,9 @@ def advance(client, plan_path, parent, output):
 
 def supervise(client, plan_path, parent, output, *, wait_seconds, poll_seconds=5, cancel=None):
     """Bounded restartable polling; stopping the observer does not cancel funded jobs."""
-    if (type(wait_seconds) is not int or not 1 <= wait_seconds <= 3600
-            or type(poll_seconds) is not int or not 1 <= poll_seconds <= 60):
-        raise ValueError("Invalid coordinator wait bounds")
-    cancellation = cancel if cancel is not None else threading.Event()
-    deadline = time.monotonic() + wait_seconds
-    last, attempts, transport_errors = None, 0, 0
-    while not cancellation.is_set():
-        if time.monotonic() >= deadline:
-            break
-        attempts += 1
-        try:
-            last = advance(client, plan_path, parent, output)
-        except httpx.TransportError:
-            # A response may be lost after creation; replay the same immutable plan.
-            # HTTP authentication/policy/status failures are deliberately not retried.
-            transport_errors += 1
-        else:
-            if last["state"] == "committed":
-                return {**last, "attempts": attempts, "transport_errors": transport_errors}
-        cancellation.wait(max(0, min(poll_seconds, deadline - time.monotonic())))
-    return {"state": "stopped" if cancellation.is_set() else "timed_out", "last_observation": last,
-            "attempts": attempts, "transport_errors": transport_errors,
-            "jobs_cancelled": False}
+    from .job_observer import observe
+    return observe(lambda: advance(client, plan_path, parent, output), complete_state="committed",
+                   wait_seconds=wait_seconds, poll_seconds=poll_seconds, cancel=cancel)
 
 
 def main():

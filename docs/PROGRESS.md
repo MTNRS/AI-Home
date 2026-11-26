@@ -1734,3 +1734,12 @@ Confirmado CI en `8a713ac`: Tests 45852134571 (Python 3.11/3.12) y Foundation
 instalado. El inventario distingue esa evidencia de los cambios mas recientes
 del nodo de escritorio. Objetivo global abierto, sin afirmacion de multihost ni
 capacidad linguistica general.
+
+### Observacion acotada de evaluaciones distribuidas
+
+Extraido observador comun para coordinadores de gradientes y evaluacion. Nuevo
+supervise/CLI con espera limitada, cancelacion del observador y reintento de
+transporte sin recrear trabajos. Siete pruebas de ambos coordinadores aprobadas
+en 21,68 s: recorrido real previo, perdida de respuesta, terminacion, timeout y
+cancelacion. Errores HTTP no se reintentan y las tareas financiadas no se cancelan
+al detener la observacion.

@@ -522,3 +522,15 @@ CPU para comprobar que conserva su funcionamiento. Informes:
 Las ventanas del smoke permanecen ocultas: demuestra ejecucion funcional, no
 legibilidad ni distribucion visual. CI incorpora la variante instalada CPU;
 la confirmacion remota de ese nuevo paso queda pendiente.
+
+El CLI de evaluacion admite `advance --wait-seconds 300 --poll-seconds 5` para
+seguir el plan durante un intervalo acotado. Limites: espera 1-3600 s y sondeo
+1-60 s; sin `--wait-seconds` conserva la pasada unica. La API Python ofrece
+`supervise(..., wait_seconds=..., poll_seconds=..., cancel=evento)`.
+
+El observador compartido con el coordinador de gradientes reintenta errores de
+transporte usando las mismas claves idempotentes. Errores HTTP de autenticacion,
+politica o estado se propagan. Devuelve `evaluated`, `timed_out` o `stopped`,
+contador de intentos y ultima observacion cuando procede. Parar o agotar la espera
+no cancela trabajos ni libera sus reservas. Una peticion HTTP en curso conserva
+su timeout propio, de modo que el plazo no es un limite duro de tiempo total.

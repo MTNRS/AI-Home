@@ -114,6 +114,12 @@ def advance(client, plan_path, checkpoint, output):
     return report
 
 
+def supervise(client, plan_path, checkpoint, output, *, wait_seconds, poll_seconds=5, cancel=None):
+    from .job_observer import observe
+    return observe(lambda: advance(client, plan_path, checkpoint, output), complete_state="evaluated",
+                   wait_seconds=wait_seconds, poll_seconds=poll_seconds, cancel=cancel)
+
+
 def main():
     import argparse
     import os
@@ -128,6 +134,8 @@ def main():
     plan.add_argument("--weights-public-and-redistributable", action="store_true")
     resume = commands.add_parser("advance", help="Submit or collect once; safe to repeat after restart")
     resume.add_argument("--plan", type=Path, required=True)
+    resume.add_argument("--wait-seconds", type=int, default=0)
+    resume.add_argument("--poll-seconds", type=int, default=5)
     for command in (plan, resume):
         command.add_argument("--checkpoint", type=Path, required=True)
         command.add_argument("--server", required=True)
@@ -151,7 +159,11 @@ def main():
         with httpx.Client(base_url=normalize_base_url(args.server), timeout=60, trust_env=False,
                           headers={"Authorization": f"Bearer {token}"}, follow_redirects=False) as client:
             try:
-                result = advance(client, args.plan, args.checkpoint, args.output)
+                if args.wait_seconds:
+                    result = supervise(client, args.plan, args.checkpoint, args.output,
+                                       wait_seconds=args.wait_seconds, poll_seconds=args.poll_seconds)
+                else:
+                    result = advance(client, args.plan, args.checkpoint, args.output)
             except KeyboardInterrupt:
                 result = {"state": "interrupted", "jobs_cancelled": False}
             print(json.dumps(result, allow_nan=False))

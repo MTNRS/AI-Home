@@ -122,3 +122,30 @@ def test_evaluation_cli_creates_real_plan_and_requires_credentials(tmp_path):
         env=env, capture_output=True, text=True, timeout=45)
     assert failure.returncode != 0 and "Set AI_HOME_COORDINATOR_TOKEN" in failure.stderr
     assert not (tmp_path / "report.json").exists()
+
+
+def test_evaluation_observer_retries_transport_and_reports_timeout_or_cancel(monkeypatch):
+    import threading
+    from ai_home.foundation import evaluation_coordinator as coordinator, job_observer
+    clock = [0.0]
+    monkeypatch.setattr(job_observer.time, "monotonic", lambda: clock[0])
+    class Wait:
+        def is_set(self):
+            return False
+        def wait(self, seconds):
+            clock[0] += seconds
+    outcomes = [httpx.ReadError("lost response"), {"state": "waiting"}, {"state": "evaluated", "tokens": 10}]
+    def step(*args):
+        result = outcomes.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result
+    monkeypatch.setattr(coordinator, "advance", step)
+    result = coordinator.supervise(None, None, None, None, wait_seconds=10, poll_seconds=1, cancel=Wait())
+    assert result["state"] == "evaluated" and result["attempts"] == 3 and result["transport_errors"] == 1
+    stopped = threading.Event()
+    stopped.set()
+    assert coordinator.supervise(None, None, None, None, wait_seconds=10, cancel=stopped)["attempts"] == 0
+    monkeypatch.setattr(coordinator, "advance", lambda *a: {"state": "waiting"})
+    result = coordinator.supervise(None, None, None, None, wait_seconds=2, poll_seconds=1, cancel=Wait())
+    assert result["state"] == "timed_out" and result["jobs_cancelled"] is False
