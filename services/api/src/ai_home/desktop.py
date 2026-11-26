@@ -15,7 +15,7 @@ from pathlib import Path
 import sys
 from typing import TypeGuard, TypeVar
 from urllib.parse import urlsplit
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import keyring
@@ -359,6 +359,7 @@ def _raise_for_auth_response(response: httpx.Response) -> None:
 class ServerChatResult:
     answer: str
     references: tuple[KnowledgeReference, ...] = ()
+    model_version: str | None = None
 
 
 def server_chat_completion(server_url, user_token, messages, **options) -> str:
@@ -371,6 +372,7 @@ def server_chat_result(
     messages: list[dict[str, str]],
     *,
     use_knowledge: bool = False,
+    model_version: str | None = None,
     timeout_seconds: float = 180,
     transport: httpx.BaseTransport | None = None,
 ) -> ServerChatResult:
@@ -382,12 +384,28 @@ def server_chat_result(
     ) as client:
         response = client.post(
             "/api/v1/chat/completions",
-            json={"messages": messages, **({"use_knowledge": True} if use_knowledge else {})},
+            json={"messages": messages, **({"use_knowledge": True} if use_knowledge else {}),
+                  **({"model_version": str(UUID(model_version))} if model_version else {})},
         )
         response.raise_for_status()
         data = response.json()
         references = tuple(KnowledgeReference.model_validate(item) for item in data.get("references", []))
-        return ServerChatResult(extract_chat_content(data), references)
+        actual_version = str(UUID(data["model_version"])) if data.get("model_version") else None
+        if model_version is not None and actual_version != str(UUID(model_version)):
+            raise ValueError("El servidor respondió con una versión distinta de la solicitada.")
+        return ServerChatResult(extract_chat_content(data), references, actual_version)
+
+
+DEFAULT_SERVER_VERSION = "Versión activa del servidor"
+
+
+def server_model_versions(server_url, user_token, *, transport=None):
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
+                      headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
+        response = client.get("/api/v1/models")
+        response.raise_for_status()
+        models = response.json()["models"]
+        return [str(UUID(model["id"])) for model in models]
 
 
 def format_knowledge_references(turns) -> str:
@@ -492,6 +510,7 @@ def main() -> None:
             self.messages: list[dict[str, str]] = []
             self.knowledge_references = []
             self.conversation_used_knowledge = False
+            self.pinned_server_version = None
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
             self.chat_request_active = False
@@ -1437,6 +1456,14 @@ def main() -> None:
                 ),
                 wraplength=760,
             ).pack(anchor="w")
+            self.server_version_var = tk.StringVar(value=DEFAULT_SERVER_VERSION)
+            self.server_version_combo = ttk.Combobox(
+                routing, textvariable=self.server_version_var, state="readonly",
+                values=[DEFAULT_SERVER_VERSION], width=44,
+            )
+            self.server_version_combo.pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Actualizar versiones aprobadas",
+                       command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
             self.use_knowledge_var = tk.BooleanVar(value=False)
             self.use_server_ai_var = tk.BooleanVar(value=False)
             ttk.Checkbutton(
@@ -1454,6 +1481,18 @@ def main() -> None:
                 text="La clave nunca se envía al servidor AI@Home.",
                 foreground="#52606d",
             ).pack(anchor="w", pady=(6, 0))
+
+        def _refresh_server_versions(self) -> None:
+            if self.session_token is None or self.session_server_url is None:
+                messagebox.showerror("AI@Home", "Inicia sesión para consultar las versiones.", parent=self)
+                return
+            server_url, token = self.session_server_url, self.session_token
+
+            def on_success(versions):
+                self.server_version_combo.configure(values=[DEFAULT_SERVER_VERSION, *versions])
+                self.status_var.set(f"{len(versions)} versiones aprobadas disponibles.")
+
+            self._background(lambda: server_model_versions(server_url, token), on_success)
 
         def _provider_changed(self, *_args) -> None:
             provider_id = _PROVIDER_ID_BY_LABEL.get(self.provider_var.get())
@@ -1776,7 +1815,13 @@ def main() -> None:
                         )
                     server_url = self.session_server_url
                     user_token = self.session_token
-                    model = "AI@Home"
+                    selected_version = self.server_version_var.get()
+                    requested_version = None if selected_version == DEFAULT_SERVER_VERSION else str(UUID(selected_version))
+                    if self.pinned_server_version is not None:
+                        if requested_version not in (None, self.pinned_server_version):
+                            raise ValueError("Limpia la conversación antes de cambiar de versión.")
+                        requested_version = self.pinned_server_version
+                    model = f"AI@Home:{requested_version}" if requested_version else "AI@Home"
                     selected_source = (
                         "ai-home-server",
                         model,
@@ -1796,6 +1841,7 @@ def main() -> None:
                         user_token,
                         request_messages,
                         use_knowledge=use_knowledge,
+                        model_version=requested_version,
                     )
                 else:
                     provider_id, provider_url = self._selected_provider()
@@ -1854,6 +1900,10 @@ def main() -> None:
                 if self.conversation_id != request_conversation_id:
                     return
                 answer = result.answer if isinstance(result, ServerChatResult) else result
+                if isinstance(result, ServerChatResult) and result.model_version is not None:
+                    self.pinned_server_version = result.model_version
+                    self.server_version_var.set(result.model_version)
+                    self.conversation_source = ("ai-home-server", f"AI@Home:{result.model_version}", server_url)
                 if use_knowledge:
                     self.conversation_used_knowledge = True
                     references = result.references if isinstance(result, ServerChatResult) else ()
@@ -1894,6 +1944,7 @@ def main() -> None:
             self.prompt_is_placeholder = False
             self.api_key_var.set("")
             self.use_knowledge_var.set(False)
+            self.server_version_combo.configure(values=[DEFAULT_SERVER_VERSION])
 
         def _show_knowledge_references(self) -> None:
             window = tk.Toplevel(self)
@@ -1906,6 +1957,8 @@ def main() -> None:
             content.configure(state="disabled")
 
         def _clear_chat(self) -> None:
+            self.pinned_server_version = None
+            self.server_version_var.set(DEFAULT_SERVER_VERSION)
             self.knowledge_references.clear()
             self.conversation_used_knowledge = False
             self.chat_request_active = False

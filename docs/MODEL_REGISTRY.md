@@ -54,8 +54,7 @@ the retained bytes, and verify fail-closed inference without path disclosure.
 Zero-threshold approval is test-only evidence of lifecycle mechanics. No useful
 conversational capability or production release is claimed.
 
-The registry has no public mutation API or remote publication. Approved-suite policies, signatures, revocation, desktop
-version selection, and multi-host deployment remain outstanding. Stored content
+The registry has no public mutation API or remote publication. Approved-suite policies, signatures, revocation and multi-host deployment remain outstanding. Stored content
 hashes detect changes, not malicious modification by someone with registry write
 access. The full checkpoint is hashed on each selection, which favors verification
 over latency; production-scale serving will require immutable deployment storage
@@ -105,4 +104,26 @@ serving. Clients can pin this returned UUID to keep a conversation on one versio
 
 Validation includes real generation from an explicitly selected non-active
 checkpoint, unchanged global activation, catalog authentication, no candidate
-leakage, and rejection of unapproved selection. Desktop selection remains pending.
+leakage, and rejection of unapproved selection. Desktop selection is available as described below.
+
+
+## Desktop selection and conversation pinning
+
+In provider routing, “Actualizar versiones aprobadas” fetches the authenticated
+server catalog. The read-only selector offers the active-server default and
+approved version UUIDs. This catalog and selection belong to the current account
+session and reset when the profile changes.
+
+The first registry-backed response pins its returned UUID for the conversation.
+Later requests send that UUID even if the server activates another version.
+Selecting a different version requires clearing the conversation. An explicitly
+selected version must match the response version; the client rejects mismatches
+or missing version metadata. Servers/direct backends that return no version
+remain supported but cannot provide registry pinning guarantees.
+
+The conversation source records `AI@Home:VERSION_UUID` for subsequent consented
+contribution provenance. Clearing chat resets the pin and selector. The selector
+does not activate or approve any version globally. Tests verify catalog auth,
+response mismatch rejection, second-turn pinning and provenance; a hidden real
+Windows Tk check verifies widget construction, chat reset and profile reset.
+Full suite: 194 passed, 4 PostgreSQL skipped. Visual layout review remains pending.

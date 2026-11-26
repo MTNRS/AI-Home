@@ -19,11 +19,13 @@ def test_late_answer_cannot_enter_another_conversation():
     app = SimpleNamespace(
         chat_request_active=False, prompt_is_placeholder=False,
         prompt=Mock(), messages=[], memory_notes=[],
+        pinned_server_version=None, server_version_var=Mock(),
         use_server_ai_var=Mock(), use_knowledge_var=Mock(return_value=False), session_token="private-token",
         session_server_url="https://one.example", conversation_source=None,
         api_key_var=Mock(), conversation_id="alice-chat", active_memory_ids=set(),
         _append_chat=Mock(), _background=Mock(), _layout_home=Mock(), status_var=Mock(),
     )
+    app.server_version_var.get.return_value = desktop.DEFAULT_SERVER_VERSION
     app.prompt.get.return_value = "Private question"
     app.use_server_ai_var.get.return_value = True
     app.use_knowledge_var.get.return_value = False
@@ -49,7 +51,7 @@ def test_profile_switch_clears_chat_and_closes_old_memory_dialogs(tmp_path, monk
     app = SimpleNamespace(
         private_windows=[window], memory_notes=["old secret"],
         prompt=Mock(), api_key_var=Mock(), use_knowledge_var=Mock(), prompt_is_placeholder=True,
-        _clear_chat=Mock(),
+        _clear_chat=Mock(), server_version_combo=Mock(),
     )
     method("_switch_memory_profile")(app, "https://one.example", str(uuid4()))
     assert app.memory_notes == []
@@ -79,3 +81,31 @@ def test_retrieval_conversation_cannot_lose_provenance_in_training_submission():
     callback(app)
     dialog.showerror.assert_called_once()
     assert "licencias" in dialog.showerror.call_args.args[1]
+
+
+def test_server_response_pins_next_turn_and_records_version_provenance():
+    from uuid import uuid4
+    version = str(uuid4())
+    app = SimpleNamespace(
+        chat_request_active=False, prompt_is_placeholder=False,
+        prompt=Mock(), messages=[], memory_notes=[], use_server_ai_var=Mock(),
+        use_knowledge_var=Mock(), pinned_server_version=None, server_version_var=Mock(),
+        session_token="token", session_server_url="https://example.org", conversation_source=None,
+        api_key_var=Mock(), conversation_id="chat", active_memory_ids=set(),
+        _append_chat=Mock(), _background=Mock(), _layout_home=Mock(), status_var=Mock(),
+    )
+    app.prompt.get.return_value = "Hi"
+    app.use_server_ai_var.get.return_value = True
+    app.use_knowledge_var.get.return_value = False
+    app.server_version_var.get.return_value = desktop.DEFAULT_SERVER_VERSION
+    send = method("_send_message")
+    send(app)
+    app._background.call_args.args[1](desktop.ServerChatResult("answer", model_version=version))
+    assert app.pinned_server_version == version
+    assert app.conversation_source[1] == f"AI@Home:{version}"
+    # Even if the selector says active, the next request keeps the established version.
+    completion = Mock(return_value=desktop.ServerChatResult("next", model_version=version))
+    send.__globals__["server_chat_result"] = completion
+    send(app)
+    app._background.call_args.args[0]()
+    assert completion.call_args.kwargs["model_version"] == version

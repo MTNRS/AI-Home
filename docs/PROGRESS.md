@@ -299,3 +299,14 @@ Tests exercise two real checkpoints, explicit non-active selection, unchanged
 activation, authenticated catalog and candidate rejection.
 
 Validation: full suite 192 passed, 4 PostgreSQL skipped. After resolving schema namespace warnings, registry/chat subset: 13 passed without warnings.
+
+
+### Desktop model version selection (2026-11-26)
+
+Connected the approved server catalog to a read-only desktop selector. The first
+registry response pins its actual UUID; subsequent requests retain that version
+across server activation changes. Explicit response mismatches are rejected.
+Conversation source metadata includes the version UUID, while chat/profile resets
+clear the selection. Validation: 194 passed, 4 PostgreSQL skipped; real hidden
+Windows Tk selector/reset checks passed. No global activation is performed by the
+client and no visual layout certification is claimed.

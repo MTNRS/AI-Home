@@ -538,3 +538,21 @@ def test_server_retrieval_opt_in_preserves_structured_references():
     assert reference["index_version"] in display
     assert "no garantizan" in display
     assert "No se encontraron" in format_knowledge_references([(1, ())])
+
+
+def test_model_catalog_and_version_pin_contract():
+    from uuid import uuid4
+    from ai_home.desktop import server_model_versions, server_chat_result
+    version, other = str(uuid4()), str(uuid4())
+    def handle(request):
+        assert request.headers["Authorization"] == "Bearer token"
+        if request.method == "GET":
+            return httpx.Response(200, json={"models": [{"id": version, "active": True}]})
+        assert json.loads(request.read())["model_version"] == version
+        return httpx.Response(200, json={"choices": [{"message": {"content": "answer"}}],
+                                        "model_version": other})
+    transport = httpx.MockTransport(handle)
+    assert server_model_versions("https://example.org", "token", transport=transport) == [version]
+    with pytest.raises(ValueError, match="versión distinta"):
+        server_chat_result("https://example.org", "token", [{"role": "user", "content": "Hi"}],
+                           model_version=version, transport=transport)
