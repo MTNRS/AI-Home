@@ -144,3 +144,16 @@ otros clientes con la misma credencial comparten el presupuesto del servidor.
 Validación local: 30 pruebas de `test_network_probe.py` y
 `test_nodes_and_jobs.py` aprobadas, incluida renovación, espera tras HTTP 429,
 recuperación, validación del intervalo y ausencia de sondeo por defecto.
+
+## Activación desde escritorio
+
+En DISTRIBUTED COMPUTE, la casilla «Medir y compartir rendimiento HTTP» permite
+activar la renovación de 60 segundos al iniciar el nodo. Está desmarcada por
+defecto y no se guarda entre sesiones. Para cambiar un nodo activo hay que
+ detenerlo y reiniciarlo. La barra de estado indica si se envió la medición o
+falló; «enviada» no certifica que siga vigente en el servidor. El hilo recibe un
+booleano capturado en la interfaz, sin acceder a variables Tk.
+
+Verificación local: navegación de las diez secciones en Tk real y activación /
+desactivación de la casilla; 36 pruebas de escritorio y privacidad aprobadas.
+No se ha realizado todavía revisión visual de esta nueva disposición.

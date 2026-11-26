@@ -1352,3 +1352,12 @@ registra fallos sin cuerpos de respuesta y aplica la espera también tras errore
 No garantiza frescura durante trabajos largos ni convierte estas mediciones en
 ancho de banda físico certificado. Pruebas locales: 30 aprobadas (sondas, nodos
 y trabajos). La opción todavía no está expuesta en la interfaz de escritorio.
+
+### Control de sondas HTTP desde escritorio
+
+DISTRIBUTED COMPUTE incorpora activación explícita de sondas de 64 KiB cada
+60 segundos al buscar trabajo. La selección se aplica al iniciar el nodo y
+permanece desactivada por defecto. Tk real verificó navegación y conmutación;
+36 pruebas de escritorio y privacidad aprobadas. CI Foundation y PostgreSQL
+para 694e949 completaron correctamente; incluye el smoke distribuido con filtros
+de transferencia. Revisión visual de la nueva casilla pendiente.

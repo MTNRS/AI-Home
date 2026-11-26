@@ -29,6 +29,13 @@ def run(self,*args):
         self.control_section_var.set(name); selector.event_generate('<<ComboboxSelected>>'); self.update()
         assert self.page_stack.select()==str(self.control_sections[name])
         assert self.control_section_var.get()==name
+    assert self.transfer_probe_var.get() is False
+    probe = next(w for w in descendants(self.control_sections['DISTRIBUTED COMPUTE'])
+                 if isinstance(w, ttk.Checkbutton) and 'rendimiento HTTP' in w.cget('text'))
+    probe.invoke()
+    assert self.transfer_probe_var.get() is True
+    probe.invoke()
+    assert self.transfer_probe_var.get() is False
     self._show_page(self.control_sections['TRAINING']); self.update()
     buttons={w.cget('text'):w for w in descendants(self.control_sections['TRAINING']) if isinstance(w,ttk.Button)}
     buttons['Entrenar o reanudar'].invoke()

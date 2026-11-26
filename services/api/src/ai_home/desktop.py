@@ -2599,11 +2599,21 @@ def main() -> None:
                 wraplength=800,
             ).pack(anchor="w", pady=6)
             self.consent_var = tk.BooleanVar(value=False)
+            self.transfer_probe_var = tk.BooleanVar(value=False)
             ttk.Checkbutton(
                 parent,
                 text="Acepto registrar este equipo y ejecutar trabajos comunitarios.",
                 variable=self.consent_var,
             ).pack(anchor="w", pady=8)
+            ttk.Checkbutton(
+                parent,
+                text="Medir y compartir rendimiento HTTP al buscar trabajo (cada 60 s).",
+                variable=self.transfer_probe_var,
+            ).pack(anchor="w", pady=4)
+            ttk.Label(parent, text=(
+                "Opcional: envía y recibe 64 KiB por medición, sin conversaciones. "
+                "Se aplica al iniciar el nodo; detén y reinicia para cambiarlo."
+            ), wraplength=800).pack(anchor="w", pady=4)
             ttk.Button(
                 parent,
                 text="Iniciar contribución",
@@ -3447,7 +3457,7 @@ def main() -> None:
             self.node_stop = stop_event
             self.node_thread = threading.Thread(
                 target=self._node_loop,
-                args=(server_url, node_id, token, stop_event),
+                args=(server_url, node_id, token, stop_event, self.transfer_probe_var.get()),
                 daemon=True,
             )
             self.node_thread.start()
@@ -3459,8 +3469,10 @@ def main() -> None:
             node_id: str,
             token: str,
             stop_event: threading.Event,
+            measure_transfer: bool = False,
         ) -> None:
-            agent = NodeAgent(server_url=server_url, node_token=token)
+            agent = NodeAgent(server_url=server_url, node_token=token,
+                              transfer_probe_interval=60 if measure_transfer else None)
             try:
                 while not stop_event.is_set():
                     did_work = agent.run_once()
@@ -3469,6 +3481,11 @@ def main() -> None:
                         if did_work
                         else f"Nodo {node_id}: esperando trabajo"
                     )
+                    if measure_transfer:
+                        if agent.last_transfer_probe_error:
+                            status += "; medición HTTP fallida (se reintentará)"
+                        elif agent.last_transfer_measurement is not None:
+                            status += "; medición HTTP enviada"
                     self.events.put(("node_status", status))
                     stop_event.wait(10)
             except Exception as error:
