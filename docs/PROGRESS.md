@@ -1495,3 +1495,10 @@ Smoke Tk asíncrono pasó: cuatro actualizaciones CPU, checkpoint cargable,
 cambio real de pesos, cachés completas y resultado mostrado en interfaz. Se
 incorpora a CI instalado/Xvfb; informe retenido en docs. Prueba funcional con
 ventana oculta, no revisión visual ni evidencia de calidad lingüística.
+
+### Revisión del formulario de caché
+
+Captura nativa del formulario a 850x580: campos, casilla y botones legibles sin
+solapamientos. Limitación: tamaño habitual/DPI actual. La activación por el
+controlador falló; se recuperó captura y se cerró la fixture interrumpiendo su
+sesión propia. No se atribuye esta inspección a una prueba funcional adicional.

@@ -119,3 +119,19 @@ inspeccionarla. Ambas ventanas se cerraron y sus procesos finalizaron con códig
 0. Esta revisión cubre el DPI actual; no otros escalados, lectores de pantalla,
 mensajes de error o todas las combinaciones de controles. Los smokes CPU/CUDA
 separados aportan la evidencia funcional.
+
+## Formulario de entrenamiento con caché — 2026-11-26
+
+Inspeccionado el formulario real «Entrenar Foundation» tras 836681b a 850x580,
+con preferencias vacías y sin ejecutar entrenamiento durante la revisión.
+Campos, selectores, casilla de caché y botones Entrenar/Parar y guardar aparecen
+legibles y sin solapamientos. La casilla está desmarcada por defecto; el texto
+explica el uso de disco local. Esta revisión cubre el tamaño habitual y el DPI
+actual, no otros tamaños, escalados ni lectores de pantalla.
+
+El controlador no pudo activar la ventana; tras recuperar su identificador,
+la captura nativa permitió inspeccionarla. El intento de cierre por teclado
+también falló al activarla. Se interrumpió únicamente el proceso de fixture
+iniciado por esta tarea mediante su sesión de ejecución (salida 1); no se
+interactuó con otras aplicaciones. La evidencia funcional de entrenamiento
+proviene del smoke separado de Tk, no de esta inspección visual.
