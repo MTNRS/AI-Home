@@ -408,6 +408,45 @@ def server_model_versions(server_url, user_token, *, transport=None):
         return [str(UUID(model["id"])) for model in models]
 
 
+def server_credits(server_url, user_token, *, transport=None):
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
+                      headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
+        balance_response = client.get("/api/v1/credits")
+        balance_response.raise_for_status()
+        transactions_response = client.get("/api/v1/credits/transactions")
+        transactions_response.raise_for_status()
+    balance, transactions = balance_response.json(), transactions_response.json()
+    if not isinstance(balance, dict) or any(type(balance.get(key)) is not int or balance[key] < 0
+                                          for key in ("available", "reserved", "earned")):
+        raise ValueError("El servidor devolvió un saldo de créditos inválido.")
+    if not isinstance(transactions, list) or len(transactions) > 100:
+        raise ValueError("El servidor devolvió movimientos inválidos.")
+    for row in transactions:
+        if (not isinstance(row, dict) or type(row.get("amount")) is not int
+                or type(row.get("transaction_id")) is not int
+                or not isinstance(row.get("operation"), str) or not isinstance(row.get("created_at"), str)):
+            raise ValueError("El servidor devolvió un movimiento inválido.")
+    return balance, transactions
+
+
+def format_credits(balance, transactions):
+    labels = {"job_reserve": "Reserva para trabajo", "job_settle": "Trabajo verificado",
+              "job_refund": "Reembolso de trabajo"}
+    lines = [f"Disponibles: {balance['available']}", f"Reservados: {balance['reserved']}",
+             f"Ganados por trabajo para otras cuentas: {balance['earned']}", "",
+             "Créditos computacionales internos; no son dinero ni criptomonedas.",
+             "Saldo y movimientos consultados por separado; pueden cambiar entre consultas.",
+             "Últimos movimientos (hasta 100, más recientes primero):", ""]
+    if not transactions:
+        lines.append("No hay movimientos registrados.")
+    for row in transactions:
+        label = labels.get(row["operation"], row["operation"])
+        if row["operation"].startswith("operator_grant:"):
+            label = "Asignación del operador: " + row["operation"].split(":", 1)[1]
+        lines.append(f"{row['created_at']} | {row['amount']:+d} | {label} | ID {row['transaction_id']}")
+    return "\n".join(lines)
+
+
 def format_knowledge_references(turns) -> str:
     lines = ["Fragmentos enviados al modelo; no garantizan que su respuesta sea correcta.",
              "Conocimiento recuperado, separado de los pesos y de la memoria personal.", ""]
@@ -1121,6 +1160,9 @@ def main() -> None:
             ttk.Button(account, text="Cerrar sesión", command=self._logout).grid(
                 row=2, column=2, padx=6, pady=3
             )
+            ttk.Button(account, text="Créditos y movimientos", command=self._show_credits).grid(
+                row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 3)
+            )
             account.columnconfigure(1, weight=1)
             ttk.Button(
                 account,
@@ -1481,6 +1523,36 @@ def main() -> None:
                 text="La clave nunca se envía al servidor AI@Home.",
                 foreground="#52606d",
             ).pack(anchor="w", pady=(6, 0))
+
+        def _show_credits(self) -> None:
+            if self.session_token is None or self.session_server_url is None:
+                messagebox.showerror("AI@Home", "Inicia sesión para consultar tus créditos.", parent=self)
+                return
+            server_url, token = self.session_server_url, self.session_token
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Créditos de mi cuenta")
+            window.geometry("800x480")
+            content = tk.Text(window, wrap="word", state="disabled")
+            content.pack(fill="both", expand=True, padx=12, pady=12)
+
+            def refresh():
+                refresh_button.configure(state="disabled")
+
+                def success(result):
+                    content.configure(state="normal")
+                    content.delete("1.0", "end")
+                    content.insert("end", format_credits(*result))
+                    content.configure(state="disabled")
+                    refresh_button.configure(state="normal")
+
+                self._background(lambda: server_credits(server_url, token), success,
+                                 lambda: refresh_button.configure(state="normal"),
+                                 is_current=lambda: bool(window.winfo_exists()))
+
+            refresh_button = ttk.Button(window, text="Actualizar", command=refresh)
+            refresh_button.pack(pady=(0, 12))
+            refresh()
 
         def _refresh_server_versions(self) -> None:
             if self.session_token is None or self.session_server_url is None:

@@ -556,3 +556,35 @@ def test_model_catalog_and_version_pin_contract():
     with pytest.raises(ValueError, match="versión distinta"):
         server_chat_result("https://example.org", "token", [{"role": "user", "content": "Hi"}],
                            model_version=version, transport=transport)
+
+
+def test_credit_view_uses_authenticated_balances_and_signed_transactions():
+    from ai_home.desktop import server_credits, format_credits
+    balance = {"available": 93, "reserved": 7, "earned": 0}
+    transactions = [{"transaction_id": 2, "operation": "job_reserve", "amount": -7,
+                     "created_at": "2026-11-26T10:00:00"},
+                    {"transaction_id": 1, "operation": "operator_grant:test", "amount": 100,
+                     "created_at": "2026-11-26T09:00:00"}]
+    def handle(request):
+        assert request.headers["Authorization"] == "Bearer own-account"
+        assert request.method == "GET"
+        return httpx.Response(200, json=transactions if request.url.path.endswith("transactions") else balance)
+    result = server_credits("https://example.org", "own-account", transport=httpx.MockTransport(handle))
+    assert result == (balance, transactions)
+    text = format_credits(*result)
+    assert "Disponibles: 93" in text and "Reservados: 7" in text
+    assert "-7" in text and "+100" in text
+    assert "Reserva para trabajo" in text and "Asignación del operador" in text
+    assert "No hay movimientos" in format_credits(balance, [])
+
+
+def test_credit_view_rejects_invalid_balance_and_auth_failure():
+    from ai_home.desktop import server_credits
+    def invalid(request):
+        return httpx.Response(200, json=[] if request.url.path.endswith("transactions") else
+                              {"available": True, "reserved": 0, "earned": 0})
+    with pytest.raises(ValueError, match="saldo"):
+        server_credits("https://example.org", "token", transport=httpx.MockTransport(invalid))
+    with pytest.raises(httpx.HTTPStatusError):
+        server_credits("https://example.org", "expired", transport=httpx.MockTransport(
+            lambda request: httpx.Response(401)))

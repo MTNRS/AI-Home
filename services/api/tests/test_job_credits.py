@@ -176,3 +176,22 @@ def test_self_funded_job_cannot_mint_credits_or_inflate_earned_counter(client):
     assert client.post(f"/api/v1/node/jobs/{claim['job_id']}/result", headers=node_headers,
         json={"lease_token": claim["lease_token"], "result": result}).status_code == 200
     assert client.get("/api/v1/credits", headers=owner_headers).json() == {"available": 100, "reserved": 0, "earned": 0}
+
+
+def test_desktop_credit_client_reads_actual_ledger_without_cross_account_data(client):
+    import httpx
+    from ai_home.desktop import server_credits
+    owner, worker, owner_headers, worker_headers, _ = funded_users(client)
+    submit_job(client, owner_headers)
+    def bridge(request):
+        response = client.get(request.url.path, headers=dict(request.headers))
+        return httpx.Response(response.status_code, json=response.json())
+    transport = httpx.MockTransport(bridge)
+    owner_token = owner_headers["Authorization"].removeprefix("Bearer ")
+    worker_token = worker_headers["Authorization"].removeprefix("Bearer ")
+    balance, transactions = server_credits("https://example.org", owner_token, transport=transport)
+    assert balance == {"available": 93, "reserved": 7, "earned": 0}
+    assert any(row["operation"] == "job_reserve" and row["amount"] == -7 for row in transactions)
+    worker_balance, worker_transactions = server_credits("https://example.org", worker_token, transport=transport)
+    assert worker_balance == {"available": 0, "reserved": 0, "earned": 0}
+    assert worker_transactions == []

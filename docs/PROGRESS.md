@@ -322,3 +322,13 @@ corrected missing runtime overhead; repeated training and actual auto-fit CLI
 execution succeeded. Evidence: RESOURCE_PLAN_CUDA.json; limitations in TRAINING.md.
 
 Validation after calibration: 197 passed, 4 PostgreSQL tests skipped.
+
+
+### Desktop credits view (2026-11-26)
+
+Added read-only account balance/history view using existing authenticated ledger
+endpoints. Shows available/reserved/earned values and signed postings, closes on
+profile change, rejects malformed data, and guards late callbacks after window
+closure. Verified actual funded ledger reads and separation from another account,
+plus hidden real Windows Tk rendering with fixture values. Full suite: 199 passed,
+4 skipped before the added ledger bridge test; final credit tests: 9 passed.

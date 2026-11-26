@@ -86,3 +86,25 @@ aislamento de usuarios, eliminación de cuenta, emisión administrativa idempote
 y pago de gradientes reales. PostgreSQL concurrente aún no se ha ejecutado;
 SQLite no prueba exclusión de filas o carreras en producción. No se presenta
 este módulo como economía de producción ni sistema antifraude completo.
+
+
+## Desktop account view
+
+The account panel's “Créditos y movimientos” button reads the authenticated
+`/api/v1/credits` and `/api/v1/credits/transactions` endpoints. It displays available
+and reserved balances, earned credits from other accounts' verified jobs, and up
+to 100 recent signed ledger postings. Operator grants, reserves, verified-work
+settlements and refunds are distinguished. Empty histories and HTTP/authentication
+errors are represented explicitly; no fabricated balance replaces failed reads.
+
+The view is read-only and refreshes on demand. It closes on profile changes;
+background callbacks are guarded by both session identity and window existence.
+No account identifier can be supplied to read someone else's ledger. Balance and
+history are two separate requests and the view says that they may change between
+reads. These internal compute credits are not money or cryptocurrency.
+
+Validation: desktop HTTP-contract tests, an actual API/ledger test with funded
+owner and separate zero-balance worker, and a hidden Windows Tk rendering/close
+check using clearly isolated fixture values. Full suite before the final ledger
+bridge test: 199 passed, 4 PostgreSQL skipped; final credits module: 9 passed.
+This does not yet implement paid inference, desktop job funding or transfers.
