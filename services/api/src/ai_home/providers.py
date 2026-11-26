@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from dataclasses import dataclass
 from urllib.parse import quote
 
 import httpx
@@ -12,6 +13,31 @@ from ai_home.privacy import contains_common_secret
 from ai_home.urls import normalize_base_url
 
 ProviderId = Literal["openai", "anthropic", "gemini", "openai-compatible"]
+TrainingProviderId = Literal["openai", "anthropic", "gemini", "openai-compatible", "ai-home-foundation"]
+
+
+@dataclass(frozen=True)
+class FoundationChatResult:
+    answer: str
+    checkpoint_sha256: str
+
+
+def foundation_chat_result(model, messages, *, expected_checkpoint=None):
+    from pathlib import Path
+    from ai_home.local_llm import default_checkpoint_path
+    from ai_home.foundation.checkpoint import load_checkpoint
+    from ai_home.foundation.inference import stream_text
+    from ai_home.foundation.training import select_device
+    name = model.strip()
+    if not name or Path(name).name != name or "/" in name or "\\" in name or ":" in name or not name.endswith(".pt"):
+        raise ValueError("Selecciona un nombre de checkpoint .pt local válido.")
+    loaded, tokenizer, _ = load_checkpoint(default_checkpoint_path().parent / name, select_device("auto"))
+    if expected_checkpoint is not None and loaded.checkpoint_sha256 != expected_checkpoint:
+        raise ValueError("El checkpoint ha cambiado; inicia otra conversación antes de usarlo.")
+    answer = "".join(stream_text(loaded, tokenizer, messages))
+    if not answer.strip():
+        raise RuntimeError("El modelo no ha producido texto; necesita entrenamiento y evaluación.")
+    return FoundationChatResult(answer, loaded.checkpoint_sha256)
 ChatProviderId = Literal[
     "ai-home-foundation",
     "ai-home-local",
@@ -62,14 +88,7 @@ def provider_completion(
     if not messages or not any(message["role"] == "user" for message in messages):
         raise ValueError("Escribe un mensaje antes de iniciar la conversación.")
     if provider == "ai-home-foundation":
-        from pathlib import Path
-        from ai_home.local_llm import default_checkpoint_path
-        from ai_home.foundation.inference import complete
-
-        name = model.strip()
-        if not name or Path(name).name != name or "/" in name or "\\" in name or ":" in name or not name.endswith(".pt"):
-            raise ValueError("Selecciona un nombre de checkpoint .pt local válido.")
-        return complete(messages, default_checkpoint_path().parent / name)
+        return foundation_chat_result(model, messages).answer
     if provider == "ai-home-local":
         from ai_home.local_llm import complete_locally
 

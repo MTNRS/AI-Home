@@ -38,6 +38,9 @@ from ai_home.providers import (
     PROVIDER_LABELS,
     ChatProviderId,
     ProviderId,
+    TrainingProviderId,
+    FoundationChatResult,
+    foundation_chat_result,
     provider_completion,
 )
 from ai_home.privacy import contains_common_secret
@@ -116,8 +119,8 @@ def _is_provider_id(value: str) -> TypeGuard[ChatProviderId]:
     return value in PROVIDER_LABELS
 
 
-def _is_training_provider(value: str) -> TypeGuard[ProviderId]:
-    return value in {"openai", "anthropic", "gemini", "openai-compatible"}
+def _is_training_provider(value: str) -> TypeGuard[TrainingProviderId]:
+    return value in {"openai", "anthropic", "gemini", "openai-compatible", "ai-home-foundation"}
 
 
 def _provider_keyring_account(provider: ChatProviderId, endpoint: str) -> str:
@@ -202,7 +205,7 @@ def submit_training_candidate(
     server_url: str,
     user_token: str,
     conversation_id: str,
-    provider: ProviderId,
+    provider: TrainingProviderId,
     source_endpoint: str,
     model: str,
     messages: list[dict[str, str]],
@@ -588,6 +591,7 @@ def main() -> None:
             self.knowledge_references = []
             self.conversation_used_knowledge = False
             self.pinned_server_version = None
+            self.pinned_foundation_checkpoint = None
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
             self.generation_settings = None
@@ -2715,6 +2719,10 @@ def main() -> None:
                         api_key=provider_api_key,
                         endpoint_url=provider_url,
                     )
+                    if provider_id == "ai-home-foundation":
+                        expected_checkpoint = self.pinned_foundation_checkpoint
+                        operation = lambda: foundation_chat_result(model, request_messages,
+                                                                    expected_checkpoint=expected_checkpoint)
             except ValueError as error:
                 messagebox.showerror("AI@Home", str(error), parent=self)
                 return
@@ -2738,7 +2746,7 @@ def main() -> None:
                     self.chat_cancel = None
                     self.chat_preview_var.set("")
 
-            def on_success(result: str | ServerChatResult) -> None:
+            def on_success(result: str | ServerChatResult | FoundationChatResult) -> None:
                 if self.conversation_id != request_conversation_id:
                     return
                 if request_cancel.is_set():
@@ -2746,7 +2754,9 @@ def main() -> None:
                     self.status_var.set("Generación cancelada; respuesta parcial descartada.")
                     return
                 on_failure()
-                answer = result.answer if isinstance(result, ServerChatResult) else result
+                answer = result.answer if isinstance(result, (ServerChatResult, FoundationChatResult)) else result
+                if isinstance(result, FoundationChatResult):
+                    self.pinned_foundation_checkpoint = result.checkpoint_sha256
                 if isinstance(result, ServerChatResult) and result.model_version is not None:
                     self.pinned_server_version = result.model_version
                     self.server_version_var.set(result.model_version)
@@ -2825,6 +2835,7 @@ def main() -> None:
             self.chat_cancel = None
             self.chat_preview_var.set("")
             self.pinned_server_version = None
+            self.pinned_foundation_checkpoint = None
             self.server_version_var.set(DEFAULT_SERVER_VERSION)
             self.knowledge_references.clear()
             self.conversation_used_knowledge = False
@@ -2893,8 +2904,7 @@ def main() -> None:
             if not _is_training_provider(source_provider):
                 messagebox.showerror(
                     "AI@Home",
-                    "Solo se pueden aportar conversaciones de proveedores "
-                    "externos con procedencia verificable.",
+                    "La conversación necesita una procedencia compatible y verificable.",
                     parent=self,
                 )
                 return
@@ -2912,7 +2922,13 @@ def main() -> None:
                     parent=self,
                 )
                 return
-            provider: ProviderId = source_provider
+            provider: TrainingProviderId = source_provider
+            if provider == "ai-home-foundation":
+                if not self.pinned_foundation_checkpoint:
+                    messagebox.showerror("AI@Home", "Falta la identidad del checkpoint cargado.", parent=self)
+                    return
+                model = self.pinned_foundation_checkpoint
+                source_endpoint = f"ai-home-foundation://sha256/{model}"
             messages = [
                 message
                 for message in self.messages

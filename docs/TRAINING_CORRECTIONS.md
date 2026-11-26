@@ -60,7 +60,9 @@ correction through the same restricted pipeline. The server validates the format
 and linkage; it cannot prove that an arbitrary client used the claimed weights.
 The supplied digest is provenance to review, not remote execution attestation.
 
-The desktop's existing submission path remains limited to external sources until
-it carries the exact loaded checkpoint identity across all conversation turns.
-Do not infer the digest from a file reread after generation or silently relabel
-server-proxy chats. This API increment does not claim that UI integration is done.
+The desktop local Foundation path now carries the digest bound by the checkpoint
+loader with its generated answer. It pins that digest across turns and rejects a
+changed checkpoint before generating the next answer. Consented submission uses
+that digest rather than a filename or a file reread after generation. Clearing
+the chat clears the pin. Server-proxy chats remain excluded until equivalent exact
+provenance is available; they are not silently relabeled.

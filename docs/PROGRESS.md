@@ -884,3 +884,14 @@ y corrección; el servidor no confunde una declaración del cliente con atestaci
 remota. Suite: 287 correctas, 5 PostgreSQL omitidas. CI PostgreSQL de la revisión
 anterior dfb7c70 (incluye migración 0009) pasó en run 45816699410. Falta transportar
 la identidad cargada en el escritorio antes de habilitar su envío Foundation.
+
+### Identidad cargada en contribuciones Foundation de escritorio
+
+El adaptador devuelve respuesta real y digest ligado a los bytes cargados. El
+escritorio fija esa identidad durante la conversación, rechaza sustitución del
+checkpoint en el siguiente turno y utiliza digest/URI Foundation al aportar con
+consentimiento. Limpiar chat/perfil borra el pin. Los chats proxy siguen excluidos.
+Prueba real sustituye el archivo durante generación y verifica identidad original
++rechazo del siguiente turno. Smoke Tk real verifica generación, pin, contrato de
+envío y reset; captura/valida el envío sin red, no se presenta como prueba HTTP.
+Suite: 288 correctas, 5 PostgreSQL omitidas. No cambia permisos ni gates de revisión.
