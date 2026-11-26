@@ -32,6 +32,7 @@ llm = [
 ]
 
 [project.scripts]
+ai-home-migrate = "ai_home.migrate:main"
 ai-home-foundation-train = "ai_home.foundation.__main__:main"
 ai-home-desktop = "ai_home.desktop:main"
 ai-home-import-conversations = "ai_home.conversation_corpus:main"
@@ -39,7 +40,7 @@ ai-home-import-wikipedia = "ai_home.wikipedia_corpus:main"
 ai-home-train = "ai_home.train_llm:main"
 
 [tool.alembic]
-script_location = "services/api/migrations"
+script_location = "ai_home:migrations"
 
 [tool.setuptools.packages.find]
 where = ["services/api/src"]

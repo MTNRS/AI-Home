@@ -939,3 +939,16 @@ real producido por Linux CI. Documentados hashes, reporte, comandos y límites e
 CLEAN_REPRODUCTION.md. No es una instalación integral de API/GUI/distribuido ni
 una máquina nueva. CI de 1f12fd8: Foundation 283/13 omitidas; PostgreSQL Python
 3.11 y 3.12, 288/8 omitidas cada uno. Inventario y encabezado TESTING actualizados.
+
+### API instalada y migraciones incluidas en wheel
+
+Detectado y corregido empaquetado: historial Alembic trasladado sin modificar
+revisiones/operaciones a ai_home.migrations. Configuración histórica compatible y
+nuevo python -m ai_home.migrate upgrade/current/check, sin depender del checkout.
+Wheel instalado en venv aislado: migraciones reales, registro/login, 401 sin sesión,
+inferencia y SSE por Uvicorn/HTTP loopback correctos; cierre del servidor verificado.
+Script reproducible scripts/verify_installed_api.py ejecutado dos veces con DB
+nuevas, informe sin credenciales en INSTALLED_API_SMOKE.json. Suite completa:
+292 correctas, 5 PostgreSQL omitidas. Añadida verificación wheel/HTTP a CI; pendiente
+resultado remoto. Limpieza de build/ rechazada por política automática; directorio
+local generado excluido del commit, sin afectar código ni prueba.

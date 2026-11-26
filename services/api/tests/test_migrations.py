@@ -64,3 +64,23 @@ def test_initial_migration_creates_identity_and_credit_tables(tmp_path, monkeypa
         "training_datasets",
     } & table_names
 
+
+def test_packaged_migrations_outside_checkout(tmp_path, monkeypatch):
+    from ai_home.migrate import migration_config
+    from sqlalchemy import text
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('AI_HOME_ENVIRONMENT', 'test')
+    monkeypatch.setenv('AI_HOME_DATABASE_URL', 'sqlite+pysqlite:///packaged.db')
+    config = migration_config()
+    command.upgrade(config, '0008_inference_expiry')
+    command.upgrade(config, 'head')
+    command.upgrade(config, 'head')
+    command.check(config)
+    engine = create_engine('sqlite+pysqlite:///packaged.db')
+    try:
+        with engine.connect() as connection:
+            assert connection.scalar(text('select version_num from alembic_version')) == '0009_training_corrections'
+        assert 'correction' in {column['name'] for column in inspect(engine).get_columns('training_contributions')}
+    finally:
+        engine.dispose()
