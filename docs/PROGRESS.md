@@ -1574,3 +1574,13 @@ exito. La lectura ahora limita bytes sobre un descriptor, sin stat/read separado
 25 pruebas de contribuciones revisadas, correcciones y modelo aprobadas en
 20,25 s, incluida sustitucion controlada entre lecturas y entrenamiento real.
 No constituye autenticacion criptografica de los exports.
+
+### Secuencias en disco para aprendizaje continuo
+
+Extendida la opcion al ciclo completo de candidato con replay y comparaciones
+padre/candidato. Verificados los cinco caches, igualdad exacta de metricas frente
+a memoria y pesos frente a reanudacion en memoria. Ocho pruebas de aprendizaje
+continuo/cache aprobadas en 6,23 s (incluyen las pruebas CPU/CUDA existentes de
+cache; el ciclo continuo se prueba en CPU). Una primera comparacion de prueba
+usaba textos crudos frente a normalizados; se corrigio para comparar el mismo
+corpus preparado. No se promociona el candidato ni se afirma mejora de capacidad.

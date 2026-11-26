@@ -11,15 +11,15 @@ from .data import load_records
 from .training import TrainingCancelled, TrainingConfig, _sequences, evaluate, select_device, train
 
 
-def compare_checkpoint(path, records, objective, device, max_bytes):
+def compare_checkpoint(path, records, objective, device, max_bytes, *, cache_path=None, cancel=None):
     model, tokenizer, _ = load_checkpoint(path, device=device, max_bytes=max_bytes)
-    sequences = _sequences(records, tokenizer, model.config.context, objective)
+    sequences = _sequences(records, tokenizer, model.config.context, objective, cache_path=cache_path, cancel=cancel)
     return evaluate(model, sequences, device)
 
 
 def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_path=None,
                   reviewed_export=None, training=None, device="auto", max_loss_increase=0.0,
-                  cancel=None, on_step=None):
+                  cancel=None, on_step=None, disk_sequences=False):
     def check_cancel():
         if cancel is not None and cancel.is_set():
             raise TrainingCancelled("Candidate comparison cancelled; retained checkpoints are not approved")
@@ -39,15 +39,19 @@ def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_p
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=False)
     candidate = output_dir / "candidate.pt"
+    cache_root = output_dir / "sequence-cache" if disk_sequences else None
     payload = train(records, candidate, training=training, device=device,
                     initial_checkpoint=parent, validation_records=validation,
-                    replay_records=replay, reviewed_export=reviewed_export, cancel=cancel, on_step=on_step)
+                    replay_records=replay, reviewed_export=reviewed_export, cancel=cancel, on_step=on_step,
+                    sequence_cache_dir=cache_root / "training" if cache_root else None)
     check_cancel()
     if hashlib.sha256(parent.read_bytes()).hexdigest() != parent_hash:
         raise RuntimeError("Parent changed during experiment")
-    baseline = compare_checkpoint(parent, validation, training.objective, device, training.memory_budget_bytes)
+    baseline = compare_checkpoint(parent, validation, training.objective, device, training.memory_budget_bytes,
+                                  cache_path=cache_root / "baseline" if cache_root else None, cancel=cancel)
     check_cancel()
-    result = compare_checkpoint(candidate, validation, training.objective, device, training.memory_budget_bytes)
+    result = compare_checkpoint(candidate, validation, training.objective, device, training.memory_budget_bytes,
+                                cache_path=cache_root / "candidate" if cache_root else None, cancel=cancel)
     check_cancel()
     delta = result["loss"] - baseline["loss"]
     report = {"format": "ai-home-continual-v1", "status": "candidate",
@@ -55,7 +59,7 @@ def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_p
               "validation_sha256": validation_hash, "replay_sha256": replay_hash,
               "dataset_sha256": payload["dataset_sha256"], "tokenizer_sha256": payload["tokenizer_sha256"],
               "data_visibility": payload["data_visibility"], "training_config": asdict(training),
-              "device": device, "baseline": baseline, "candidate": result, "loss_delta": delta,
+              "disk_sequences": disk_sequences, "device": device, "baseline": baseline, "candidate": result, "loss_delta": delta,
               "max_loss_increase": max_loss_increase, "regression_gate_passed": delta <= max_loss_increase,
               "replay_samples_per_batch": payload["replay_samples_per_batch"],
               "embedding_delta_l2": payload["embedding_delta_l2"],
@@ -75,12 +79,13 @@ def main():
     sources.add_argument("--reviewed-export", type=Path)
     parser.add_argument("--training-config", required=True, type=Path)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument("--disk-sequences", action="store_true", help="Store local token sequences on disk, including replay and comparison")
     parser.add_argument("--max-loss-increase", type=float, default=0.0)
     args = parser.parse_args()
     training = TrainingConfig(**json.loads(args.training_config.read_text(encoding="utf-8")))
     print(json.dumps(run_candidate(args.parent, args.output_dir, args.validation, args.replay,
           dataset_path=args.dataset, reviewed_export=args.reviewed_export, training=training,
-          device=args.device, max_loss_increase=args.max_loss_increase), indent=2))
+          device=args.device, max_loss_increase=args.max_loss_increase, disk_sequences=args.disk_sequences), indent=2))
 
 
 if __name__ == "__main__":

@@ -412,3 +412,19 @@ diagnostico, sin checkpoint ni resultado de exito. Se requiere un directorio
 nuevo al reintentar. La lectura del export esta acotada sobre el mismo descriptor,
 sin depender de una consulta previa del tamano. Esto verifica consistencia local;
 no autentica la identidad del administrador ni sustituye su revision.
+
+### Replay y comparacion con secuencias en disco
+
+`python -m ai_home.foundation.continual --disk-sequences` extiende la opcion local
+al entrenamiento incremental, replay, validacion y comparaciones padre/candidato.
+El resto de argumentos del comando permanece obligatorio. La API Python admite
+`run_candidate(..., disk_sequences=True)`. Cada conjunto se escribe en un
+subdirectorio nuevo de `sequence-cache` dentro del experimento; el informe registra
+la opcion. La preparacion de las comparaciones tambien atiende la cancelacion.
+
+No cambia el muestreo, el criterio de regresion ni la aprobacion: el resultado
+sigue siendo candidato y requiere evaluacion independiente. Los archivos pueden
+contener texto privado tokenizado, ocupan disco y no se publican automaticamente.
+No se garantiza un limite estricto de RAM ni se reutilizan caches existentes.
+Pruebas CPU comparan exactamente metricas con/sin disco y pesos del candidato
+contra una ejecucion reanudada en memoria, conservando linaje y restricciones.

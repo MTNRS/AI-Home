@@ -19,7 +19,8 @@ def records(prefix):
             for i in range(4)]
 
 
-def test_continual_real_training_replay_lineage_and_regression(tmp_path):
+@pytest.mark.parametrize("disk_sequences", [False, True])
+def test_continual_real_training_replay_lineage_and_regression(tmp_path, disk_sequences):
     torch.set_num_threads(1)
     old, new, validation = records("Antiguo"), records("Nuevo"), records("Reservado")
     config = FoundationConfig(vocab_size=280, width=32, layers=2, heads=4, kv_heads=2, hidden=64, context=16)
@@ -34,8 +35,22 @@ def test_continual_real_training_replay_lineage_and_regression(tmp_path):
         (tmp_path / f"{name}.json").write_text(json.dumps({"format_version": 1, "records": data}), encoding="utf-8")
     report = run_candidate(parent, tmp_path / "experiment", tmp_path / "validation.json",
                            tmp_path / "old.json", dataset_path=tmp_path / "new.json",
-                           training=settings, device="cpu")
+                           training=settings, device="cpu", disk_sequences=disk_sequences)
     candidate = load_checkpoint(tmp_path / "experiment/candidate.pt")[2]
+    assert report["disk_sequences"] is disk_sequences
+    cache = tmp_path / "experiment" / "sequence-cache"
+    if disk_sequences:
+        for split in ("training/train", "training/validation", "training/replay", "baseline", "candidate"):
+            manifest = json.loads((cache / split / "manifest.json").read_text(encoding="utf-8"))
+            assert manifest["bytes"] == (cache / split / "sequences.i64").stat().st_size
+        from ai_home.foundation.continual import compare_checkpoint
+        from ai_home.foundation.data import load_records
+        prepared_validation = load_records(tmp_path / "validation.json")[0]
+        assert report["baseline"] == compare_checkpoint(parent, prepared_validation, settings.objective, "cpu", settings.memory_budget_bytes)
+        assert report["candidate"] == compare_checkpoint(tmp_path / "experiment/candidate.pt", prepared_validation,
+                                                       settings.objective, "cpu", settings.memory_budget_bytes)
+    else:
+        assert not cache.exists()
     assert report["embedding_delta_l2"] > 0
     assert report["replay_samples_per_batch"] == 1
     assert report["regression_gate_passed"] == (report["loss_delta"] <= 0)
