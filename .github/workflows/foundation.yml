@@ -31,6 +31,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk
       - name: Verify installed desktop control sections
         run: xvfb-run -a python -I scripts/verify_desktop_sections.py --require-installed
+      - name: Verify visual stream isolation on profile switch
+        run: xvfb-run -a python -I scripts/verify_visual_profile.py --require-installed
       - run: python -I scripts/verify_installed_api.py --output-dir artifacts/installed-api --checkpoint artifacts/foundation-smoke/foundation-nano.pt
       - run: python -I -m ai_home.foundation.distributed_smoke --output-dir artifacts/installed-distributed --rounds 2 --reward-credits 3 --worker-devices cpu cpu --restart-coordinator
       - uses: actions/upload-artifact@v4

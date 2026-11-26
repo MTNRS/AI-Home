@@ -326,3 +326,17 @@ respuesta final y salida de productor con cola llena al cancelar). Se repitieron
 el formulario Tk con generación red y la navegación de diez secciones, ambos OK.
 La inspección visual/DPI y una prueba de cambio de perfil durante generación siguen
 pendientes; las comprobaciones funcionales anteriores no equivalen a esa revisión.
+
+## Aislamiento visual durante cambio de perfil
+
+`scripts/verify_visual_profile.py` ejecuta Tk real, _background y la función real
+_switch_memory_profile con cuentas sintéticas sin conexión. Un productor controlado
+emite un fragmento y espera cancelación; tras cambiar perfil, confirma destrucción
+de la ventana, parada del productor y descarte del resultado tardío por la guarda
+de sesión. La ventana nueva permanece vacía. Es una prueba de concurrencia/privacidad,
+no una simulación de capacidad del modelo.
+
+Ejecución Windows pasó. Primer intento del harness usó un identificador de usuario
+no UUID y falló antes del cambio; se corrigió a UUID sintético válido y se repitió
+correctamente. CI añade la misma prueba sobre paquete instalado con Xvfb/Python -I;
+resultado remoto de esta adición todavía pendiente. Revisión visual/DPI pendiente.

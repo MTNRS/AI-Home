@@ -1222,3 +1222,10 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - 2 pruebas pasaron en 4.22s: stream real y cancelación con cola llena.
   Formulario Tk real y navegación de diez secciones repetidos correctamente.
 - Pendiente inspección visual/DPI y prueba de cambio de perfil durante generación.
+
+## 2026-11-26 — Aislamiento de stream visual al cambiar perfil
+
+- Script Tk real usa worker/guardas/cambio de perfil de producto con stream controlado.
+  Verifica cancelación, destrucción de ventana y descarte de salida antigua.
+- Ejecución Windows pasó tras corregir UUID del harness; nueva ventana vacía.
+- Gate añadido a CI instalado/Xvfb. Resultado remoto de esta adición pendiente.
