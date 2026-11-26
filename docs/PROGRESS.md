@@ -365,3 +365,15 @@ close cancel the stream. Only complete answers enter history or contribution dat
 late fragments and completion-after-stop are discarded. Existing version pinning
 and retrieval provenance remain intact. Validation: 212 passed, 4 skipped; hidden
 real Windows Tk preview/stop-race/reset check passed with isolated UI fixtures.
+
+
+### Bounded API generation controls (2026-11-26)
+
+Exposed Foundation temperature, top-k, top-p, repetition penalty, seed and token
+limit in both chat routes, returning effective settings with responses/metadata.
+Strict validation rejects invalid values and requests above the server token cap.
+External backends explicitly reject these Foundation-specific options. Actual
+checkpoint tests compare greedy direct, complete-response and streaming outputs
+with the same retrieved context. Desktop sampling widgets remain pending.
+
+Validation: full CUDA-enabled suite 227 passed, 4 PostgreSQL tests skipped.

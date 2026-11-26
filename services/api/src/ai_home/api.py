@@ -72,6 +72,7 @@ from ai_home.schemas import (
     ClaimedJobResponse,
     ChatCompletionRequest,
     ChatCompletionResponse,
+    FoundationGeneration,
     CreateMathSumJobRequest,
     CreateTokenizeJobRequest,
     CreateGradientJobRequest,
@@ -484,6 +485,14 @@ def create_app(
         except Exception:
             raise HTTPException(status_code=503, detail="Model catalog unavailable.") from None
 
+    def generation_options(payload, settings):
+        options = (payload.generation or FoundationGeneration()).model_dump()
+        maximum = options["max_new_tokens"]
+        if maximum is not None and maximum > settings.foundation_max_new_tokens:
+            raise HTTPException(status_code=422, detail="Requested generation exceeds the server token limit.")
+        options["max_new_tokens"] = maximum if maximum is not None else settings.foundation_max_new_tokens
+        return options
+
     @app.post("/api/v1/chat/stream")
     def stream_foundation_chat(payload: ChatCompletionRequest, request: Request,
                                _user: AuthenticatedUser = Depends(get_current_user)):
@@ -496,6 +505,7 @@ def create_app(
             raise HTTPException(status_code=503, detail="Model selection requires a registry.")
         if payload.use_knowledge and settings.knowledge_index is None:
             raise HTTPException(status_code=503, detail="Knowledge retrieval is not configured.")
+        options = generation_options(payload, settings)
         from ai_home.foundation.streaming import InferenceStream
 
         def work(cancel, emit):
@@ -518,11 +528,11 @@ def create_app(
             if payload.use_knowledge:
                 from ai_home.knowledge import prepare_knowledge_context
                 messages, references = prepare_knowledge_context(messages, model, tokenizer, settings.knowledge_index)
-            emit({"type": "metadata", "model_version": version, "references": references})
+            emit({"type": "metadata", "model_version": version, "references": references, "generation": options})
             started = time.perf_counter()
             chunks, characters, nonempty = 0, 0, False
             for content in stream_text(model, tokenizer, messages, cancel=cancel,
-                                       max_new_tokens=settings.foundation_max_new_tokens):
+                                       **options):
                 if cancel.is_set():
                     return
                 chunks += 1
@@ -550,6 +560,8 @@ def create_app(
         current_user: AuthenticatedUser = Depends(get_current_user),
     ) -> ChatCompletionResponse:
         settings: Settings = request.app.state.settings
+        if payload.generation is not None and settings.chat_backend != "foundation":
+            raise HTTPException(status_code=422, detail="Generation controls require the Foundation backend.")
         if payload.model_version is not None and (settings.chat_backend != "foundation" or settings.foundation_registry is None):
             raise HTTPException(status_code=503, detail="Approved model selection requires a Foundation registry.")
         if payload.use_knowledge and (settings.chat_backend != "foundation" or settings.knowledge_index is None):
@@ -557,6 +569,7 @@ def create_app(
         if settings.chat_backend == "foundation":
             if settings.foundation_checkpoint is None and settings.foundation_registry is None:
                 raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
+            options = generation_options(payload, settings)
             # One active local generation per process; no prompts or KV caches are shared.
             if not foundation_inference_lock.acquire(blocking=False):
                 raise HTTPException(status_code=503, detail="Foundation inference is busy.",
@@ -584,7 +597,7 @@ def create_app(
                     checkpoint,
                     device=settings.foundation_device,
                     max_bytes=settings.foundation_memory_budget_bytes,
-                    max_new_tokens=settings.foundation_max_new_tokens,
+                    **options,
                     **extra,
                 )
                 if payload.use_knowledge:
@@ -597,7 +610,7 @@ def create_app(
                                     detail="Foundation inference failed; verify the checkpoint and runtime.") from None
             finally:
                 foundation_inference_lock.release()
-            return ChatCompletionResponse(model_version=selected_version, references=references, choices=[{
+            return ChatCompletionResponse(generation=options, model_version=selected_version, references=references, choices=[{
                 "index": 0, "message": {"role": "assistant", "content": answer},
                 "finish_reason": "stop",
             }])

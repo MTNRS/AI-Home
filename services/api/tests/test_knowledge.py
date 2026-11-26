@@ -94,13 +94,17 @@ def test_real_foundation_generation_with_retrieved_context(tmp_path, client):
     settings.knowledge_index = index
     response = client.post("/api/v1/chat/completions", json={
         "messages": [{"role": "user", "content": "Marte"}], "use_knowledge": True,
+        "generation": {"temperature": 0.0, "max_new_tokens": 3},
     }, headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200, response.text
+    assert response.json()["choices"][0]["message"]["content"] == answer
+    assert response.json()["generation"]["temperature"] == 0
     assert len(response.json()["references"]) == 1
     assert response.json()["references"][0]["text"] == references[0]["text"]
     headers = {"Authorization": f"Bearer {token}"}
     streamed = client.post("/api/v1/chat/stream", json={
         "messages": [{"role": "user", "content": "Marte"}], "use_knowledge": True,
+        "generation": {"temperature": 0.0, "max_new_tokens": 3},
     }, headers=headers)
     assert streamed.status_code == 200
     assert streamed.headers["content-type"].startswith("text/event-stream")
@@ -110,6 +114,12 @@ def test_real_foundation_generation_with_retrieved_context(tmp_path, client):
     assert events[-1]["type"] == "done"
     text = "".join(e["content"] for e in events if e["type"] == "delta")
     assert text.strip() and len(text) == events[-1]["characters"]
+    assert text == answer
+    assert events[0]["generation"] == response.json()["generation"]
+    for route in ("/api/v1/chat/completions", "/api/v1/chat/stream"):
+        limited = client.post(route, json={"messages": [{"role": "user", "content": "Hi"}],
+            "generation": {"max_new_tokens": 4}}, headers=headers)
+        assert limited.status_code == 422
     assert client.post("/api/v1/chat/stream", json={
         "messages": [{"role": "user", "content": "Marte"}]}).status_code == 401
 

@@ -65,7 +65,19 @@ class ChatMessage(BaseModel):
     content: StrictStr = Field(min_length=1, max_length=8192)
 
 
+class FoundationGeneration(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    max_new_tokens: int | None = Field(default=None, ge=1, le=4096)
+    temperature: float = Field(default=0.8, ge=0, le=5, allow_inf_nan=False)
+    top_k: int = Field(default=40, ge=0, le=100_000)
+    top_p: float = Field(default=0.95, gt=0, le=1, allow_inf_nan=False)
+    repetition_penalty: float = Field(default=1.0, ge=1, le=10, allow_inf_nan=False)
+    seed: int = Field(default=42, ge=0, le=2**63 - 1)
+
+
 class ChatCompletionRequest(BaseModel):
+    generation: FoundationGeneration | None = None
     use_knowledge: StrictBool = False
     model_version: UUID | None = None
     model_config = ConfigDict(extra="forbid", protected_namespaces=("model_validate", "model_dump"))
@@ -269,6 +281,7 @@ class KnowledgeReference(BaseModel):
 
 
 class ChatCompletionResponse(BaseModel):
+    generation: FoundationGeneration | None = None
     model_config = ConfigDict(protected_namespaces=("model_validate", "model_dump"))
     model_version: UUID | None = None
     references: list[KnowledgeReference] = Field(default_factory=list)

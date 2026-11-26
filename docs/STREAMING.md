@@ -94,3 +94,40 @@ then delivered a late completion and verified that history contained only the
 question. Clear-chat reset was also checked. Real model/network behavior remains
 covered by the separate actual-checkpoint HTTP loopback test. Full visual layout
 review and production proxy testing remain outstanding.
+
+
+## Generation controls
+
+Both chat routes accept an optional `generation` object:
+
+```json
+{
+  "messages": [{"role": "user", "content": "Hola"}],
+  "generation": {
+    "max_new_tokens": 64,
+    "temperature": 0.0,
+    "top_k": 40,
+    "top_p": 0.95,
+    "repetition_penalty": 1.0,
+    "seed": 42
+  }
+}
+```
+
+Omitted values retain the existing sampler defaults. The token count defaults to
+the server setting; an explicit count above that setting is rejected (422), not
+silently clamped. Global request bounds are 1–4096 new tokens, temperature 0–5,
+top-k 0–100000, top-p greater than 0 and at most 1, repetition penalty 1–10,
+and integer seed 0 through 2^63−1. Booleans/string coercions, non-finite floats,
+unknown fields and fractional integer controls are rejected.
+
+Temperature zero is greedy decoding. A seed controls stochastic sampling on the
+selected device; reproducibility across different devices/runtime versions is not
+promised. The full-response `generation` field and streaming metadata return the
+effective values. These controls are Foundation-only; specifying them for an
+external backend returns an explicit error. Desktop sampling controls are not yet
+exposed; existing desktop defaults remain unchanged.
+
+Actual-checkpoint tests compare direct inference, full HTTP response and SSE with
+identical greedy settings and retrieved context. They assert equal generated
+text, matching reported settings and token-budget rejection on both routes.
