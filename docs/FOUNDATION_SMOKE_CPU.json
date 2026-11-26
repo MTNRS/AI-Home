@@ -1,0 +1,88 @@
+{
+  "format": "ai-home-foundation-v1",
+  "device": "cpu",
+  "inference_device": "cpu",
+  "python_version": "3.11.9",
+  "torch_version": "2.15.0+cpu",
+  "checkpoint_sha256": "5a4307c7965afb972699b96d9cc5f74fa01305dce21432cce63c422521ee2c2b",
+  "parameter_count": 27808,
+  "step": 8,
+  "tokenizer_sha256": "4593ce79dbeb4a7cce792c97e641f62f23d11abf5accfcb70410489f090c0f46",
+  "dataset_sha256": "02df7a0350a4517c499e2e9a20a086dcd7e617ba354e23ae26738569e4845351",
+  "embedding_delta_l2_since_resume": 0.02502243034541607,
+  "validation": {
+    "loss": 5.615235095121423,
+    "tokens": 784,
+    "perplexity": 274.57792353832775
+  },
+  "metrics": [
+    {
+      "step": 1,
+      "train_loss": 5.685358047485352,
+      "learning_rate": 0.00015,
+      "elapsed_seconds": 0.006997699994826689,
+      "tokens_per_second": 4572.931109315517,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 2,
+      "train_loss": 5.6574625968933105,
+      "learning_rate": 0.0003,
+      "elapsed_seconds": 0.010619599997880869,
+      "tokens_per_second": 6026.592339897091,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 3,
+      "train_loss": 5.637936115264893,
+      "learning_rate": 0.0002819134295108992,
+      "elapsed_seconds": 0.01433829999587033,
+      "tokens_per_second": 6695.354402380311,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 4,
+      "train_loss": 5.628079891204834,
+      "learning_rate": 0.00023249999999999999,
+      "elapsed_seconds": 0.018139899999368936,
+      "tokens_per_second": 7056.268226641435,
+      "gpu_peak_bytes": 0,
+      "validation_loss": 5.6287216069746995
+    },
+    {
+      "step": 5,
+      "train_loss": 5.623262882232666,
+      "learning_rate": 0.000165,
+      "elapsed_seconds": 0.004041500011226162,
+      "tokens_per_second": 7917.852260574763,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 6,
+      "train_loss": 5.6037468910217285,
+      "learning_rate": 9.750000000000003e-05,
+      "elapsed_seconds": 0.007272000002558343,
+      "tokens_per_second": 8800.880084912587,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 7,
+      "train_loss": 5.5976738929748535,
+      "learning_rate": 4.808657048910077e-05,
+      "elapsed_seconds": 0.010549200000241399,
+      "tokens_per_second": 9100.21612992485,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 8,
+      "train_loss": 5.595621585845947,
+      "learning_rate": 2.9999999999999997e-05,
+      "elapsed_seconds": 0.013785300005110912,
+      "tokens_per_second": 9285.25312851689,
+      "gpu_peak_bytes": 0,
+      "validation_loss": 5.615235095121423
+    }
+  ],
+  "generated_text": "KapB\u0011f\ufffd\ufffd\u0004mediade \ufffduDuu\u0013",
+  "claim": "Mechanical smoke experiment only; no conversational capability established"
+}

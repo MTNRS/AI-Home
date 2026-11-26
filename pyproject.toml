@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-home"
+version = "0.1.0"
+description = "Community-driven AI and voluntary compute platform"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.14,<2.0",
+    "argon2-cffi>=23.1,<26.0",
+    "email-validator>=2.2,<3.0",
+    "fastapi>=0.115,<1.0",
+    "httpx>=0.27,<1.0",
+    "PyJWT[crypto]>=2.10,<3.0",
+    "keyring>=25.0,<26.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "psutil>=6.0,<8.0",
+    "pydantic-settings>=2.6,<3.0",
+    "SQLAlchemy>=2.0,<3.0",
+    "uvicorn[standard]>=0.30,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+]
+llm = [
+    "mwparserfromhell>=0.7,<1.0",
+    "torch>=2.6,<3.0",
+]
+
+[project.scripts]
+ai-home-foundation-train = "ai_home.foundation.__main__:main"
+ai-home-desktop = "ai_home.desktop:main"
+ai-home-import-conversations = "ai_home.conversation_corpus:main"
+ai-home-import-wikipedia = "ai_home.wikipedia_corpus:main"
+ai-home-train = "ai_home.train_llm:main"
+
+[tool.alembic]
+script_location = "services/api/migrations"
+
+[tool.setuptools.packages.find]
+where = ["services/api/src"]
+
+[tool.pytest.ini_options]
+testpaths = ["services/api/tests"]
+pythonpath = ["services/api/src"]
+
