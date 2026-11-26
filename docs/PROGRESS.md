@@ -1258,3 +1258,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   accesibles, sin solapamientos observados. Sin cambio de diseño necesario.
 - Instancias cerradas y procesos finalizados. Evidencia y alcance limitado a DPI
   actual en DESKTOP_VISUAL_REVIEW.md. Otros DPI/accesibilidad pendientes.
+
+## 2026-11-26 — Formulario de entrenamiento visual
+
+- TRAINING conecta manifiesto/configuración/salida/reanudación y CPU/CUDA mediante
+  flujo compartido con CLI; cancelación y métricas reales al terminar.
+- Tk real entrenó cuatro pasos y mostró checkpoint/pérdidas, artefactos conservados.
+  CLI regresión 1 passed in 2.51s y navegación de diez secciones OK.
+- Revisión visual del nuevo formulario y métricas en vivo pendientes.

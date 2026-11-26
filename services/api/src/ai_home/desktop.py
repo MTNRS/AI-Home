@@ -752,7 +752,7 @@ def main() -> None:
                  [("Inspeccionar checkpoint", self._inspect_checkpoint_dialog),
                   ("Probar imagen local (experimental)", self._visual_inference_dialog)]),
                 ("TRAINING", "Selecciona datasets autorizados, configuración y checkpoints. El entrenamiento produce un candidato; no lo publica automáticamente.",
-                 [("Entrenar o reanudar", self._run_training_dialog), ("Inspeccionar entrenamiento", self._inspect_checkpoint_dialog),
+                 [("Entrenar o reanudar", self._run_training_dialog), ("Entrenamiento visual (experimental)", self._visual_training_dialog), ("Inspeccionar entrenamiento", self._inspect_checkpoint_dialog),
                   ("Mis aportaciones consentidas", self._manage_training_candidates)]),
                 ("EVALUATION", "Ejecuta una suite reproducible o consulta sus resultados. Una prueba ejecutable no demuestra una capacidad adquirida.",
                  [("Ejecutar evaluación", self._run_evaluation_dialog), ("Abrir informe", self._experiment_report_dialog)]),
@@ -797,6 +797,10 @@ def main() -> None:
         def _visual_inference_dialog(self):
             from ai_home.visual_desktop import open_visual_dialog
             open_visual_dialog(self)
+
+        def _visual_training_dialog(self):
+            from ai_home.visual_training_desktop import open_visual_training_dialog
+            open_visual_training_dialog(self)
 
         def _scrollable_page(self, parent):
             canvas = tk.Canvas(parent, highlightthickness=0, background="#eeeeee", height=400)

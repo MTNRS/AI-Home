@@ -25,7 +25,20 @@ def main():
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--stop-after", type=int)
     args = parser.parse_args()
-    with args.config.open("rb") as source:
+    cancel = threading.Event()
+    previous = signal.signal(signal.SIGINT, lambda *_: cancel.set())
+    try:
+        report = train_from_config(args.dataset, args.config, args.output_dir, device=args.device,
+                                   resume=args.resume, stop_after=args.stop_after, cancel=cancel)
+    finally:
+        signal.signal(signal.SIGINT, previous)
+    print(json.dumps(report, ensure_ascii=True))
+
+
+def train_from_config(dataset, config_path, output_dir, *, device="cpu", resume=None, stop_after=None, cancel=None):
+    config_path, output_dir = Path(config_path), Path(output_dir)
+    cancel = cancel if cancel is not None else threading.Event()
+    with config_path.open("rb") as source:
         raw = source.read(65537)
     if len(raw) > 65536:
         raise ValueError("Visual training configuration exceeds 64 KiB")
@@ -34,34 +47,29 @@ def main():
         raise ValueError("Expected explicit model, vision, training, prompt and tokenizer_vocab_size")
     training = TrainingConfig(**data["training"])
     vision = VisionConfig(**data["vision"])
-    records, dataset_hash = load_visual_manifest(args.dataset)
+    records, dataset_hash = load_visual_manifest(dataset)
     if "vocab_size" in data["model"]:
         raise ValueError("Use tokenizer_vocab_size; model vocabulary is derived from BPE")
-    if args.resume:
-        loaded, tokenizer, _ = load_vision_weights(args.resume, max_bytes=training.memory_budget_bytes)
+    if resume:
+        loaded, tokenizer, _ = load_vision_weights(resume, max_bytes=training.memory_budget_bytes)
         del loaded
     else:
         tokenizer = ByteBPE.train([r["caption"] for r in records if r["split"] == "train"],
                                   vocab_size=data["tokenizer_vocab_size"])
     config = FoundationConfig(**data["model"], vocab_size=tokenizer.vocab_size)
     # Exclusive output directory prevents overwriting another run's checkpoints.
-    args.output_dir.mkdir(parents=True, exist_ok=False)
-    cancel = threading.Event()
-    previous = signal.signal(signal.SIGINT, lambda *_: cancel.set())
-    try:
-        _, history, checkpoint = train_visual(args.dataset, tokenizer, config, vision, training,
-            args.output_dir, device=args.device, prompt=data["prompt"], resume=args.resume,
-            stop_after=args.stop_after, cancel=cancel)
-    finally:
-        signal.signal(signal.SIGINT, previous)
+    output_dir.mkdir(parents=True, exist_ok=False)
+    _, history, checkpoint = train_visual(dataset, tokenizer, config, vision, training,
+        output_dir, device=device, prompt=data["prompt"], resume=resume,
+        stop_after=stop_after, cancel=cancel)
     report = {"format": "ai-home-visual-training-report-v1", "dataset_sha256": dataset_hash,
         "model": asdict(config), "vision": asdict(vision), "training": asdict(training),
         "tokenizer_sha256": tokenizer.fingerprint, "prompt": data["prompt"],
         "checkpoint": checkpoint.name if checkpoint else None, "history": history,
         "cancelled": cancel.is_set(), "status": "candidate", "quality_claim": "none"}
-    with (args.output_dir / "training-report.json").open("x", encoding="utf-8") as output:
+    with (output_dir / "training-report.json").open("x", encoding="utf-8") as output:
         json.dump(report, output, indent=2, ensure_ascii=False)
-    print(json.dumps(report, ensure_ascii=True))
+    return report
 
 
 if __name__ == "__main__":

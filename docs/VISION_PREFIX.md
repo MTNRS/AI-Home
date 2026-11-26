@@ -378,3 +378,20 @@ Inspeccionada con Computer Use en 760×560 y 600×450: controles y textos comple
 respuesta visible y desplazable, sin defectos observados en esos estados. Ambas
 instancias de prueba cerradas y procesos terminados. Detalles y límites en
 DESKTOP_VISUAL_REVIEW.md; otros DPI/accesibilidad siguen pendientes.
+
+## Entrenamiento visual en el escritorio
+
+TRAINING → «Entrenamiento visual (experimental)» permite elegir manifiesto JSON,
+configuración JSON, carpeta de salida nueva, checkpoint opcional de reanudación y
+CPU/CUDA. Reutiliza `vision_train_cli.train_from_config`; no duplica el entrenamiento.
+Ejecuta en el worker de escritorio, permite cancelación cooperativa y cierra/cancela
+al cambiar de perfil. Al terminar muestra checkpoint, precisión y métricas por paso
+(pérdidas train/validation y tokens supervisados/s), además de conservar el informe.
+No hay actualización de métricas en vivo todavía. No publica ni activa candidatos.
+
+Prueba funcional Tk con entrenamiento real: `artifacts/verify-visual-training-ui.py`
+rellenó e invocó el formulario y comprobó paso 4 y métricas mostradas; artefactos en
+`artifacts/visual-training-ui-v1`. Harness ejecutó la operación síncronamente para
+verificar el resultado; producto usa _background. CLI regresión: 1 passed in 2.51s;
+navegación de diez secciones también pasó. Revisión visual/DPI de este formulario
+nuevo y prueba específica de cancelación durante entrenamiento desde UI pendientes.
