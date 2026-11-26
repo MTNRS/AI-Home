@@ -718,3 +718,14 @@ Existing TF-IDF remains the default. CPU and CUDA tests cover exact-text retriev
 provenance, checkpoint mismatch, malformed vectors and RAG context refusal. Full
 suite: 266 passed, 5 PostgreSQL-dependent skips; final added context assertion:
 2 embedding tests passed on CPU/CUDA. No semantic retrieval improvement is claimed.
+
+### Retrieval comparison with labeled paraphrases
+
+Added a bounded retrieval evaluation CLI with per-query document relevance,
+recall@k and reciprocal rank, plus eight original fictional ES/EN documents and
+separate paraphrase queries (retrieval permission only). Actual CPU comparison
+with the existing trained Nano checkpoint: both TF-IDF and own neural retrieval
+hit 5/8 at k=3; MRR 0.5000 versus 0.5417. This small diagnostic does not demonstrate
+a general semantic gain. Reports and reproduction are in RETRIEVAL_COMPARISON.json
+and RETRIEVAL_EVALUATION.md. Full suite: 267 passed, 5 PostgreSQL skips. The final
+fixture wrapper change passed its focused test and both documented CLI paths.
