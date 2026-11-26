@@ -1063,3 +1063,17 @@ visuales bloqueantes observados en esos tamaños; no cubre otros DPI/accesibilid
 CI 6a25e3f correcta: Foundation 291/15 omitidas y paquete/API/distribuido wheel;
 PostgreSQL 3.11/3.12 298/8 omitidas por versión. Actualizado inventario con esa
 evidencia y con los fallos locales previos por RAM/reintentos, sin ocultarlos.
+
+### Navegación por las diez secciones del objetivo
+
+Selector persistente FOUNDATION MODEL / TRAINING / EVALUATION / EVOLUTION /
+KNOWLEDGE / DISTRIBUTED COMPUTE / MODELS / CHAT / PRIVACY / CREDITS. Reutiliza
+vistas y diálogos funcionales, mantiene accesos previos y no inventa estadísticas.
+Las páginas descriptivas no autentican, entrenan, aprueban ni cambian consentimientos
+por seleccionarlas. Verificación Tk de diez rutas y apertura del formulario real
+de training; script reproducible scripts/verify_desktop_sections.py. Revisión visual
+900×700 del selector/Chat/Training y 720×560 del chat/control/compositor sin recortes
+bloqueantes observados. Ventanas cerradas. No revisión visual integral/DPI.
+32 pruebas relacionadas correctas (12,46 s). No repetida suite neuronal completa
+por la presión de RAM documentada; CI anterior aae8715 correcta. Detalles en
+DESKTOP_CONTROL_SECTIONS.md. Esto consolida navegación, no completa todo el dashboard.

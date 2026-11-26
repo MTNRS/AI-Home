@@ -70,3 +70,17 @@ not every DPI, screen reader, keyboard-only path or error dialog. The records we
 synthetic UI fixtures, not evidence of completed distributed jobs. The separate
 HTTP/CPU/CUDA experiments remain the evidence for real work. No screenshot of a
 real user's account or private work was captured.
+
+## Named control navigation (2026-11-26)
+
+Inspected the new Sección selector on the development app with empty settings and
+no account. At 900×700, the ten named sections appeared in the dropdown and
+selecting TRAINING opened the real page with train/resume, inspection and consented
+contribution entry points. Chat's controls and composer remained visible. A second
+window started at the minimum 720×560; its selector, original shortcuts, stop/
+reference controls, composer and status remained accessible. Both windows were
+closed and absence verified. No training/network/account action was triggered.
+
+All ten routes and the existing training form were additionally checked with
+hidden real-Tk widgets. The visual check does not cover every section/dialog,
+other DPI settings, keyboard-only navigation or screen readers.

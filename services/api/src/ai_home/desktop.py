@@ -704,6 +704,7 @@ def main() -> None:
             self._build_provider_tab(ttk, self._scrollable_page(provider_tab))
             self._build_account_tab(ttk, self._scrollable_page(account_tab))
             self._build_node_tab(ttk, self._scrollable_page(node_tab))
+            self._build_control_sections(ttk, chat_tab, provider_tab, account_tab, node_tab)
             nav = ttk.Frame(header)
             nav.pack(side="right", anchor="n")
             ttk.Button(
@@ -743,6 +744,54 @@ def main() -> None:
                 padding=(16, 3),
                 foreground="#62676b",
             ).pack(side="bottom", fill="x", padx=8, pady=(0, 3), before=self.page_stack)
+
+        def _build_control_sections(self, ttk, chat_tab, provider_tab, account_tab, node_tab):
+            self.control_sections = {"CHAT": chat_tab, "DISTRIBUTED COMPUTE": node_tab}
+            definitions = [
+                ("FOUNDATION MODEL", "Inspecciona la arquitectura, configuración, parámetros y estado de un checkpoint propio.",
+                 [("Inspeccionar checkpoint", self._inspect_checkpoint_dialog)]),
+                ("TRAINING", "Selecciona datasets autorizados, configuración y checkpoints. El entrenamiento produce un candidato; no lo publica automáticamente.",
+                 [("Entrenar o reanudar", self._run_training_dialog), ("Inspeccionar entrenamiento", self._inspect_checkpoint_dialog),
+                  ("Mis aportaciones consentidas", self._manage_training_candidates)]),
+                ("EVALUATION", "Ejecuta una suite reproducible o consulta sus resultados. Una prueba ejecutable no demuestra una capacidad adquirida.",
+                 [("Ejecutar evaluación", self._run_evaluation_dialog), ("Abrir informe", self._experiment_report_dialog)]),
+                ("EVOLUTION", "Ejecuta un experimento controlado y consulta su comparación y decisión. No activa modelos automáticamente.",
+                 [("Nuevo experimento", self._run_evolution_dialog), ("Abrir resultado", self._experiment_report_dialog)]),
+                ("KNOWLEDGE", "Consulta fuentes y fragmentos de índices revisados o crea una versión nueva. La recuperación no modifica los pesos.",
+                 [("Explorar conocimiento", self._knowledge_dialog), ("Crear índice", self._build_knowledge_dialog)]),
+                ("MODELS", "Selecciona versiones del modelo propio o revisa el registro local, sus aprobaciones y activaciones.",
+                 [("Selección y conexión", lambda: self._show_page(provider_tab)),
+                  ("Registro, aprobación y rollback", self._model_registry_dialog), ("Inspeccionar checkpoint", self._inspect_checkpoint_dialog)]),
+                ("PRIVACY", "Gestiona memoria local, cuenta y aportaciones consentidas. Retirar datos no garantiza borrar su influencia de pesos ya entrenados.",
+                 [("Memoria de este perfil", self._manage_memories), ("Mis aportaciones", self._manage_training_candidates),
+                  ("Cuenta y consentimiento", lambda: self._show_page(account_tab))]),
+                ("CREDITS", "Consulta saldo, movimientos y límites de inferencia de tu cuenta. Son créditos computacionales internos, no dinero ni criptomonedas.",
+                 [("Saldo, movimientos y límite", self._show_credits)]),
+            ]
+            for title, description, actions in definitions:
+                page = ttk.Frame(self.page_stack)
+                self.page_stack.add(page, text=title)
+                content = self._scrollable_page(page)
+                ttk.Label(content, text=title, font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=(0, 8))
+                ttk.Label(content, text=description, wraplength=620).pack(anchor="w", pady=(0, 12))
+                for label, action in actions:
+                    ttk.Button(content, text=label, command=action).pack(anchor="w", pady=5)
+                self.control_sections[title] = page
+            order = ("FOUNDATION MODEL", "TRAINING", "EVALUATION", "EVOLUTION", "KNOWLEDGE",
+                     "DISTRIBUTED COMPUTE", "MODELS", "CHAT", "PRIVACY", "CREDITS")
+            navigation = ttk.Frame(self, padding=(18, 0, 18, 6))
+            navigation.pack(fill="x", before=self.page_stack)
+            ttk.Label(navigation, text="Sección").pack(side="left", padx=(0, 8))
+            self.control_section_var = tk.StringVar(value="CHAT")
+            selector = ttk.Combobox(navigation, textvariable=self.control_section_var,
+                                    values=order, state="readonly", width=28)
+            selector.pack(side="left")
+            selector.bind("<<ComboboxSelected>>", lambda _: self._show_page(self.control_sections[self.control_section_var.get()]))
+            def synchronize(*args):
+                selected = self.page_stack.select()
+                name = next((name for name, page in self.control_sections.items() if str(page) == selected), None)
+                self.control_section_var.set(name or "Configuración de cuenta / conexión")
+            self.page_stack.bind("<<NotebookTabChanged>>", synchronize, add="+")
 
         def _scrollable_page(self, parent):
             canvas = tk.Canvas(parent, highlightthickness=0, background="#eeeeee", height=400)
