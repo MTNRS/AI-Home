@@ -569,3 +569,14 @@ fragmentos del mismo holdout; esto no crea particiones train/test nuevas.
 `--dataset` exige `--shard-count`; `--shards` mantiene el formato manual anterior
 y no admite esa opcion. Crear el plan es local y no reserva creditos; `advance`
 conserva la autenticacion, envio y verificacion descritos anteriormente.
+
+El smoke `python -m ai_home.foundation.evaluation_smoke --output-dir NEW_DIR
+--worker-devices cpu cuda` ahora recorre esta entrada mediante un proceso CLI
+real. Conserva holdout.json versionado, plan, checkpoint y resultados; comprueba
+que planificar no crea trabajos ni reservas, y que todos los documentos del
+holdout llegan al plan. Inicia cuatro procesos del coordinador: planificacion,
+primer envio, observacion y consulta idempotente final. El informe
+DISTRIBUTED_EVALUATION_DATASET_SMOKE.json registra la ejecucion CPU/CUDA local:
+468 tokens, dos trabajos y tres creditos liquidados por nodo. La CI reutiliza
+el mismo smoke con CPU/CPU desde el paquete instalado; esta revision no se
+declara validada remotamente hasta que termine su workflow.

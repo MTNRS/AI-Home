@@ -1798,3 +1798,14 @@ en 78.42 segundos, sin fallos. CI comprobada de ae2078d: Tests 45854301608
 exito; verificados sus pasos, incluido paquete instalado, observador distribuido,
 permisos de evaluacion en Tk y entrenamiento distribuido. CI de fddfb20 aun
 en ejecucion al consultar; no se declara aprobada. Actualizado FOUNDATION_STATUS.
+
+
+### Dataset a evaluacion distribuida por HTTP real
+
+El smoke genera un holdout Knowledge versionado y ejecuta el CLI de planificacion
+en otro proceso. Comprueba cobertura de documentos y ausencia de reservas/trabajos
+antes de advance. Ejecucion CPU/CUDA completada: 468 tokens, perdida distribuida
+5.634302481626853 frente a referencia 5.634302383814102, dos trabajos completados,
+tres creditos por nodo, cero reservas pendientes y checkpoint intacto. Observador:
+nueve intentos, cero errores de transporte. Informe conservado en
+DISTRIBUTED_EVALUATION_DATASET_SMOKE.json. Un equipo, no prueba multihost.

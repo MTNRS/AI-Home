@@ -23,8 +23,7 @@ from ai_home.credit_admin import grant_credits
 from ai_home.migrate import migration_config
 from ai_home.node_worker import NodeAgent, detect_hardware
 from .continual import checkpoint_digest, compare_checkpoint
-from .data import prepare_records
-from .evaluation_coordinator import create_plan
+from .data import canonical_hash, prepare_records
 from .model import FoundationConfig
 from .training import TrainingConfig, train
 
@@ -40,6 +39,10 @@ def run(output, devices):
         "text": f"Documento {i}: Evaluamos un modelo propio con datos autorizados. " * 3}
         for i in range(8)]
     validation = prepare_records(records[4:])
+    holdout_path = output / "holdout.json"
+    holdout_version = canonical_hash(validation)
+    holdout_path.write_text(json.dumps({"format_version": 1, "dataset_version": holdout_version,
+                                      "records": validation}, indent=2), encoding="utf-8")
     config = FoundationConfig(vocab_size=280, width=16, layers=1, heads=2, kv_heads=1, hidden=32, context=16)
     training = TrainingConfig(steps=2, warmup=0)
     checkpoint = output / "model.pt"
@@ -86,9 +89,22 @@ def run(output, devices):
                 grant_credits(session, user_id=user["user_id"], amount=6,
                               idempotency_key="smoke-issuance", reason="isolated evaluation smoke")
             plan, report_path = output / "plan.json", output / "evaluation.json"
-            create_plan(checkpoint, [validation[:2], validation[2:]], plan, server=url,
-                        owner_user_id=user["user_id"], reward_credits=3,
-                        allow_public_node_processing=True, weights_public_and_redistributable=True)
+            planned = subprocess.run(python_command + ["-m", "ai_home.foundation.evaluation_coordinator",
+                "plan", "--checkpoint", str(checkpoint), "--dataset", str(holdout_path),
+                "--shard-count", "2", "--output", str(plan), "--server", url,
+                "--owner", user["user_id"], "--reward-credits", "3",
+                "--allow-public-node-processing", "--weights-public-and-redistributable"],
+                capture_output=True, text=True, timeout=90)
+            if planned.returncode:
+                raise RuntimeError("Evaluation planning process failed: " + planned.stderr[-2000:])
+            planning = json.loads(planned.stdout)
+            stored_plan = json.loads(plan.read_text(encoding="utf-8"))
+            assert planning == {"state": "planned", "plan_sha256": stored_plan["sha256"], "shards": 2}
+            planned_records = prepare_records([record for payload in stored_plan["payloads"]
+                                               for record in payload["shard"]["records"]])
+            assert {record["sha256"] for record in planned_records} == {record["sha256"] for record in validation}
+            assert owner.get("/api/v1/jobs").json() == []
+            assert owner.get("/api/v1/credits").json()["reserved"] == 0
             coordinator_command = python_command + ["-m", "ai_home.foundation.evaluation_coordinator",
                 "advance", "--checkpoint", str(checkpoint), "--plan", str(plan),
                 "--server", url, "--output", str(report_path)]
@@ -138,7 +154,8 @@ def run(output, devices):
             assert checkpoint_digest(checkpoint) == identity
             report = {"format": "ai-home-evaluation-smoke-v1", "transport": "real loopback HTTP",
                 "workers": worker_reports, "worker_balances": balances, "owner_balance": owner_balance,
-                "coordinator_processes": 3, "observation": observation, "completed_jobs": len(jobs), "checkpoint_sha256": identity,
+                "coordinator_processes": 4, "planning": planning, "holdout_dataset_sha256": holdout_version,
+                "observation": observation, "completed_jobs": len(jobs), "checkpoint_sha256": identity,
                 "training_embedding_delta_l2": trained["embedding_delta_l2"], "reference": reference,
                 "distributed_loss": evaluated["mean_loss"], "tokens": evaluated["tokens"],
                 "scope": "One machine, two worker processes; no multi-host or general capability claim"}

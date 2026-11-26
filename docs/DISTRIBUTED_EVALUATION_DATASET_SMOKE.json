@@ -1,0 +1,72 @@
+{
+  "format": "ai-home-evaluation-smoke-v1",
+  "transport": "real loopback HTTP",
+  "workers": [
+    {
+      "format": "ai-home-worker-service-measurement-v1",
+      "job_type": "foundation.evaluate.v1",
+      "device": "cpu",
+      "heartbeat_service_seconds": 0.00550489999295678,
+      "claim_service_seconds": 0.009650699998019263,
+      "execution_seconds": 1.3526897999981884,
+      "submit_service_seconds": 0.04655389999970794,
+      "claim_response_bytes": 38603,
+      "submit_request_bytes": 651,
+      "claim_service_bytes_per_second": 4000020.7247062894,
+      "submit_service_bytes_per_second": 13983.790831790337
+    },
+    {
+      "format": "ai-home-worker-service-measurement-v1",
+      "job_type": "foundation.evaluate.v1",
+      "device": "cuda",
+      "heartbeat_service_seconds": 0.00619379999989178,
+      "claim_service_seconds": 0.0074694999930216,
+      "execution_seconds": 1.8823431999917375,
+      "submit_service_seconds": 0.036659099991084076,
+      "claim_response_bytes": 38603,
+      "submit_request_bytes": 651,
+      "claim_service_bytes_per_second": 5168083.544556524,
+      "submit_service_bytes_per_second": 17758.2101076767
+    }
+  ],
+  "worker_balances": [
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    },
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    }
+  ],
+  "owner_balance": {
+    "available": 0,
+    "reserved": 0,
+    "earned": 0
+  },
+  "coordinator_processes": 4,
+  "planning": {
+    "state": "planned",
+    "plan_sha256": "08e7d09026aa10738fc4866aa440b171f57c47f21f8e8af0bbf02da832705291",
+    "shards": 2
+  },
+  "holdout_dataset_sha256": "89359cda011afc7ac7e48c24bf4d9c041eb697b1c199a6df15181f4aa1a01ec6",
+  "observation": {
+    "attempts": 9,
+    "transport_errors": 0
+  },
+  "completed_jobs": 2,
+  "checkpoint_sha256": "be9d477394bfb42a21c2aceff786919a5963133406f2ab41834ab0704ec4202c",
+  "training_embedding_delta_l2": 0.012670348398387432,
+  "reference": {
+    "loss": 5.634302383814102,
+    "tokens": 468,
+    "perplexity": 279.86361180874,
+    "checkpoint_sha256": "be9d477394bfb42a21c2aceff786919a5963133406f2ab41834ab0704ec4202c"
+  },
+  "distributed_loss": 5.634302481626853,
+  "tokens": 468,
+  "scope": "One machine, two worker processes; no multi-host or general capability claim"
+}
