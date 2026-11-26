@@ -47,6 +47,7 @@ def run_training(dataset, model_config, training_config, output_dir, *, device="
     result = train(records, output_dir / "model.pt", config, settings, device=device,
                    resume=resume, cancel=cancel, on_step=on_step,
                    reviewed_export=dataset if reviewed_export else None,
+                   reviewed_export_sha256=digest if reviewed_export else None,
                    initial_checkpoint=initial_checkpoint, validation_records=validation,
                    sequence_cache_dir=output_dir / 'sequence-cache' if disk_sequences else None)
     summary = {"checkpoint": str((output_dir / "model.pt").resolve()), "step": result["step"],

@@ -1564,3 +1564,13 @@ importacion antigua completa/incompleta y entrenamiento SFT real. Suite final:
 un cambio accidental de codificacion en un mensaje; se restauro antes de esta
 validacion final. Las particiones/huellas preparadas anteriores cambian; limites
 de compatibilidad documentados en TRAINING.md.
+
+### Vinculacion del export revisado al trabajo
+
+El hash preparado del export registrado en la configuracion se comprueba de nuevo
+en el entrenador antes de preparar secuencias. Una sustitucion intermedia por
+otro export con manifiesto valido produce error sin checkpoint ni resultado de
+exito. La lectura ahora limita bytes sobre un descriptor, sin stat/read separado.
+25 pruebas de contribuciones revisadas, correcciones y modelo aprobadas en
+20,25 s, incluida sustitucion controlada entre lecturas y entrenamiento real.
+No constituye autenticacion criptografica de los exports.

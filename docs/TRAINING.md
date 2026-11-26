@@ -403,3 +403,12 @@ a importaciones anteriores; no se promete reanudacion exacta de checkpoints
 creados antes de este cambio. El linaje antiguo sin grupos no permite comprobar
 familias retrospectivamente. Copias aportadas como conversaciones independientes
 no se reconocen semanticamente como una misma familia.
+
+El trabajo local vincula la lectura inicial del export revisado con la del
+entrenador mediante el hash de los registros preparados. Si el archivo cambia
+entre ambas, incluso por otro export con manifiesto valido, falla antes de
+preparar secuencias o actualizar pesos. Conserva `configuration.json` para
+diagnostico, sin checkpoint ni resultado de exito. Se requiere un directorio
+nuevo al reintentar. La lectura del export esta acotada sobre el mismo descriptor,
+sin depender de una consulta previa del tamano. Esto verifica consistencia local;
+no autentica la identidad del administrador ni sustituye su revision.

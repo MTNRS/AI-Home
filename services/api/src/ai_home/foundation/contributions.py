@@ -11,10 +11,13 @@ from .data import canonical_hash, prepare_records
 
 
 def load_reviewed_export(path, max_bytes=8_000_000):
-    path = Path(path)
-    if path.stat().st_size > max_bytes:
+    if type(max_bytes) is not int or max_bytes < 1:
+        raise ValueError("Invalid reviewed export read budget")
+    with Path(path).open("rb") as source:
+        content = source.read(max_bytes + 1)
+    if len(content) > max_bytes:
         raise ValueError("Reviewed export exceeds input budget")
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads(content.decode("utf-8"))
     export = TrainingDatasetExportResponse.model_validate(raw)
     manifest = {"dataset_version": raw["dataset_version"], "records": raw["records"]}
     if canonical_hash(manifest) != export.manifest_sha256 or export.item_count != len(export.records):

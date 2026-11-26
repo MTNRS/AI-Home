@@ -127,9 +127,11 @@ def evaluate(model, sequences, device, batch_size=2):
 def train(records, output, config=None, training=None, device="auto", resume=None,
           stop_after=None, on_step=None, reviewed_export=None, initial_checkpoint=None,
           validation_records=None, replay_records=None, replay_fraction=0.25, cancel=None,
-          sequence_cache_dir=None):
+          sequence_cache_dir=None, reviewed_export_sha256=None):
     if cancel is not None and cancel.is_set():
         raise TrainingCancelled("Training cancelled before initialization")
+    if reviewed_export_sha256 is not None and reviewed_export is None:
+        raise ValueError("Reviewed export digest requires a reviewed export")
     training = training or TrainingConfig()
     if resume and initial_checkpoint:
         raise ValueError("Resume and initialization are distinct operations")
@@ -149,6 +151,8 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
         if training.objective != "sft":
             raise ValueError("Reviewed conversations require SFT")
         records = load_reviewed_export(reviewed_export)
+        if reviewed_export_sha256 is not None and canonical_hash(records) != reviewed_export_sha256:
+            raise ValueError("Reviewed export changed after job configuration; start a new job")
     if validation_records is None:
         train_records, validation_records = split_records(records, allow_reviewed=reviewed_export is not None)
     else:

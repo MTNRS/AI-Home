@@ -14,7 +14,7 @@ from ai_home.models import TrainingContribution, TrainingDataset
 REVIEW_TOKEN = "test-training-review-token-0123456789"
 
 
-def test_frozen_contributions_reach_real_sft_without_public_release(client, tmp_path):
+def test_frozen_contributions_reach_real_sft_without_public_release(client, tmp_path, monkeypatch):
     torch = pytest.importorskip("torch")
     from ai_home.foundation.contributions import load_reviewed_export
     from ai_home.foundation.data import canonical_hash, prepare_records
@@ -65,6 +65,30 @@ def test_frozen_contributions_reach_real_sft_without_public_release(client, tmp_
     with pytest.raises(ValueError, match="sft"):
         run_training(path, model_path, training_path, tmp_path / "bad-objective", reviewed_export=True)
     assert not (tmp_path / "bad-objective").exists()
+    # Replace the source with another internally valid export between both reads.
+    # A manifest-valid replacement must not train under the first dataset hash.
+    import copy
+    from ai_home.foundation import training_job
+    replacement = copy.deepcopy(exported)
+    replacement["records"][0]["messages"][1]["content"] = "A different reviewed answer"
+    replacement["manifest_sha256"] = canonical_hash({"dataset_version": replacement["dataset_version"],
+                                                     "records": replacement["records"]})
+    original_train = training_job.train
+    def replace_before_training(*args, **kwargs):
+        path.write_text(json.dumps(replacement), encoding="utf-8")
+        return original_train(*args, **kwargs)
+    training_path.write_text(json.dumps(asdict(settings)), encoding="utf-8")
+    with monkeypatch.context() as patch:
+        patch.setattr(training_job, "train", replace_before_training)
+        with pytest.raises(ValueError, match="changed after job configuration"):
+            run_training(path, model_path, training_path, tmp_path / "changed-export", reviewed_export=True)
+    assert not (tmp_path / "changed-export" / "model.pt").exists()
+    assert not (tmp_path / "changed-export" / "result.json").exists()
+    path.write_text(json.dumps(exported), encoding="utf-8")
+    with pytest.raises(ValueError, match="exceeds input budget"):
+        load_reviewed_export(path, max_bytes=32)
+    with pytest.raises(ValueError, match="Invalid reviewed export read budget"):
+        load_reviewed_export(path, max_bytes=True)
     exported["records"][0]["messages"][1]["content"] = "tampered"
     path.write_text(json.dumps(exported), encoding="utf-8")
     with pytest.raises(ValueError, match="manifest"):
