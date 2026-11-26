@@ -85,3 +85,6 @@ The window does not optimize preferences, approve its own content or start SFT.
 A real Tk functional smoke routed its desktop HTTP helper into the real in-process
 FastAPI/database, verified the unchecked-consent gate and new candidate/provenance.
 This is functional evidence, not a visual layout or real-network transport review.
+The separate [visual review](DESKTOP_VISUAL_REVIEW.md) verified the initial dialog
+layout, response selection and unchecked-consent error on Windows. Other sizes,
+DPI scaling and long-content scrolling remain unverified.

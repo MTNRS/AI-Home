@@ -907,3 +907,12 @@ procedencia. El test de correcciones/SFT atraviesa ahora el helper HTTP de escri
 Suite previa al último ajuste del test: 288 correctas, 5 PostgreSQL omitidas;
 tests finales de correcciones: 2 correctos. Revisión visual pendiente. CI del código
 anterior 27d005d pasó (Foundation y matriz PostgreSQL 3.11/3.12).
+
+### Revisión visual del editor de correcciones
+
+Revisión Windows con Tk real y cuatro mensajes de desarrollo: controles legibles
+en el tamaño inicial, cambio de respuesta/prefijo correcto y error visible al
+enviar sin confirmaciones. Sin envío de contribuciones en esta revisión. Ventana
+cerrada y ausencia comprobada. Redimensionado/DPI y textos largos sin verificar;
+detalle en DESKTOP_VISUAL_REVIEW.md. Suite completa actual: 288 correctas,
+5 PostgreSQL omitidas, 39,48 segundos. No demuestra calidad del modelo.
