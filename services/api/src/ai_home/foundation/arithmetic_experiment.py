@@ -37,7 +37,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--device', choices=('cpu', 'cuda'), default='cpu')
+    parser.add_argument('--seed', type=int, default=42)
     args = parser.parse_args()
+    if not 0 <= args.seed < 2**32:
+        parser.error('Seed must be an integer between 0 and 2**32 - 1')
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(2)
@@ -45,7 +48,7 @@ def main():
     config = FoundationConfig(vocab_size=262, width=64, layers=2, heads=4,
                               kv_heads=2, hidden=128, context=16)
     training = TrainingConfig(steps=1000, batch_size=16, learning_rate=.002,
-        warmup=30, checkpoint_every=1000, objective='sft', seed=42)
+        warmup=30, checkpoint_every=1000, objective='sft', seed=args.seed)
     def save(name, value):
         (output / name).write_text(json.dumps(value, indent=2), encoding='utf-8')
     plan = {'format': 'ai-home-arithmetic-protocol-v1', 'model': asdict(config),

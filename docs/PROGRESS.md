@@ -1415,3 +1415,11 @@ pares y sus permutaciones; falla 0+0 (produce 1). No prueba matemáticas general
 ni se promociona candidato. Protocolo, script, checkpoints locales e informe
 conservados; detalles en ARITHMETIC_EXPERIMENT.md. Suite local anterior completa:
 363 aprobadas y 7 PostgreSQL omitidas. Nueva prueba de particiones aprobada.
+
+### Repetición aritmética: variación entre semillas
+
+Sin cambiar el protocolo, semillas 7 y 123 alcanzan 6/14 y 7/14 frente a 13/14
+con 42; las tres parten de 0/14 tras un paso. Media descriptiva 61,9% sobre los
+mismos 14 casos, no 42 pruebas independientes. El mejor resultado no es estable
+entre semillas. Se conservan todos los informes/checkpoints y no se promueve
+ningún modelo. CLI admite semilla explícita; detalles en ARITHMETIC_EXPERIMENT.md.

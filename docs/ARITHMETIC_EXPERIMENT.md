@@ -33,3 +33,28 @@ pero esta ejecución del experimento fue CUDA. Informe publicado:
 
 Antes de este experimento, suite local completa: 363 aprobadas, 7 PostgreSQL
 omitidas, 44.13 segundos. La nueva prueba del protocolo pasó por separado.
+
+## Repetición con semillas fijadas 7 y 123
+
+Se añadieron dos ejecuciones tras observar el resultado inicial, sin cambiar
+datos, particiones, arquitectura, precisión, LR, pasos ni regla de generación.
+Las semillas 7 y 123 se declararon antes de ejecutar esas repeticiones. El CLI
+acepta `--seed`; el valor predeterminado sigue siendo 42. No se seleccionó ni
+promovió un candidato a partir de estos resultados.
+
+| Semilla | Tras 1 paso | Tras 1.000 pasos |
+| --- | --- | --- |
+| 42 | 0/14 | 13/14 |
+| 7 | 0/14 | 6/14 |
+| 123 | 0/14 | 7/14 |
+
+Media descriptiva final: 61,9%; rango 42,9–92,9%. Son los mismos 14 problemas
+repetidos, no 42 problemas independientes. Tres semillas son insuficientes para
+establecer fiabilidad general. La mejora desde el inicio se repite, pero el
+13/14 inicial no representa un resultado estable del procedimiento. Este
+resultado señala sensibilidad a inicialización/muestreo; no identifica por sí
+solo la causa ni justifica modificar una versión publicada.
+
+Informes completos [semilla 7](ARITHMETIC_SEED7.json) y
+[semilla 123](ARITHMETIC_SEED123.json); checkpoints y protocolos locales en
+`artifacts/arithmetic-seed7-v1` y `artifacts/arithmetic-seed123-v1`.
