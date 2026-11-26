@@ -28,3 +28,7 @@ Suite completa tras integrar exportaciones revisadas: `python -m pytest -q` — 
 ## Aprendizaje incremental con replay
 
 `python -m pytest -q`: 132 aprobadas, 5 omitidas, 12,74 segundos. `git diff --check`: exit 0. La nueva prueba entrena padre y candidato, verifica tokenizador invariable, restricciones heredadas, padre intacto, reanudación bit a bit con replay y bloqueo de contaminación ancestral. Experimento persistente: `python -m ai_home.foundation.continual_smoke --output-dir artifacts/continual-smoke-v1 --device cpu`, exit 0; informe conservado en CONTINUAL_SMOKE_CPU.json.
+
+## Evaluación de generación y evolución
+
+`python -m pytest -q`: 135 aprobadas, 5 omitidas, 13,70 segundos. `git diff --check`: exit 0. Las pruebas entrenan dos candidatos reales, verifican generación determinista, puntuación exacta, prompts truncados, contaminación conocida y requisitos de aceptación. Pruebas unitarias de decisión usan cifras sintéticas únicamente para validar reglas; el experimento persistente usa pérdidas y generaciones reales. Comandos y artefactos en EVOLUTION.md.

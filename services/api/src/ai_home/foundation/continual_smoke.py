@@ -15,6 +15,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device", choices=("cpu", "cuda", "auto"), default="cpu")
+    parser.add_argument("--context", type=int, default=16)
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(2)
@@ -30,7 +31,7 @@ def main():
         (args.output_dir / f"{split}.json").write_text(json.dumps(
             {"format_version": 1, "records": datasets[split]}, indent=2), encoding="utf-8")
     config = FoundationConfig(vocab_size=280, width=32, layers=2, heads=4,
-                              kv_heads=2, hidden=64, context=16)
+                              kv_heads=2, hidden=64, context=args.context)
     settings = TrainingConfig(steps=8, warmup=2, batch_size=2, checkpoint_every=4)
     for name, value in (("model-config", config), ("training-config", settings)):
         (args.output_dir / f"{name}.json").write_text(json.dumps(asdict(value), indent=2), encoding="utf-8")

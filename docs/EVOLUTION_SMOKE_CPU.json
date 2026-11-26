@@ -1,0 +1,228 @@
+{
+  "format": "ai-home-evolution-result-v1",
+  "proposal": {
+    "format": "ai-home-evolution-proposal-v1",
+    "target_category": "consistency",
+    "limitation": {
+      "passed": 0,
+      "total": 2,
+      "accuracy": 0.0
+    },
+    "parent_sha256": "2111fe448c725898a65f8be213cb04fca3456e5e2c6395d97b0acb1924da6616",
+    "hypothesis": "Changing the learning rate may improve the weakest measured category without regression",
+    "change": {
+      "learning_rate": [
+        0.0003,
+        0.00015
+      ]
+    },
+    "control_config": {
+      "steps": 8,
+      "batch_size": 2,
+      "accumulation": 1,
+      "learning_rate": 0.0003,
+      "warmup": 2,
+      "clip": 1.0,
+      "seed": 42,
+      "checkpoint_every": 4,
+      "precision": "fp32",
+      "memory_budget_bytes": 2000000000,
+      "objective": "causal"
+    },
+    "experimental_config": {
+      "steps": 8,
+      "batch_size": 2,
+      "accumulation": 1,
+      "learning_rate": 0.00015,
+      "warmup": 2,
+      "clip": 1.0,
+      "seed": 42,
+      "checkpoint_every": 4,
+      "precision": "fp32",
+      "memory_budget_bytes": 2000000000,
+      "objective": "causal"
+    },
+    "acceptance_rule": "Strict target accuracy gain, no category regression, loss no worse than control",
+    "publication": "disabled"
+  },
+  "control": {
+    "format": "ai-home-continual-v1",
+    "status": "candidate",
+    "parent_sha256": "2111fe448c725898a65f8be213cb04fca3456e5e2c6395d97b0acb1924da6616",
+    "candidate_sha256": "d416814ccff84ed69a0ad0f1c2e55b5894fe11318f1e1bf25103c9e1cf35970a",
+    "validation_sha256": "c8bc626ea821ea8f445d8846cce9f87e64392a26ff253b01699952ca78c546d7",
+    "replay_sha256": "ce5aed96325b89e329dbd96fbbdbe3847a64771259f33fb405d4f76024164f7c",
+    "dataset_sha256": "57ac28d60b00244375879406dba7d7b82c73fed72624cd12702b98b4411ec733",
+    "tokenizer_sha256": "9d003b0df9325e5de793ca31260c7026fd276a29e2458dfe2b0fc6930f98dcc1",
+    "data_visibility": "public",
+    "training_config": {
+      "steps": 8,
+      "batch_size": 2,
+      "accumulation": 1,
+      "learning_rate": 0.0003,
+      "warmup": 2,
+      "clip": 1.0,
+      "seed": 42,
+      "checkpoint_every": 4,
+      "precision": "fp32",
+      "memory_budget_bytes": 2000000000,
+      "objective": "causal"
+    },
+    "device": "cpu",
+    "baseline": {
+      "loss": 5.61068868637085,
+      "tokens": 1536,
+      "perplexity": 273.3324135082616
+    },
+    "candidate": {
+      "loss": 5.55414080619812,
+      "tokens": 1536,
+      "perplexity": 258.30493515182644
+    },
+    "loss_delta": -0.05654788017272949,
+    "max_loss_increase": 0.0,
+    "regression_gate_passed": true,
+    "replay_samples_per_batch": 1,
+    "embedding_delta_l2": 0.11385951191186905,
+    "promotion": "not_performed; independent capability evaluation and approval required"
+  },
+  "experiment": {
+    "format": "ai-home-continual-v1",
+    "status": "candidate",
+    "parent_sha256": "2111fe448c725898a65f8be213cb04fca3456e5e2c6395d97b0acb1924da6616",
+    "candidate_sha256": "63c6be9d2230c0c4946dc529418bac8f08920b3cd53ada245c9149d897c47458",
+    "validation_sha256": "c8bc626ea821ea8f445d8846cce9f87e64392a26ff253b01699952ca78c546d7",
+    "replay_sha256": "ce5aed96325b89e329dbd96fbbdbe3847a64771259f33fb405d4f76024164f7c",
+    "dataset_sha256": "57ac28d60b00244375879406dba7d7b82c73fed72624cd12702b98b4411ec733",
+    "tokenizer_sha256": "9d003b0df9325e5de793ca31260c7026fd276a29e2458dfe2b0fc6930f98dcc1",
+    "data_visibility": "public",
+    "training_config": {
+      "steps": 8,
+      "batch_size": 2,
+      "accumulation": 1,
+      "learning_rate": 0.00015,
+      "warmup": 2,
+      "clip": 1.0,
+      "seed": 42,
+      "checkpoint_every": 4,
+      "precision": "fp32",
+      "memory_budget_bytes": 2000000000,
+      "objective": "causal"
+    },
+    "device": "cpu",
+    "baseline": {
+      "loss": 5.61068868637085,
+      "tokens": 1536,
+      "perplexity": 273.3324135082616
+    },
+    "candidate": {
+      "loss": 5.583737055460612,
+      "tokens": 1536,
+      "perplexity": 266.0640463257517
+    },
+    "loss_delta": -0.026951630910237334,
+    "max_loss_increase": 0.0,
+    "regression_gate_passed": true,
+    "replay_samples_per_batch": 1,
+    "embedding_delta_l2": 0.05692252889275551,
+    "promotion": "not_performed; independent capability evaluation and approval required"
+  },
+  "decision": "reject",
+  "reason": "Held-out loss did not match the control",
+  "promoted": false,
+  "suite_sha256": "d4470b4bda92e5ff75b571680d9594f55e403c44786a9424c66849f6ebaeaa23",
+  "control_categories": {
+    "consistency": {
+      "passed": 0,
+      "total": 2,
+      "accuracy": 0.0
+    },
+    "english": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "instructions": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "knowledge": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "mathematics": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "programming": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "reasoning": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "robustness": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "spanish": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    }
+  },
+  "experiment_categories": {
+    "consistency": {
+      "passed": 0,
+      "total": 2,
+      "accuracy": 0.0
+    },
+    "english": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "instructions": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "knowledge": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "mathematics": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "programming": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "reasoning": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "robustness": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "spanish": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    }
+  }
+}

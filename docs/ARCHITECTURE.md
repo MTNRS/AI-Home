@@ -226,3 +226,7 @@ Para conservar el proxy externo, configurar explícitamente
 Esta selección explícita es necesaria al actualizar instalaciones del proxy.
 El endpoint HTTP devuelve una respuesta completa; streaming/cancelación HTTP
 siguen pendientes (el generador neuronal ya soporta ambos localmente).
+
+## Motores de evaluación y evolución
+
+`foundation.evaluation` carga un checkpoint propio y ejecuta probes declarativos sin ejecutar código generado ni llamar a jueces externos. `foundation.evolution` conserva una propuesta previa, crea dos candidatos mediante continual y compara evidencia del mismo protocolo. Solo emite propuesta; no tiene rutas de escritura al modelo activo, permisos, créditos o infraestructura.

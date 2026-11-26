@@ -73,3 +73,7 @@ Las exportaciones revisadas entran por una opción explícita, separada del corp
 ## 2026-11-26: separar reanudación y aprendizaje incremental
 
 Resume restaura el optimizador y exige datos/configuración idénticos. Inicializar un candidato conserva pesos y tokenizador propios pero crea un optimizador nuevo. Los hashes de entrenamiento y holdout se acumulan por linaje; un checkpoint sin ese historial no puede demostrar aislamiento y se rechaza como padre incremental. Un resultado favorable de pérdida nunca activa publicación.
+
+## 2026-11-26: experimento rechazado también es evidencia
+
+El primer ciclo compara tasa de aprendizaje con un control del mismo presupuesto. Requiere ganancia de acierto y ausencia de regresiones; una pérdida menor aislada no basta. El resultado real fue rechazo y se conserva. Diez probes autorados no se presentan como benchmark general ni prueba de capacidades adquiridas.
