@@ -1646,3 +1646,11 @@ La evolucion rechaza mezclar perdida de un checkpoint con probes de otro.
 Doce pruebas aprobadas en 8,30 s; dos casos sustituyen el candidato por el padre
 antes de generar (control y experimento), ejecutan inferencia real y comprueban
 invalidacion sin decision. Los informes retenidos identifican los pesos medidos.
+
+### Validacion conjunta de escritorio e identidad experimental
+
+Suite completa en `d94792a`: 399 aprobadas, siete PostgreSQL omitidas, 66,57 s.
+CI confirmado en `01a7ba5`: Tests 45849234023 (Python 3.11/3.12) y Foundation
+45849234313, incluidos todos los pasos de escritorio instalado. El inventario
+distingue esa revision remota de los cambios de identidad comprobados localmente.
+El objetivo global permanece abierto, sin capacidades generales nuevas demostradas.
