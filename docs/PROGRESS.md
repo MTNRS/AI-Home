@@ -916,3 +916,15 @@ enviar sin confirmaciones. Sin envío de contribuciones en esta revisión. Venta
 cerrada y ausencia comprobada. Redimensionado/DPI y textos largos sin verificar;
 detalle en DESKTOP_VISUAL_REVIEW.md. Suite completa actual: 288 correctas,
 5 PostgreSQL omitidas, 39,48 segundos. No demuestra calidad del modelo.
+
+### Paquete redistribuible Nano smoke
+
+Añadido empaquetador/verificador acotado para el experimento propio: pesos con
+estado de reanudación, BPE, configuraciones, corpus sintético público exacto,
+reporte, licencia y manifiesto SHA256. Publicación exclusiva, sin extracción de
+rutas ZIP; comprueba identidad del corpus/división, checkpoint y metadatos.
+No acepta otros corpus ni candidatos heredados/restringidos y no equivale a firma
+o aprobación de calidad. Actions construye, verifica y sube el paquete por separado.
+Suite local: 291 correctas, 5 PostgreSQL omitidas, 46,50 segundos. Incluye pruebas
+con entrenamiento real y rechazos por corrupción, metadatos, rutas y privacidad.
+CI previa (9930d35): Foundation y PostgreSQL Python 3.11/3.12 correctos.

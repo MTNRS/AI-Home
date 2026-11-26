@@ -38,7 +38,7 @@ otros documentos describen el estado en que se escribieron, no el estado actual.
 | Interfaz (17) | Chat, training/evaluation/evolution, conocimiento, créditos, inspección y registro con rollback funcionales | Consolidar secciones nombradas; revisión visual de diálogos recientes; no hay evidencia visual integral |
 | Pruebas (18) | CPU/CUDA local; Linux 3.11/3.12/PostgreSQL remoto; entrenamientos y cambios reales de pesos | Ampliar al resto de funcionalidades pendientes y mantener evidencia de cada revisión |
 | Aceptación (19) | Los 22 criterios tienen componentes y demostraciones locales parciales descritos arriba | No se reduce el objetivo a sus criterios mínimos; falta auditar todos los requisitos explícitos antes de declarar aceptación |
-| Entrega (20) | Código, configuraciones, informes y PR publicados; artefacto de smoke en Actions | Paquete versionado de pesos/datasets redistribuibles, instrucciones verificadas en entorno limpio y auditoría final |
+| Entrega (20) | Código, configuraciones, informes y PR publicados; paquete Nano smoke con pesos/corpus propios, manifiesto y verificador en Actions ([detalle](SMOKE_DISTRIBUTION.md)) | Corpus/evaluaciones representativos redistribuibles, instrucciones verificadas en entorno limpio y auditoría final |
 | Prioridad y misión (21–22) | Pesos propios desde cero; modelo externo no sustituye automáticamente Foundation | Plataforma generalista/multimodal/comunitaria sigue siendo objetivo de investigación, no capacidad obtenida |
 
 ## Próximas líneas de implementación

@@ -23,6 +23,12 @@ jobs:
         env:
           AI_HOME_ENVIRONMENT: test
       - run: python -m ai_home.foundation.smoke --output-dir artifacts/foundation-smoke --device cpu
+      - run: python -m ai_home.foundation.smoke_package build artifacts/foundation-smoke artifacts/foundation-nano-smoke.zip --revision "$GITHUB_SHA"
+      - run: python -m ai_home.foundation.smoke_package verify artifacts/foundation-nano-smoke.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foundation-nano-smoke-package
+          path: artifacts/foundation-nano-smoke.zip
       - uses: actions/upload-artifact@v4
         with:
           name: foundation-smoke
