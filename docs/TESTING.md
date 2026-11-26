@@ -61,3 +61,14 @@ permissions, tests and limitations. Network connectors and desktop references
 remain outstanding.
 
 Validation: CUDA-enabled full suite **173 passed, 4 skipped** (PostgreSQL unavailable).
+
+
+### Model lifecycle registry (2026-11-26)
+
+Added local content-addressed candidate storage with real retained-checkpoint
+evaluation, explicit approval gates, transactional activation history and rollback.
+Foundation API serving can select the active approved registry version. Direct
+checkpoint mode remains available and is not an approval claim. See
+[Model registry](MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.
+
+Registry validation: full CUDA-enabled suite 191 passed, 4 PostgreSQL tests skipped.

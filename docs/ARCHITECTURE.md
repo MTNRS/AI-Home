@@ -253,3 +253,12 @@ retrieval, not weight training or a demonstrated improvement in model quality.
 See [Knowledge retrieval](KNOWLEDGE.md) for commands,
 permissions, tests and limitations. Network connectors and desktop references
 remain outstanding.
+
+
+### Model lifecycle registry (2026-11-26)
+
+Added local content-addressed candidate storage with real retained-checkpoint
+evaluation, explicit approval gates, transactional activation history and rollback.
+Foundation API serving can select the active approved registry version. Direct
+checkpoint mode remains available and is not an approval claim. See
+[Model registry](MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.

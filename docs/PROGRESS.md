@@ -265,3 +265,12 @@ through review and retrieval, plus rejection cases. Full suite: 189 passed,
 4 PostgreSQL skipped; final connector-specific run: 9 passed. Documentation and
 reproducible commands are in KNOWLEDGE.md. Large-dump review and real-source
 license/privacy review remain operator work.
+
+
+### Model lifecycle registry (2026-11-26)
+
+Added local content-addressed candidate storage with real retained-checkpoint
+evaluation, explicit approval gates, transactional activation history and rollback.
+Foundation API serving can select the active approved registry version. Direct
+checkpoint mode remains available and is not an approval claim. See
+[Model registry](MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.

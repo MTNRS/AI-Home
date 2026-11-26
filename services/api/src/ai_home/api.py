@@ -485,7 +485,7 @@ def create_app(
         if payload.use_knowledge and (settings.chat_backend != "foundation" or settings.knowledge_index is None):
             raise HTTPException(status_code=503, detail="Foundation knowledge retrieval is not configured.")
         if settings.chat_backend == "foundation":
-            if settings.foundation_checkpoint is None:
+            if settings.foundation_checkpoint is None and settings.foundation_registry is None:
                 raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
             # One active local generation per process; no prompts or KV caches are shared.
             if not foundation_inference_lock.acquire(blocking=False):
@@ -494,6 +494,12 @@ def create_app(
             try:
                 from ai_home.foundation.inference import complete
 
+                checkpoint = settings.foundation_checkpoint
+                if settings.foundation_registry is not None:
+                    if checkpoint is not None:
+                        raise ValueError("Configure a registry or a direct checkpoint, not both")
+                    from ai_home.foundation.registry import ModelRegistry
+                    checkpoint = ModelRegistry(settings.foundation_registry).active_checkpoint()
                 references = []
                 completion = complete
                 extra = {}
@@ -503,7 +509,7 @@ def create_app(
                     extra["index_path"] = settings.knowledge_index
                 result = completion(
                     [message.model_dump() for message in payload.messages],
-                    settings.foundation_checkpoint,
+                    checkpoint,
                     device=settings.foundation_device,
                     max_bytes=settings.foundation_memory_budget_bytes,
                     max_new_tokens=settings.foundation_max_new_tokens,
