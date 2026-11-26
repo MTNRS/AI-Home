@@ -115,3 +115,21 @@ Reproducir con `arithmetic_experiment --augment-formats --seed N` y después
 configuraciones y datos locales en `artifacts/arithmetic-aug42-v1`,
 `artifacts/arithmetic-aug7-v1`, `artifacts/arithmetic-aug123-v1` y
 `artifacts/arithmetic-aug-robustness-v1`. No se afirma mejora de lenguaje general.
+
+## Comparación reproducible y comprobada
+
+`python -m ai_home.foundation.arithmetic_compare` recibe `--controls` y
+`--candidates` (directorios de experimentos emparejados),
+`--control-evaluations` y `--candidate-evaluations` (reportes de robustez), y
+`--output` (archivo nuevo). Lee JSON con límite de 16 MB por archivo; exige
+particiones exactas del protocolo, hashes, configuración/semilla coincidentes,
+checkpoints identificados, tokenizer/runtime compatibles y todos los probes.
+Recalcula aciertos desde respuestas y compara regresiones con el motor existente.
+Rechaza semillas duplicadas y no sobrescribe el informe de salida.
+
+Ejecutado sobre los seis experimentos retenidos: reproduce 4/0/3 regresiones y
+`reject_unconditional_promotion`. [Informe v2](ARITHMETIC_AUGMENTATION_VERIFIED.json).
+Ocho pruebas aprobadas, incluyendo diferencias de semilla, contaminación de
+partición, resultados incompletos, puntuación inconsistente y checkpoint distinto.
+Esto verifica consistencia de artefactos, no autenticidad criptográfica ni una
+nueva inferencia de los pesos. Los resultados siguen siendo de desarrollo.

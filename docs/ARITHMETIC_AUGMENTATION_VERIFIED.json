@@ -1,0 +1,168 @@
+{
+  "format": "ai-home-arithmetic-augmentation-comparison-v2",
+  "rows": [
+    {
+      "seed": 42,
+      "control_sha256": "affe6ee45099f9f0abe556821f6e4c0e9e1249c11800d41fa599d984677e3b82",
+      "candidate_sha256": "48b984e92e2504aee66fa70a38b5711c07d8b80dd083b18100aa43396f120fe9",
+      "control": {
+        "english": {
+          "passed": 0,
+          "total": 14,
+          "accuracy": 0.0
+        },
+        "mathematics": {
+          "passed": 13,
+          "total": 14,
+          "accuracy": 0.9285714285714286
+        },
+        "robustness": {
+          "passed": 3,
+          "total": 14,
+          "accuracy": 0.21428571428571427
+        },
+        "spanish": {
+          "passed": 0,
+          "total": 14,
+          "accuracy": 0.0
+        }
+      },
+      "candidate": {
+        "english": {
+          "passed": 10,
+          "total": 14,
+          "accuracy": 0.7142857142857143
+        },
+        "mathematics": {
+          "passed": 10,
+          "total": 14,
+          "accuracy": 0.7142857142857143
+        },
+        "robustness": {
+          "passed": 10,
+          "total": 14,
+          "accuracy": 0.7142857142857143
+        },
+        "spanish": {
+          "passed": 10,
+          "total": 14,
+          "accuracy": 0.7142857142857143
+        }
+      },
+      "regressions": [
+        "addition-11-original",
+        "addition-11-spaces",
+        "addition-8-original",
+        "addition-9-original"
+      ]
+    },
+    {
+      "seed": 7,
+      "control_sha256": "86169f07b88e46f20480f65aa4334d46f04901bdda223df2a8cc092d80378621",
+      "candidate_sha256": "2de01ca5c099869f0c33a39dd40d41749a7797cffb9b53a211057aedb73b03d4",
+      "control": {
+        "english": {
+          "passed": 1,
+          "total": 14,
+          "accuracy": 0.07142857142857142
+        },
+        "mathematics": {
+          "passed": 6,
+          "total": 14,
+          "accuracy": 0.42857142857142855
+        },
+        "robustness": {
+          "passed": 3,
+          "total": 14,
+          "accuracy": 0.21428571428571427
+        },
+        "spanish": {
+          "passed": 0,
+          "total": 14,
+          "accuracy": 0.0
+        }
+      },
+      "candidate": {
+        "english": {
+          "passed": 11,
+          "total": 14,
+          "accuracy": 0.7857142857142857
+        },
+        "mathematics": {
+          "passed": 11,
+          "total": 14,
+          "accuracy": 0.7857142857142857
+        },
+        "robustness": {
+          "passed": 11,
+          "total": 14,
+          "accuracy": 0.7857142857142857
+        },
+        "spanish": {
+          "passed": 11,
+          "total": 14,
+          "accuracy": 0.7857142857142857
+        }
+      },
+      "regressions": []
+    },
+    {
+      "seed": 123,
+      "control_sha256": "5253c718350e51a54d28636ce895e6d8c774dc22daf41131734b1b88309041cd",
+      "candidate_sha256": "58ab8420dd352589d124692d267eed54286402857259f2b66d8b1fea80e6e0e9",
+      "control": {
+        "english": {
+          "passed": 9,
+          "total": 14,
+          "accuracy": 0.6428571428571429
+        },
+        "mathematics": {
+          "passed": 7,
+          "total": 14,
+          "accuracy": 0.5
+        },
+        "robustness": {
+          "passed": 8,
+          "total": 14,
+          "accuracy": 0.5714285714285714
+        },
+        "spanish": {
+          "passed": 6,
+          "total": 14,
+          "accuracy": 0.42857142857142855
+        }
+      },
+      "candidate": {
+        "english": {
+          "passed": 8,
+          "total": 14,
+          "accuracy": 0.5714285714285714
+        },
+        "mathematics": {
+          "passed": 8,
+          "total": 14,
+          "accuracy": 0.5714285714285714
+        },
+        "robustness": {
+          "passed": 8,
+          "total": 14,
+          "accuracy": 0.5714285714285714
+        },
+        "spanish": {
+          "passed": 8,
+          "total": 14,
+          "accuracy": 0.5714285714285714
+        }
+      },
+      "regressions": [
+        "addition-11-english",
+        "addition-11-original",
+        "addition-11-spaces"
+      ]
+    }
+  ],
+  "evaluation_role": "Previously inspected development suite; not independent confirmation",
+  "artifact_scope": "Checks retained metadata and hashes, not an attestation or rerun of weights",
+  "decision": "reject_unconditional_promotion",
+  "promoted": false
+}

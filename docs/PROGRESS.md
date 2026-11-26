@@ -1439,3 +1439,11 @@ informe completo y CLI reproducible; no hay promoción ni selección del mejor.
 contra controles detecta 4,0,3 regresiones, por lo que no se acepta promoción
 incondicional. Suite tratada explícitamente como desarrollo ya observado.
 Conservados informes/checkpoints; dos pruebas del protocolo aprobadas.
+
+### Comparación aritmética reproducible
+
+Añadido CLI para comparar controles/candidatos desde artefactos conservados,
+con comprobación de particiones, semillas/configuración, runtime, hashes y
+puntuación por respuesta. Reproduce rechazo con 4/0/3 regresiones. Ocho pruebas
+aprobadas. Verifica consistencia de los informes; no sustituye revisión
+independiente ni certifica autenticidad de los pesos.
