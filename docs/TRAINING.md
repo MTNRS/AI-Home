@@ -437,3 +437,11 @@ no es una interrupcion instantanea. La iteracion usa vistas por lote sin crear
 una tupla de vistas para todas las secuencias. La validacion periodica interna
 del entrenador conserva su comportamiento de finalizar la validacion y guardar
 el checkpoint al cancelar un entrenamiento.
+
+Las comparaciones de perdida registran `checkpoint_sha256` de los pesos realmente
+cargados por el lector seguro. El ciclo continuo contrasta esa identidad con el
+padre usado para entrenar y con el candidato guardado; comprueba tambien los
+archivos al terminar. Un cambio detectado aborta sin informe de comparacion.
+El calculo adicional de hashes lee por bloques, sin materializar el checkpoint
+completo en RAM. Esto no bloquea escrituras externas posteriores ni autentica
+al autor de los pesos; los consumidores deben seguir verificando su hash.

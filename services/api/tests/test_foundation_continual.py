@@ -140,3 +140,25 @@ def test_evaluation_cancel_restores_mode_without_partial_score(was_training, row
         hook.remove()
     assert len(calls) == 1
     assert model.training is was_training
+
+
+def test_comparison_identity_tracks_loaded_checkpoint(tmp_path, monkeypatch):
+    from ai_home.foundation import continual
+    torch.set_num_threads(1)
+    parent = tmp_path / "parent.pt"
+    config = FoundationConfig(vocab_size=280, width=16, layers=1, heads=2,
+                              kv_heads=1, hidden=32, context=16)
+    train(records("identity"), parent, config, TrainingConfig(steps=1, warmup=0), "cpu")
+    identity = continual.checkpoint_digest(parent)
+    actual_load = continual.load_checkpoint
+    def replace_after_load(*args, **kwargs):
+        loaded = actual_load(*args, **kwargs)
+        parent.write_bytes(b"replaced after loading")
+        return loaded
+    with monkeypatch.context() as patch:
+        patch.setattr(continual, "load_checkpoint", replace_after_load)
+        result = continual.compare_checkpoint(parent, records("holdout"), "causal", "cpu", 100_000_000,
+                                              expected_sha256=identity)
+    assert result["checkpoint_sha256"] == identity
+    assert continual.checkpoint_digest(parent) != identity
+    assert result["tokens"] > 0

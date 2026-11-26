@@ -1631,3 +1631,11 @@ distintos bajo las mismas rutas. Se contrastan hashes y condiciones de ejecucion
 se registra invalidacion y no se emite decision. Diez pruebas de evolucion
 aprobadas en 7,53 s, incluidas tres sustituciones entre ramas con entrenamiento
 real. Los candidatos ya entrenados se conservan; no hay promocion automatica.
+
+### Identidad de pesos en comparaciones de perdida
+
+Las metricas de comparacion incluyen el hash de los pesos cargados, no una lectura
+posterior potencialmente distinta. El ciclo continuo comprueba padre de entrenamiento,
+identidad al cargar y archivos al concluir; evita lecturas completas para hashing.
+Diecisiete pruebas continuo/evolucion aprobadas en 8,89 s, incluida sustitucion
+del archivo tras cargar pesos reales sin alterar la identidad informada.

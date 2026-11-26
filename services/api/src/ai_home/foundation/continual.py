@@ -11,10 +11,18 @@ from .data import load_records
 from .training import TrainingCancelled, TrainingConfig, _sequences, evaluate, select_device, train
 
 
-def compare_checkpoint(path, records, objective, device, max_bytes, *, cache_path=None, cancel=None):
+def checkpoint_digest(path):
+    with Path(path).open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def compare_checkpoint(path, records, objective, device, max_bytes, *, cache_path=None, cancel=None,
+                       expected_sha256=None):
     model, tokenizer, _ = load_checkpoint(path, device=device, max_bytes=max_bytes)
+    if expected_sha256 is not None and model.checkpoint_sha256 != expected_sha256:
+        raise RuntimeError("Checkpoint changed before comparison")
     sequences = _sequences(records, tokenizer, model.config.context, objective, cache_path=cache_path, cancel=cancel)
-    return evaluate(model, sequences, device, cancel=cancel)
+    return {**evaluate(model, sequences, device, cancel=cancel), "checkpoint_sha256": model.checkpoint_sha256}
 
 
 def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_path=None,
@@ -34,7 +42,7 @@ def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_p
     replay, replay_hash = load_records(replay_path)
     records = load_records(dataset_path)[0] if dataset_path else None
     parent = Path(parent)
-    parent_hash = hashlib.sha256(parent.read_bytes()).hexdigest()
+    parent_hash = checkpoint_digest(parent)
     # Exclusive directory creation prevents replacing an existing experiment.
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -45,17 +53,22 @@ def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_p
                     replay_records=replay, reviewed_export=reviewed_export, cancel=cancel, on_step=on_step,
                     sequence_cache_dir=cache_root / "training" if cache_root else None)
     check_cancel()
-    if hashlib.sha256(parent.read_bytes()).hexdigest() != parent_hash:
+    if payload["parent_checkpoint_sha256"] != parent_hash or checkpoint_digest(parent) != parent_hash:
         raise RuntimeError("Parent changed during experiment")
+    candidate_hash = checkpoint_digest(candidate)
     baseline = compare_checkpoint(parent, validation, training.objective, device, training.memory_budget_bytes,
-                                  cache_path=cache_root / "baseline" if cache_root else None, cancel=cancel)
+                                  cache_path=cache_root / "baseline" if cache_root else None, cancel=cancel,
+                                  expected_sha256=parent_hash)
     check_cancel()
     result = compare_checkpoint(candidate, validation, training.objective, device, training.memory_budget_bytes,
-                                cache_path=cache_root / "candidate" if cache_root else None, cancel=cancel)
+                                cache_path=cache_root / "candidate" if cache_root else None, cancel=cancel,
+                                expected_sha256=candidate_hash)
     check_cancel()
+    if checkpoint_digest(parent) != parent_hash or checkpoint_digest(candidate) != candidate_hash:
+        raise RuntimeError("Checkpoint changed during comparison")
     delta = result["loss"] - baseline["loss"]
     report = {"format": "ai-home-continual-v1", "status": "candidate",
-              "parent_sha256": parent_hash, "candidate_sha256": hashlib.sha256(candidate.read_bytes()).hexdigest(),
+              "parent_sha256": parent_hash, "candidate_sha256": candidate_hash,
               "validation_sha256": validation_hash, "replay_sha256": replay_hash,
               "dataset_sha256": payload["dataset_sha256"], "tokenizer_sha256": payload["tokenizer_sha256"],
               "data_visibility": payload["data_visibility"], "training_config": asdict(training),
