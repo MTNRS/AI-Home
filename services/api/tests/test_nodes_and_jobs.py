@@ -507,3 +507,60 @@ def test_node_clients_require_https_for_remote_servers():
             name="desktop-node",
         )
 
+
+
+def test_lease_renewal_requires_current_owner_token_and_unexpired_lease(client, monkeypatch):
+    register(client, "renew@example.com")
+    token = login(client, "renew@example.com")
+    first, second = create_node(client, token), create_node(client, token, "second")
+    create_job(client, token)
+    headers = user_headers(first["node_token"])
+    claim = client.post("/api/v1/node/jobs/claim", headers=headers).json()
+    route = f"/api/v1/node/jobs/{claim['job_id']}/renew"
+    body = {"lease_token": claim["lease_token"]}
+    original_expiry = claim["lease_expires_epoch"]
+    monkeypatch.setattr(job_service.time, "time", lambda: original_expiry - 30)
+    assert client.post(route, headers=user_headers(second["node_token"]), json=body).status_code == 404
+    assert client.post(route, headers=headers, json={"lease_token": "x"*32}).status_code == 404
+    renewed = client.post(route, headers=headers, json=body)
+    assert renewed.status_code == 200
+    assert renewed.json()["lease_expires_epoch"] == original_expiry - 30 + JOB_LEASE_SECONDS
+    monkeypatch.setattr(job_service.time, "time", lambda: renewed.json()["lease_expires_epoch"])
+    assert client.post(route, headers=headers, json=body).status_code == 404
+    with client.app.state.session_factory() as session:
+        assert session.get(ComputeJob, claim["job_id"]).attempt_count == 1
+
+
+@pytest.mark.parametrize("renew_status", [200, 404])
+def test_worker_renews_during_work_and_discards_result_after_lost_lease(monkeypatch, renew_status):
+    import threading
+    import ai_home.node_worker as worker
+    renewed = threading.Event()
+    submitted = []
+    def forward(request):
+        if request.url.path.endswith("/heartbeat"):
+            return httpx.Response(200, json={})
+        if request.url.path.endswith("/claim"):
+            return httpx.Response(200, json={"job_id":"test-job", "job_type":"math.sum.v1",
+                "payload":{"values":[1,2]}, "lease_token":"x"*32, "lease_expires_epoch":4000000000})
+        if request.url.path.endswith("/renew"):
+            renewed.set()
+            return httpx.Response(renew_status, json={"lease_expires_epoch":4000000120})
+        submitted.append(request.url.path)
+        return httpx.Response(200, json={})
+    def work(*args, **kwargs):
+        assert renewed.wait(3)
+        return {"sum":3}
+    monkeypatch.setattr(worker, "execute_job", work)
+    agent = NodeAgent(server_url="http://localhost", node_token="test", lease_renew_interval=1,
+                      transport=httpx.MockTransport(forward))
+    try:
+        if renew_status == 200:
+            assert agent.run_once()
+            assert submitted == ["/api/v1/node/jobs/test-job/result"]
+        else:
+            with pytest.raises(RuntimeError, match="not submitted"):
+                agent.run_once()
+            assert not submitted
+    finally:
+        agent.close()

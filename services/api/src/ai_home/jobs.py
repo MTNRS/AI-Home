@@ -306,6 +306,24 @@ def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=
     return ClaimedJob(job=job, lease_token=lease_token, reward_credits=funding.amount if funding else 0)
 
 
+def renew_job_lease(session: Session, *, node: ComputeNode, job_id: str, lease_token: str) -> int:
+    now = int(time.time())
+    if node.revoked_at is not None:
+        raise NodeNotFound
+    expiry = session.execute(update(ComputeJob).where(
+        ComputeJob.job_id == job_id,
+        ComputeJob.assigned_node_id == node.node_id,
+        ComputeJob.status == "leased",
+        ComputeJob.lease_token_hash == _token_hash(lease_token),
+        ComputeJob.lease_expires_epoch > now,
+    ).values(lease_expires_epoch=now + JOB_LEASE_SECONDS).returning(
+        ComputeJob.lease_expires_epoch).execution_options(synchronize_session=False)).scalar_one_or_none()
+    if expiry is None:
+        raise JobNotFound
+    heartbeat_node(session, node)
+    return expiry
+
+
 def submit_job_result(
     session: Session,
     *,

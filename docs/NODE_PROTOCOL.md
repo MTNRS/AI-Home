@@ -100,3 +100,21 @@ Legacy nodes without snapshots retain the prior installed-RAM admission checks;
 new workers still check actual memory locally before executing. This is advisory
 self-reported eligibility, not hardware attestation, reservation of memory or
 performance ranking. Independent artifact verification remains mandatory.
+
+
+## Lease renewal during computation
+
+POST `/api/v1/node/jobs/{job_id}/renew` requires the node credential and a
+`lease_token` body field. A conditional database update extends only an active,
+unexpired lease assigned to that node with that exact token. Expired, cancelled,
+reassigned and wrong-owner/token requests return 404; renewal cannot resurrect
+a lease. It also refreshes node liveness, but not its memory snapshot.
+
+NodeAgent renews every 30 seconds during computation (configurable 1–60 seconds
+for tests/deployments, below the 120-second lease window). A failed renewal stops
+further renewals and prevents result submission. It cannot interrupt an active
+CUDA kernel or handler; local compute may finish and be discarded. The renewal
+thread is joined before submission/return, including handler exceptions.
+Network calls remain bounded by the node client's configured timeout. Existing
+result validation and reward settlement are unchanged. No credits accrue for
+renewal alone; the owner can still cancel the job.

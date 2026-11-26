@@ -675,3 +675,15 @@ snapshots despite live claim heartbeats and successful refreshed admission.
 Full suite before the added assertions: 259 passed, 5 PostgreSQL skips; final
 node/distributed suites: 29 passed. Performance/network-aware ranking remains
 outstanding; these are advisory snapshots, not reserved or attested resources.
+
+
+### Renewable node job leases
+
+Added authenticated lease renewal with an atomic owner/token/status/expiry
+predicate. Workers renew on a bounded interval while a handler runs, stop/join
+the helper on completion or exception, and discard results after renewal failure.
+Tests verify token/owner rejection, expiry fencing, no attempt inflation and
+worker success/failure behavior with an actual renewal thread. Full suite:
+262 passed, 5 PostgreSQL skips (portable server stopped). Renewal alone grants
+no credit and does not freshen resource snapshots. Handler/kernel interruption
+and multi-host long-duration validation remain outside this completed increment.

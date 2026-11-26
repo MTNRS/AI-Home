@@ -58,6 +58,7 @@ from ai_home.jobs import (
     register_node,
     revoke_node,
     submit_job_result,
+    renew_job_lease,
 )
 from ai_home.models import (
     AuthSession,
@@ -86,6 +87,7 @@ from ai_home.schemas import (
     RegisterRequest,
     SessionResponse,
     SubmitJobResultRequest,
+    RenewJobLeaseRequest,
     TrainingContributionExportResponse,
     TrainingContributionReviewResponse,
     TrainingContributionRequest,
@@ -1436,6 +1438,19 @@ def create_app(
             )
         session.commit()
         return _claimed_job_response(claim)
+
+    @app.post("/api/v1/node/jobs/{job_id}/renew")
+    def renew_node_job(job_id: str, payload: RenewJobLeaseRequest,
+                       current_node: ComputeNode = Depends(get_current_node),
+                       session: Session = Depends(get_db)):
+        try:
+            expiry = renew_job_lease(session, node=current_node, job_id=job_id,
+                                     lease_token=payload.lease_token.get_secret_value())
+            session.commit()
+            return {"lease_expires_epoch": expiry}
+        except (JobNotFound, NodeNotFound):
+            session.rollback()
+            raise HTTPException(status_code=404, detail="Active job lease not found.") from None
 
     @app.post(
         "/api/v1/node/jobs/{job_id}/result",

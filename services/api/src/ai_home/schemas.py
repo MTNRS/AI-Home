@@ -424,6 +424,11 @@ class ClaimedJobResponse(BaseModel):
     reward_credits: int = 0
 
 
+class RenewJobLeaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lease_token: SecretStr = Field(min_length=32, max_length=128)
+
+
 class SubmitJobResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

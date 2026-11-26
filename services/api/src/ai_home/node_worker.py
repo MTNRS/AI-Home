@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import threading
 from csv import Error as CsvError
 from csv import reader
 from pathlib import Path
@@ -172,9 +173,13 @@ class NodeAgent:
         transport: httpx.BaseTransport | None = None,
         allow_foundation_training: bool = False,
         foundation_device: str = "cpu",
+        lease_renew_interval: int = 30,
     ) -> None:
         if foundation_device not in {"cpu", "cuda"}:
             raise ValueError("Foundation worker device must be cpu or cuda")
+        if type(lease_renew_interval) is not int or not 1 <= lease_renew_interval <= 60:
+            raise ValueError("Lease renewal interval must be between 1 and 60 seconds")
+        self.lease_renew_interval = lease_renew_interval
         self.foundation_device = foundation_device
         self.allow_foundation_training = allow_foundation_training
         server_url = normalize_base_url(server_url)
@@ -202,8 +207,26 @@ class NodeAgent:
         response.raise_for_status()
 
         job = ClaimedJobResponse.model_validate(response.json())
-        result = execute_job(job.job_type, job.payload, allow_foundation_training=self.allow_foundation_training,
-                             foundation_device=self.foundation_device)
+        stop_renewal, renewal_failed = threading.Event(), threading.Event()
+        def renew():
+            while not stop_renewal.wait(self.lease_renew_interval):
+                try:
+                    response = self._client.post(f"/api/v1/node/jobs/{job.job_id}/renew",
+                                                 json={"lease_token": job.lease_token})
+                    response.raise_for_status()
+                except Exception:
+                    renewal_failed.set()
+                    return
+        renewer = threading.Thread(target=renew, daemon=True)
+        renewer.start()
+        try:
+            result = execute_job(job.job_type, job.payload, allow_foundation_training=self.allow_foundation_training,
+                                 foundation_device=self.foundation_device)
+        finally:
+            stop_renewal.set()
+            renewer.join()
+        if renewal_failed.is_set():
+            raise RuntimeError("Job lease renewal failed; result was not submitted")
         submitted = self._client.post(
             f"/api/v1/node/jobs/{job.job_id}/result",
             json={
