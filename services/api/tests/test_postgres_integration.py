@@ -232,3 +232,32 @@ def test_postgres_inference_duplicate_settlement_and_expiry(postgres_engine):
     with Session(postgres_engine) as session, session.begin():
         assert refund_expired_inference(session, owner) == 1
     assert ledger.balance(user_account_id(owner)) == 13
+
+def test_postgres_scheduler_measurement_json_predicate(postgres_engine):
+    import time
+    from ai_home.jobs import create_gradient_job, _measurement_eligibility
+    from test_foundation_distributed import setup_shards
+    _, _, _, payloads = setup_shards()
+    owner = str(uuid4())
+    now = int(time.time())
+    with Session(postgres_engine) as session:
+        try:
+            session.add(User(user_id=owner, email=f'{owner}@example.com', password_hash='test-only'))
+            session.flush()
+            jobs = [create_gradient_job(session, owner_user_id=owner, idempotency_key=str(uuid4()),
+                payload=payloads[0], allow_public_node_processing=True, scheduling=constraint)
+                for constraint in (None, {'min_gradient_tokens_per_second':1.0},
+                                   {'min_gradient_tokens_per_second':100.0})]
+            sample = {'format':'ai-home-worker-service-measurement-v1', 'job_type':'foundation.gradient.v1',
+                      'device':'cpu', 'heartbeat_service_seconds':0.01, 'claim_service_seconds':0.02,
+                      'execution_seconds':1.0, 'submit_service_seconds':0.03,
+                      'claim_response_bytes':1000, 'submit_request_bytes':1000}
+            node = ComputeNode(hardware={'resources_epoch':now,'resources':{'foundation_device':'cpu'},
+                'service_measurement':{'completed_epoch':now,'sample':sample,
+                'profile_sha256':jobs[1].scheduling['profile_sha256'], 'gradient_tokens_per_second':10.0,
+                'claim_service_bytes_per_second':50000.0,'submit_service_bytes_per_second':30000.0}})
+            query=select(ComputeJob.job_id).where(ComputeJob.owner_user_id==owner)
+            assert set(session.scalars(query.where(_measurement_eligibility(node, now)))) == {jobs[0].job_id,jobs[1].job_id}
+            assert set(session.scalars(query.where(_measurement_eligibility(node, now+121)))) == {jobs[0].job_id}
+        finally:
+            session.rollback()

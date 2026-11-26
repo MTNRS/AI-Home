@@ -995,3 +995,18 @@ muestras finales comprobadas en DB con recibos concordantes; reporte
 WORKER_RECEIPTS_SMOKE.json. Suite: 295 correctas, 5 PostgreSQL omitidas, 39,66 s.
 CI previa e07f454 pasó. Scheduler todavía FIFO; falta aplicar muestras comparables
 y frescas con restricciones explícitas en el momento de asignación.
+
+### Asignación con restricciones de rendimiento/servicio
+
+Añadida migración 0010 para requisitos opcionales de trabajos de gradiente:
+tokens/s mínimos, tasas claim/submit mínimas y heartbeat máximo. Perfil del
+servidor vincula arquitectura/tokenizador/runtime; filtros SQL exigen muestras y
+recursos <=120 s, mismo dispositivo y todos los umbrales antes de FIFO/bloqueo.
+Trabajos antiguos sin restricciones conservan comportamiento/hash; restricciones
+entran en idempotencia y planes reanudables. Sin muestras válidas no hay fallback.
+No son medidas de ancho de banda físico ni atestación de honestidad. Bootstrap
+sin restricciones explícito; créditos siguen sujetos a recomputación.
+Smoke CPU/CUDA con dos rondas, segunda restringida, y reinicios completó 4 trabajos;
+report MEASURED_SCHEDULING_SMOKE.json. Suite 296 correctas, 6 omitidas; ejecución
+PostgreSQL local separada: 6 correctas, incluida consulta JSON y migración. No DB
+producción modificada. Documentación MEASURED_SCHEDULING.md.

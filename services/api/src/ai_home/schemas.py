@@ -437,6 +437,7 @@ class MathSumJobPayload(BaseModel):
 class JobResponse(BaseModel):
     job_id: str
     job_type: str
+    scheduling: dict | None = None
     status: str
     result: dict | None
     failure_code: str | None
@@ -502,12 +503,27 @@ class CreateTokenizeJobRequest(BaseModel):
         return self
 
 
+class GradientSchedulingRequirements(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    min_gradient_tokens_per_second: float | None = Field(default=None, gt=0, le=1e9, allow_inf_nan=False)
+    min_claim_service_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
+    min_submit_service_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
+    max_heartbeat_service_seconds: float | None = Field(default=None, gt=0, le=600, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def nonempty(self):
+        if all(value is None for value in self.model_dump().values()):
+            raise ValueError("At least one scheduling constraint is required")
+        return self
+
+
 class CreateGradientJobRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     payload: dict
     allow_public_node_processing: StrictBool
     idempotency_key: str = Field(min_length=1, max_length=160)
     reward_credits: StrictInt = Field(default=0, ge=0, le=1_000_000)
+    scheduling: GradientSchedulingRequirements | None = None
 
     @model_validator(mode="after")
     def require_consent(self):

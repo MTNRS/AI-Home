@@ -80,7 +80,7 @@ def test_packaged_migrations_outside_checkout(tmp_path, monkeypatch):
     engine = create_engine('sqlite+pysqlite:///packaged.db')
     try:
         with engine.connect() as connection:
-            assert connection.scalar(text('select version_num from alembic_version')) == '0009_training_corrections'
+            assert connection.scalar(text('select version_num from alembic_version')) == '0010_job_scheduling'
         assert 'correction' in {column['name'] for column in inspect(engine).get_columns('training_contributions')}
     finally:
         engine.dispose()

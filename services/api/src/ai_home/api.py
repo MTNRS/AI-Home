@@ -1380,7 +1380,7 @@ def create_app(
             raise HTTPException(status_code=503, detail="Experimental gradient jobs are disabled.")
         arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
                          payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing,
-                         reward_credits=payload.reward_credits)
+                         reward_credits=payload.reward_credits, scheduling=payload.scheduling)
         try:
             try:
                 job = create_gradient_job(session, **arguments)

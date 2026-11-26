@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--reward-credits", type=int, default=0)
     parser.add_argument("--worker-devices", nargs=2, choices=("cpu", "cuda"), default=["cpu", "cpu"])
     parser.add_argument("--restart-coordinator", action="store_true")
+    parser.add_argument("--measured-scheduling", action="store_true")
     args = parser.parse_args()
     if not 1 <= args.rounds <= 10:
         parser.error("Reference experiment permits 1-10 rounds")
@@ -47,6 +48,8 @@ def main():
         parser.error("Smoke reward must be between 0 and 100 internal test credits")
     if args.restart_coordinator and args.rounds < 2:
         parser.error("Coordinator restart requires at least two rounds")
+    if args.measured_scheduling and args.rounds < 2:
+        parser.error("Measured scheduling requires a bootstrap and a constrained round")
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(2)
@@ -127,6 +130,9 @@ def main():
                 response.raise_for_status()
                 nodes.append(response.json())
             for step in range(1, args.rounds + 1):
+                scheduling = ({"min_gradient_tokens_per_second": 1.0,
+                    "min_claim_service_bytes_per_second": 1.0, "min_submit_service_bytes_per_second": 1.0,
+                    "max_heartbeat_service_seconds": 1.0} if args.measured_scheduling and step > 1 else None)
                 parameters = encode_tensors(dict(model.named_parameters()))
                 ids = []
                 round_payloads = []
@@ -139,14 +145,15 @@ def main():
                         continue
                     response = client.post("/api/v1/jobs/foundation/gradient", json={"payload": payload,
                         "allow_public_node_processing": True, "idempotency_key": f"round-{step}-shard-{shard}",
-                        "reward_credits": args.reward_credits})
+                        "reward_credits": args.reward_credits,
+                        **({"scheduling": scheduling} if scheduling else {})})
                     response.raise_for_status()
                     ids.append(response.json()["job_id"])
                 if args.restart_coordinator and step > 1:
                     from .coordinator import create_plan
                     create_plan(output / f"round-{step-1}.pt", round_payloads, output / f"round-{step}-plan.json",
                                 server=url, owner_user_id=registration.json()["user_id"],
-                                reward_credits=args.reward_credits, allow_public_node_processing=True)
+                                reward_credits=args.reward_credits, allow_public_node_processing=True, scheduling=scheduling)
                     first = advance_process(step)
                     reserved = client.get("/api/v1/credits").json()
                     second = advance_process(step)
@@ -162,6 +169,8 @@ def main():
                     observed = json.loads(worker.stdout)
                     if not observed["completed"]:
                         raise RuntimeError("Worker did not complete a gradient shard")
+                    if args.measured_scheduling and not observed.get("measurement_uploaded"):
+                        raise RuntimeError("Measured scheduling requires an accepted worker observation")
                     workers.append({"round": step, "node_id": node["node_id"], "device": worker_device, **observed})
                 response = client.get("/api/v1/jobs")
                 response.raise_for_status()
@@ -213,6 +222,7 @@ def main():
             report["coordinator_process_runs"] = coordinator_runs
             report["isolated_python"] = bool(sys.flags.isolated)
             report["database_setup"] = "packaged Alembic upgrade and schema check"
+            report["measured_scheduling"] = args.measured_scheduling
             report["credits"] = {"reward_per_job": args.reward_credits,
                 "requester": client.get("/api/v1/credits").json(),
                 "workers": [client.get("/api/v1/credits", headers=h).json() for h in worker_sessions],

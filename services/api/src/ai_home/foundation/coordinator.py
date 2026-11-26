@@ -16,7 +16,7 @@ from .distributed_round import commit_round
 
 
 def create_plan(parent, payloads, output, *, server, owner_user_id, reward_credits=0,
-                allow_public_node_processing=False):
+                allow_public_node_processing=False, scheduling=None):
     if allow_public_node_processing is not True:
         raise ValueError("Explicit public node processing consent required")
     if (not isinstance(payloads, list) or not 2 <= len(payloads) <= 8
@@ -42,6 +42,9 @@ def create_plan(parent, payloads, output, *, server, owner_user_id, reward_credi
             "owner_user_id": owner_user_id, "parent_sha256": model.checkpoint_sha256,
             "payloads": validated, "reward_credits": reward_credits,
             "allow_public_node_processing": True}
+    if scheduling is not None:
+        from ai_home.schemas import GradientSchedulingRequirements
+        plan["scheduling"] = GradientSchedulingRequirements.model_validate(scheduling).model_dump(exclude_none=True)
     plan["sha256"] = canonical_hash(plan)
     raw = json.dumps(plan, sort_keys=True).encode("utf-8")
     if len(raw) > 16_000_000:
@@ -77,7 +80,8 @@ def advance(client, plan_path, parent, output):
     for index, payload in enumerate(plan["payloads"]):
         response = client.post("/api/v1/jobs/foundation/gradient", json={
             "payload": payload, "allow_public_node_processing": plan["allow_public_node_processing"],
-            "reward_credits": plan["reward_credits"], "idempotency_key": f"coordinator-{digest}-{index}"})
+            "reward_credits": plan["reward_credits"], "idempotency_key": f"coordinator-{digest}-{index}",
+            **({"scheduling": plan["scheduling"]} if "scheduling" in plan else {})})
         response.raise_for_status()
         jobs.append(response.json())
     if any(job["status"] in {"failed", "cancelled"} for job in jobs):

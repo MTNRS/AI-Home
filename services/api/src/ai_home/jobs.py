@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -284,6 +284,7 @@ def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=
         .where(
             ComputeJob.status == "queued",
             ComputeJob.job_type.in_(compatible),
+            _measurement_eligibility(node, now),
             or_(ComputeJob.job_type != GRADIENT_JOB_TYPE,
                 ComputeJob.payload["torch_version"].as_string() == node.hardware.get("foundation_torch_version")),
         )
@@ -365,6 +366,7 @@ def submit_job_result(
         "job_id": job.job_id, "job_type": job.job_type,
         "completed_epoch": int(time.time()),
         "payload_sha256": _request_hash(job.job_type, job.payload),
+        "profile_sha256": _gradient_profile(job.payload) if job.job_type == GRADIENT_JOB_TYPE else None,
         "token_count": result.get("token_count"),
         "device": (node.hardware.get("resources") or {}).get("foundation_device", "cpu"),
     }}
@@ -394,6 +396,7 @@ def record_worker_measurement(session, *, node, job_id, measurement):
         return previous
     stored = {"job_id": job_id, "completed_epoch": receipt["completed_epoch"],
               "received_epoch": now, "payload_sha256": receipt["payload_sha256"],
+              "profile_sha256": receipt.get("profile_sha256"),
               "sample": data, "trust": "worker-reported-service-observation",
               "claim_service_bytes_per_second": data["claim_response_bytes"] / max(data["claim_service_seconds"], 1e-9),
               "submit_service_bytes_per_second": data["submit_request_bytes"] / max(data["submit_service_seconds"], 1e-9)}
@@ -414,18 +417,24 @@ def create_tokenize_job(session: Session, *, owner_user_id: str, idempotency_key
 
 
 def create_gradient_job(session: Session, *, owner_user_id: str, idempotency_key: str,
-                        payload: dict, allow_public_node_processing: bool, reward_credits=0) -> ComputeJob:
+                        payload: dict, allow_public_node_processing: bool, reward_credits=0, scheduling=None) -> ComputeJob:
     from ai_home.foundation.distributed import GradientPayload
     if allow_public_node_processing is not True:
         raise ValueError("Public node processing requires explicit consent")
     payload = GradientPayload.model_validate(payload).model_dump()
-    return _create_foundation_job(session, owner_user_id, idempotency_key, payload, GRADIENT_JOB_TYPE, reward_credits)
+    if scheduling is not None:
+        from ai_home.schemas import GradientSchedulingRequirements
+        scheduling = {**GradientSchedulingRequirements.model_validate(scheduling).model_dump(exclude_none=True),
+                      "profile_sha256": _gradient_profile(payload)}
+    return _create_foundation_job(session, owner_user_id, idempotency_key, payload, GRADIENT_JOB_TYPE, reward_credits, scheduling)
 
 
-def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job_type, reward_credits):
+def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job_type, reward_credits, scheduling=None):
     if type(reward_credits) is not int or not 0 <= reward_credits <= 1_000_000:
         raise ValueError("Invalid job reward")
     request_hash = _request_hash(job_type, {"payload": payload, "reward_credits": reward_credits} if reward_credits else payload)
+    if scheduling is not None:
+        request_hash = _request_hash(job_type, {"payload": payload, "reward_credits": reward_credits, "scheduling": scheduling})
     existing = session.scalar(select(ComputeJob).where(ComputeJob.owner_user_id == owner_user_id,
                                                        ComputeJob.idempotency_key == idempotency_key))
     if existing is not None:
@@ -433,7 +442,7 @@ def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job
             raise IdempotencyConflict
         return existing
     job = ComputeJob(job_id=str(uuid4()), owner_user_id=owner_user_id,
-                     job_type=job_type, payload=payload, status="queued",
+                     job_type=job_type, payload=payload, scheduling=scheduling, status="queued",
                      idempotency_key=idempotency_key, request_hash=request_hash,
                      public_node_consent_at_epoch=int(time.time()),
                      public_node_consent_version=PUBLIC_NODE_CONSENT_VERSION)
@@ -473,3 +482,43 @@ def _request_hash(job_type: str, payload: dict) -> str:
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
+
+
+def _gradient_profile(payload):
+    # Weight values/documents may change between rounds; architecture, tokenizer
+    # and runtime must match before reusing a normalized throughput observation.
+    return _request_hash('gradient-service-profile-v1', {
+        'config': payload['config'], 'torch_version': payload['torch_version'],
+        'tokenizer': payload['shard']['tokenizer']})
+
+
+def _measurement_eligibility(node, now):
+    from ai_home.schemas import WorkerServiceMeasurement
+    unconstrained = ComputeJob.scheduling.is_(None)
+    observed = node.hardware.get('service_measurement') or {}
+    resources = node.hardware.get('resources') or {}
+    try:
+        sample = WorkerServiceMeasurement.model_validate(observed['sample'])
+        if (not 0 <= now - observed['completed_epoch'] <= 120
+                or not 0 <= now - node.hardware.get('resources_epoch', 0) <= 120
+                or sample.job_type != GRADIENT_JOB_TYPE
+                or resources.get('foundation_device') != sample.device
+                or not observed.get('profile_sha256')):
+            return unconstrained
+        # Rate values were derived by the server on receipt; defend against old
+        # or invalid stored samples rather than silently broadening eligibility.
+        import math
+        metrics = [('min_gradient_tokens_per_second', observed['gradient_tokens_per_second'], False),
+                   ('min_claim_service_bytes_per_second', observed['claim_service_bytes_per_second'], False),
+                   ('min_submit_service_bytes_per_second', observed['submit_service_bytes_per_second'], False),
+                   ('max_heartbeat_service_seconds', sample.heartbeat_service_seconds, True)]
+        if any(not isinstance(value, (float, int)) or isinstance(value, bool)
+               or not math.isfinite(value) or value <= 0 for _, value, _ in metrics):
+            return unconstrained
+    except (KeyError, TypeError, ValueError):
+        return unconstrained
+    terms = [ComputeJob.scheduling['profile_sha256'].as_string() == observed['profile_sha256']]
+    for name, value, maximum in metrics:
+        threshold = ComputeJob.scheduling[name].as_float()
+        terms.append(or_(threshold.is_(None), threshold >= value if maximum else threshold <= value))
+    return or_(unconstrained, and_(*terms))

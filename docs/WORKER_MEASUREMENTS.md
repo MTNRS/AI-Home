@@ -65,3 +65,8 @@ There is no automatic retry or second result submission. Local smoke output
 reports whether upload succeeded. The scheduler still does not consume these
 samples: it must enforce freshness and comparability at decision time, not rely
 only on the upload window. Credits are never calculated from these observations.
+
+Optional [measured scheduling](MEASURED_SCHEDULING.md) now consumes these samples
+with freshness/device/profile checks at claim time. It remains explicit per job;
+unconstrained jobs still use the existing FIFO compatibility policy. The earlier
+notes describing scheduling as pending record the implementation sequence.

@@ -149,3 +149,63 @@ def test_cuda_gradient_worker_is_independently_verified_on_cpu(monkeypatch):
     before = model.embedding.weight.detach().clone()
     aggregate_gradients(model, tokenizer, [result, other], torch.optim.AdamW(model.parameters(), lr=.001))
     assert not torch.equal(before, model.embedding.weight)
+
+def test_scheduler_enforces_fresh_comparable_service_constraints(client):
+    from ai_home.models import ComputeNode
+    _, _, _, payloads = setup_shards()
+    register(client, 'constraints@example.com')
+    headers = user_headers(login(client, 'constraints@example.com'))
+    client.app.state.settings.foundation_distributed_training_enabled = True
+    route = '/api/v1/jobs/foundation/gradient'
+    def enqueue(key, constraints=None, payload=None):
+        body = {'payload': payload or payloads[0], 'idempotency_key': key, 'allow_public_node_processing': True}
+        if constraints is not None:
+            body['scheduling'] = constraints
+        response = client.post(route, headers=headers, json=body)
+        assert response.status_code == 201, response.text
+        return response.json()
+    for i, constraint in enumerate(({'min_gradient_tokens_per_second': 1e8},
+            {'min_claim_service_bytes_per_second': 1e9}, {'min_submit_service_bytes_per_second': 1e9},
+            {'max_heartbeat_service_seconds': 0.001})):
+        enqueue(f'blocked-{i}', constraint)
+    acceptable = {'min_gradient_tokens_per_second': 1.0, 'min_claim_service_bytes_per_second': 1.0,
+                  'min_submit_service_bytes_per_second': 1.0, 'max_heartbeat_service_seconds': 1.0}
+    eligible = enqueue('eligible', acceptable)
+    assert eligible['scheduling']['profile_sha256']
+    assert enqueue('eligible', acceptable)['job_id'] == eligible['job_id']
+    assert client.post(route, headers=headers, json={'payload': payloads[0], 'idempotency_key': 'eligible',
+        'allow_public_node_processing': True, 'scheduling': {'min_gradient_tokens_per_second': 2.0}}).status_code == 409
+    assert client.post(route, headers=headers, json={'payload': payloads[0], 'idempotency_key': 'empty',
+        'allow_public_node_processing': True, 'scheduling': {}}).status_code == 422
+    bootstrap = enqueue('bootstrap')
+    node = client.post('/api/v1/nodes', headers=headers, json={'name':'measured',
+        'hardware':hardware_report(), 'supported_job_types':['foundation.gradient.v1'],
+        'foundation_torch_version':str(torch.__version__)}).json()
+    nh = user_headers(node['node_token'])
+    resource = {'ram_available_bytes':2**30, 'foundation_device':'cpu'}
+    client.post('/api/v1/node/heartbeat', headers=nh, json=resource).raise_for_status()
+    claim = client.post('/api/v1/node/jobs/claim', headers=nh).json()
+    assert claim['job_id'] == bootstrap['job_id']  # constrained head does not starve bootstrap
+    result = execute_gradient(claim['payload'])
+    client.post(f"/api/v1/node/jobs/{claim['job_id']}/result", headers=nh,
+        json={'lease_token':claim['lease_token'], 'result':result}).raise_for_status()
+    sample = {'format':'ai-home-worker-service-measurement-v1', 'job_type':'foundation.gradient.v1',
+        'device':'cpu', 'heartbeat_service_seconds':0.01, 'claim_service_seconds':0.02,
+        'execution_seconds':1.0, 'submit_service_seconds':0.03,
+        'claim_response_bytes':1000, 'submit_request_bytes':1000}
+    client.post(f"/api/v1/node/jobs/{claim['job_id']}/measurement", headers=nh, json=sample).raise_for_status()
+    client.post('/api/v1/node/heartbeat', headers=nh, json={**resource,'foundation_device':'cuda','cuda_free_bytes':2**30}).raise_for_status()
+    assert client.post('/api/v1/node/jobs/claim', headers=nh).status_code == 204
+    client.post('/api/v1/node/heartbeat', headers=nh, json=resource).raise_for_status()
+    claim2 = client.post('/api/v1/node/jobs/claim', headers=nh).json()
+    assert claim2['job_id'] == eligible['job_id']
+    changed = copy.deepcopy(payloads[0]); changed['config']['context'] = 8
+    enqueue('other-profile', acceptable, changed)
+    assert client.post('/api/v1/node/jobs/claim', headers=nh).status_code == 204
+    enqueue('later', acceptable)
+    with client.app.state.session_factory() as session, session.begin():
+        stored = session.get(ComputeNode, node['node_id'])
+        hardware = copy.deepcopy(stored.hardware)
+        hardware['service_measurement']['completed_epoch'] = 0
+        stored.hardware = hardware
+    assert client.post('/api/v1/node/jobs/claim', headers=nh).status_code == 204
