@@ -370,3 +370,16 @@ pendientes anteriores no sustituyen el estado del nuevo perfil. Informe:
 `DESKTOP_NODE_ISOLATION_SMOKE.json`. La prueba de cambio de perfil visual comprueba
 también la señal de parada y los consentimientos; 36 pruebas de escritorio y
 privacidad aprobadas. No se simula cálculo neuronal en este ensayo.
+
+### Consulta directa de propiedad del nodo
+
+La comprobación previa al arranque usa ahora `GET /api/v1/nodes/{node_id}` y ya
+no depende del listado de 100 nodos. La consulta exige sesión de usuario y filtra
+por propietario y ausencia de revocación; un nodo ajeno, inexistente o revocado
+produce el mismo 404. No expone la credencial ni su hash. El listado conserva su
+límite anterior. Cliente y servidor deben actualizarse juntos.
+
+Validación local: 25 pruebas de nodos/trabajos aprobadas y nueva ejecución del
+smoke completo CPU/Tk/HTTP con bloqueo de reutilización entre cuentas
+(`artifacts/desktop-node-lookup-v1`). CI Foundation 45839308567 de 28fc6c8 terminó
+correctamente, incluido el nodo de escritorio instalado en Linux bajo Xvfb.

@@ -1269,6 +1269,21 @@ def create_app(
             )
         )
 
+    @app.get("/api/v1/nodes/{node_id}", response_model=NodeResponse)
+    def get_node(
+        node_id: str,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeNode:
+        node = session.scalar(select(ComputeNode).where(
+            ComputeNode.node_id == node_id,
+            ComputeNode.owner_user_id == current_user.user_id,
+            ComputeNode.revoked_at.is_(None),
+        ))
+        if node is None:
+            raise HTTPException(status_code=404, detail="Node not found.")
+        return node
+
     @app.delete("/api/v1/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_node(
         node_id: str,

@@ -1398,3 +1398,11 @@ de reutilización cruzada después de ejecutar y liquidar un gradiente. Tk confi
 parada y reinicio de consentimientos. 36 pruebas de escritorio/privacidad pasan.
 La verificación de propiedad conserva el límite de 100 nodos del listado actual;
 trabajos ya iniciados pueden terminar para la cuenta original.
+
+### Propiedad de nodos sin límite de listado
+
+El escritorio consulta directamente su nodo guardado con autorización por
+propietario. Eliminada la restricción de los 100 nodos recientes para reutilizar
+credenciales; nodos ajenos/revocados/inexistentes comparten 404. 25 pruebas y
+smoke completo CPU/Tk/HTTP aprobados. CI Foundation de 28fc6c8 completado con
+éxito, incluido smoke de escritorio contra paquete instalado en Linux.

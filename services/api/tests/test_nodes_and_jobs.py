@@ -91,6 +91,27 @@ def create_node(client: TestClient, token: str, name: str = "node-one") -> dict:
     return response.json()
 
 
+def test_node_lookup_is_owner_scoped_and_excludes_revoked(client):
+    register(client, "node-owner@example.com")
+    register(client, "node-other@example.com")
+    owner = login(client, "node-owner@example.com")
+    other = login(client, "node-other@example.com")
+    node = create_node(client, owner)
+    path = f"/api/v1/nodes/{node['node_id']}"
+    assert client.get(path).status_code == 401
+    response = client.get(path, headers=user_headers(owner))
+    assert response.status_code == 200
+    assert response.json()["node_id"] == node["node_id"]
+    assert "node_token" not in response.json() and "token_hash" not in response.json()
+    assert response.headers["cache-control"] == "private, no-store"
+    absent = client.get("/api/v1/nodes/missing", headers=user_headers(other))
+    foreign = client.get(path, headers=user_headers(other))
+    assert absent.status_code == foreign.status_code == 404
+    assert absent.json() == foreign.json()
+    assert client.delete(path, headers=user_headers(owner)).status_code == 204
+    assert client.get(path, headers=user_headers(owner)).status_code == 404
+
+
 def create_job(
     client: TestClient,
     token: str,

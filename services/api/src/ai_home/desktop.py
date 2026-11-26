@@ -3465,10 +3465,12 @@ def main() -> None:
             if token:
                 def verify_owned_node():
                     with httpx.Client(base_url=server_url, timeout=20) as client:
-                        response = client.get("/api/v1/nodes", headers={"Authorization": f"Bearer {user_token}"})
-                        response.raise_for_status()
-                        if not any(node["node_id"] == existing_id for node in response.json()):
+                        response = client.get(f"/api/v1/nodes/{existing_id}", headers={"Authorization": f"Bearer {user_token}"})
+                        if response.status_code == 404:
                             raise ValueError("El nodo guardado no pertenece a esta cuenta o está revocado. Inicia sesión con su propietario para gestionarlo.")
+                        response.raise_for_status()
+                        if response.json()["node_id"] != existing_id:
+                            raise ValueError("El servidor devolvió otro nodo; no se iniciará la contribución.")
                 self.node_registration_active = True
                 def on_owned(_):
                     self.node_registration_active = False
