@@ -1181,3 +1181,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   con PostgreSQL. Sin CUDA remota.
 - Checkpoint visual Linux descargado y cargado realmente en Windows, paso 4,
   28.544 parámetros. Evidencia y hash en VISION_PREFIX.md; sin calidad demostrada.
+
+## 2026-11-26 — CLI de entrenamiento visual
+
+- Configuración JSON explícita y acotada, BPE solo train, salida exclusiva,
+  informes y Ctrl+C cooperativo; reanudación conserva tokenizer del checkpoint.
+- Dos procesos locales ejecutaron pasos 1–2 y reanudaron 3–4 con artefactos reales.
+- Prueba CLI pasó en 3.10s, incluyendo exclusión de validation en BPE y protección
+  de salida existente. Comandos en VISION_PREFIX.md; calidad aún no demostrada.

@@ -220,3 +220,23 @@ El artefacto Linux se descargó a `artifacts/visual-linux-ci-v1` y su checkpoint
 SHA256 `bfb455e3a035e85aec507e2228626e8d2e120fe954569fc529460493cdb2a811`,
 paso 4, 28.544 parámetros. Esto verifica carga de pesos entre estos entornos,
 no reanudación bit-exact entre sistemas ni calidad visual.
+
+## CLI de entrenamiento visual
+
+```powershell
+python -m ai_home.foundation.vision_train_cli --dataset artifacts/vision-smoke-cpu-v1/dataset.json --config configs/foundation/vision-caption-example.json --output-dir artifacts/visual-partial-new --stop-after 2
+python -m ai_home.foundation.vision_train_cli --dataset artifacts/vision-smoke-cpu-v1/dataset.json --config configs/foundation/vision-caption-example.json --output-dir artifacts/visual-resumed-new --resume artifacts/visual-partial-new/visual-step-2.pt
+```
+
+Configuración explícita JSON limitada a 64 KiB: model (sin vocab_size), vision,
+training, prompt y tokenizer_vocab_size. En una corrida nueva BPE se entrena solo
+con captions train; el tamaño real puede ser inferior al máximo solicitado si no
+hay merges repetidos. Al reanudar se utiliza el tokenizador guardado, sin ampliarlo.
+El directorio debe ser nuevo para evitar sobrescrituras. Ctrl+C solicita guardado
+al límite del paso y restaura después el manejador de señal anterior.
+
+`training-report.json` registra configuración efectiva, hashes, historial y nombre
+del candidato. No acredita calidad. Ejecución local real en procesos separados:
+`artifacts/visual-cli-partial-v1` paso 2 y `artifacts/visual-cli-resumed-v1` paso 4.
+Prueba CLI: 1 passed in 3.10s, entrenamiento real, BPE solo train y salida exclusiva.
+El ejemplo es para comprobación técnica diminuta, no un corpus de capacidad.
