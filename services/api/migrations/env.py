@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 import ai_home.credits  # noqa: F401
+import ai_home.inference_credits  # noqa: F401
 import ai_home.job_credits  # noqa: F401
 import ai_home.models  # noqa: F401
 from ai_home.config import Settings

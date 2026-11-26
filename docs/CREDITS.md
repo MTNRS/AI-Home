@@ -108,3 +108,24 @@ owner and separate zero-balance worker, and a hidden Windows Tk rendering/close
 check using clearly isolated fixture values. Full suite before the final ledger
 bridge test: 199 passed, 4 PostgreSQL skipped; final credits module: 9 passed.
 This does not yet implement paid inference, desktop job funding or transfers.
+
+
+## Inference reservation primitives (integration in progress)
+
+Migration 0007 adds durable `inference_funding` records. The service reserves a
+positive integer price from the authenticated owner's account into a per-request
+escrow. Settlement transfers it to `service:foundation-inference`; refund returns
+it to the owner. All ledger postings and status transitions use the caller's
+transaction. Conditional updates prevent concurrent double resolution.
+
+Idempotency keys are scoped to the owner and bound to request digest and price.
+A duplicate returns `created=False`: callers must not execute inference again.
+Conflicting requests are rejected. Neither prompts nor generated text are stored
+in this table. Hashes are integrity bindings, not encryption or proof of privacy
+against guessing. Accounting records remain pseudonymous and durable.
+
+These primitives are not yet connected to chat routes, prices or crash recovery.
+They do not currently charge users. Callers must commit reservation before work,
+settle only successful completion, refund failed work, and reconcile interrupted
+requests. SQLite transactional/concurrency tests cover the primitives; PostgreSQL
+runtime behavior remains unverified on this machine.

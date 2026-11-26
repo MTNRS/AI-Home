@@ -529,3 +529,15 @@ a causal configuration before creating a run directory. A live Tk smoke executed
 fresh-parent training from the form and verified changed weights. Full suite:
 247 passed, 4 PostgreSQL skips. Layout and private-SFT button interaction have
 not been visually reviewed; no dataset or model has been published.
+
+
+### Inference accounting foundation
+
+Added migration 0007 and transactional reservation/settlement/refund primitives
+for inference, owner-scoped idempotency, request/price binding and conditional
+terminal transitions. No chat charge is enabled yet: API/stream lifecycle and
+crash reconciliation integration remain outstanding. Tests cover insufficient
+funds rollback, ownership, conflicts, repeated refunds/settlements, injected
+posting failure rollback, two concurrent duplicate reservations and concurrent
+settlement on file-backed SQLite. Migration upgrade/check/downgrade passed.
+Full suite: 251 passed, 4 PostgreSQL skips. No real user funds were touched.
