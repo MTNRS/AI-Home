@@ -1567,6 +1567,8 @@ def main() -> None:
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
             ttk.Button(routing, text="Explorar conocimiento local",
                        command=self._knowledge_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Entrenar modelo local",
+                       command=self._run_training_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ejecutar evaluación local",
                        command=self._run_evaluation_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ver evaluación o evolución",
@@ -1654,6 +1656,83 @@ def main() -> None:
             query.bind("<Return>", lambda _: search())
             search()
 
+        def _run_training_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Entrenar Foundation")
+            window.geometry("800x490")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            names = ("Dataset JSON", "Modelo JSON (opcional)", "Entrenamiento JSON", "Carpeta nueva", "Reanudar checkpoint (opcional)")
+            values = {name: tk.StringVar() for name in names}
+            for row, (name, value) in enumerate(values.items()):
+                ttk.Label(frame, text=name).grid(row=row, column=0, sticky="w", pady=6)
+                ttk.Entry(frame, textvariable=value, width=50).grid(row=row, column=1, sticky="ew")
+                def choose(label=name, variable=value):
+                    if label == "Carpeta nueva":
+                        path = filedialog.asksaveasfilename(parent=window, title="Nombre de carpeta nueva para el entrenamiento")
+                    else:
+                        path = filedialog.askopenfilename(parent=window)
+                    if path:
+                        variable.set(path)
+                ttk.Button(frame, text="Elegir", command=choose).grid(row=row, column=2, padx=5)
+            frame.columnconfigure(1, weight=1)
+            device = tk.StringVar(value="cpu")
+            ttk.Label(frame, text="Dispositivo").grid(row=5, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=12).grid(row=5, column=1, sticky="w")
+            status = tk.StringVar(value="Usa datos públicos autorizados. El entrenamiento crea un candidato; no lo activa.")
+            ttk.Label(frame, textvariable=status, wraplength=730).grid(row=7, column=0, columnspan=3, sticky="w", pady=12)
+            cancellation = threading.Event()
+            events = queue.Queue()
+            def stop():
+                cancellation.set()
+                status.set("Parada solicitada; guardando al terminar el paso en curso…")
+            def start():
+                if any(getattr(self, name, None) is not None and getattr(self, name).is_alive()
+                       for name in ("training_worker", "evaluation_worker")):
+                    status.set("Ya hay un entrenamiento o evaluación local en curso.")
+                    return
+                paths = [value.get().strip() for value in values.values()]
+                if any(not paths[index] for index in (0, 2, 3)):
+                    status.set("Selecciona dataset, configuración de entrenamiento y una carpeta nueva.")
+                    return
+                selected_device = device.get()
+                cancellation.clear()
+                self.training_cancel = cancellation
+                start_button.configure(state="disabled")
+                status.set("Preparando datos y entrenamiento…")
+                def execute():
+                    try:
+                        from ai_home.foundation.training_job import run_training
+                        result = run_training(paths[0], paths[1] or None, paths[2], paths[3],
+                                              device=selected_device, resume=paths[4] or None,
+                                              cancel=cancellation, on_step=lambda item: events.put(("progress", dict(item))))
+                        events.put(("done", result))
+                    except Exception as error:
+                        events.put(("error", str(error)))
+                self.training_worker = threading.Thread(target=execute, daemon=True)
+                self.training_worker.start()
+            def poll():
+                if not window.winfo_exists():
+                    return
+                while not events.empty():
+                    kind, value = events.get_nowait()
+                    if kind == "progress":
+                        status.set(f"Paso {value['step']} — pérdida {value['train_loss']:.4f} — "
+                                   f"{value.get('tokens_per_second', 0):.1f} tokens/s")
+                    elif kind == "done":
+                        status.set(f"{value['stop_reason']}. Paso {value['step']}. Checkpoint: {value['checkpoint']}")
+                        start_button.configure(state="normal")
+                    else:
+                        status.set(value)
+                        start_button.configure(state="normal")
+                window.after(100, poll)
+            start_button = ttk.Button(frame, text="Entrenar", command=start)
+            start_button.grid(row=6, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Parar y guardar", command=stop).grid(row=6, column=2)
+            window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
+            poll()
+
         def _run_evaluation_dialog(self) -> None:
             window = tk.Toplevel(self)
             self.private_windows.append(window)
@@ -1688,9 +1767,9 @@ def main() -> None:
                 cancellation.set()
                 status.set("Cancelación solicitada; esperando al trabajo en curso…")
             def start():
-                active = getattr(self, "evaluation_worker", None)
-                if active is not None and active.is_alive():
-                    status.set("Ya hay una evaluación local en curso.")
+                if any(getattr(self, name, None) is not None and getattr(self, name).is_alive()
+                       for name in ("training_worker", "evaluation_worker")):
+                    status.set("Ya hay un entrenamiento o evaluación local en curso.")
                     return
                 try:
                     count = int(budget.get())
@@ -2830,6 +2909,12 @@ def main() -> None:
             self._background(revoke, on_success)
 
         def _close(self) -> None:
+            worker = getattr(self, "training_worker", None)
+            if worker is not None and worker.is_alive():
+                self.training_cancel.set()
+                self.status_var.set("Esperando a guardar el entrenamiento antes de cerrar…")
+                self.after(100, self._close)
+                return
             self._stop_generation()
             if self.node_stop is not None:
                 self.node_stop.set()

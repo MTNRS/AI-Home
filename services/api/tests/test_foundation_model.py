@@ -217,3 +217,28 @@ def test_vocabulary_and_fresh_training_cli_end_to_end(tmp_path):
     assert conflict.returncode == 2
     shrinking = invoke("ai_home.foundation", *args, "--allow-model-shrink")
     assert shrinking.returncode == 2
+
+
+def test_local_training_job_retains_configuration_and_resumes(tmp_path):
+    import json
+    from dataclasses import asdict
+    from ai_home.foundation.training_job import run_training
+    dataset, architecture, settings = (tmp_path / name for name in ("dataset.json", "model.json", "training.json"))
+    dataset.write_text(json.dumps({"format_version": 1, "records": records()}))
+    architecture.write_text(json.dumps(asdict(config())))
+    settings.write_text(json.dumps(asdict(TrainingConfig(steps=4, warmup=0))))
+    cancellation = threading.Event()
+    paused = run_training(dataset, architecture, settings, tmp_path / "paused", cancel=cancellation,
+                          on_step=lambda metric: cancellation.set() if metric["step"] == 2 else None)
+    assert paused["step"] == 2 and paused["stop_reason"] == "cancelled"
+    assert (tmp_path / "paused" / "configuration.json").is_file()
+    assert json.loads((tmp_path / "paused" / "result.json").read_text())["step"] == 2
+    resumed = run_training(dataset, None, settings, tmp_path / "resumed", resume=paused["checkpoint"])
+    complete = run_training(dataset, architecture, settings, tmp_path / "complete")
+    assert resumed["training_complete"] and complete["training_complete"]
+    left = load_checkpoint(resumed["checkpoint"])[0].state_dict()
+    right = load_checkpoint(complete["checkpoint"])[0].state_dict()
+    for key in left:
+        torch.testing.assert_close(left[key], right[key], atol=1e-6, rtol=1e-5)
+    with pytest.raises(FileExistsError):
+        run_training(dataset, architecture, settings, tmp_path / "paused")

@@ -503,3 +503,16 @@ output collision and pre/mid-run cancellation. A live Tk smoke invoked the actua
 button, evaluated the existing CUDA-trained checkpoint on CPU and saved a real
 10-probe report under artifacts/ui-review. Layout has not been visually reviewed.
 Full suite: 246 passed, 4 PostgreSQL skips. No quality or promotion claim.
+
+
+### Desktop real training and resume
+
+Added local dataset/model/training configuration selection, CPU/CUDA device,
+new run directory, resume checkpoint, actual step/loss/throughput and controlled
+stop. Run directories retain settings and results. Training/evaluation workers
+exclude each other in the desktop; normal close waits for the trainer to save.
+A real Tk button smoke trained two CPU steps and verified changed embeddings
+and a completed checkpoint under artifacts/ui-review. Functional cancellation
+and resume tests compare all tensors against uninterrupted training. Full suite:
+247 passed, 4 PostgreSQL skips. Dialog layout has not been visually reviewed.
+Private SFT and fresh-parent training are still CLI-only; no automatic promotion.

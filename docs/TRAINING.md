@@ -186,3 +186,28 @@ With a parent, automatic resource fitting uses the actual parent architecture
 and may adjust microbatch/accumulation. Architecture shrinking is prohibited.
 An explicitly supplied model configuration must match the parent. The output
 is a candidate requiring evaluation and approval, not a newly active model.
+
+
+## Desktop training control
+
+On the provider page choose **Entrenar modelo local**. Select an authorized public
+dataset JSON, an optional model configuration JSON, a required training
+configuration JSON and a new run directory. Choose CPU or CUDA. To resume, select
+the prior checkpoint and retain the exact training configuration/dataset; leave
+model configuration blank to use the saved architecture. Without a parent or
+model configuration, the trainer uses its default architecture.
+
+The worker displays actual optimizer steps, training loss and throughput. The
+new run directory retains `configuration.json`, numbered checkpoints, `model.pt`
+and, after a successful or controlled-stop return, `result.json`. Existing run
+directories are rejected. **Parar y guardar** requests cancellation at a complete
+optimizer update; no new checkpoint is produced if stopped before the first
+update. Closing the dialog or changing profile also requests cancellation.
+Normal application close waits for the training worker to finish saving; forced
+process termination cannot guarantee a new checkpoint.
+
+Desktop evaluation and training workers exclude one another within this app
+instance. Other processes are not coordinated. This initial training form accepts
+public datasets; reviewed private SFT exports and fresh-parent fine-tuning remain
+available through the CLI. It does not automatically fit resource budgets or
+activate a checkpoint; configuration limits and trainer validation apply.
