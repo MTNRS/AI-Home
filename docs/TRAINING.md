@@ -53,10 +53,50 @@ el texto de las conversaciones. Los pesos pueden memorizar datos: borrar la
 exportación no elimina su influencia; una retirada posterior exige reconstruir
 versiones afectadas o investigar unlearning, que aún no está implementado.
 
-Actualmente este comando inicializa un modelo propio desde cero o reanuda el
-mismo entrenamiento. Fine-tuning desde otro candidato, replay, evaluación de
-regresión estable y promoción aprobada siguen pendientes. Esta ruta demuestra
+El comando básico inicializa desde cero o reanuda el mismo entrenamiento. El
+módulo continual permite fine-tuning desde otro candidato con replay y una
+evaluación explícita fija. La promoción aprobada sigue pendiente. Esta ruta demuestra
 SFT mecánico, no capacidad conversacional. El empaquetado ahora incluye colas:
 no comparar métricas históricas como si fueran la misma configuración de datos.
 La nueva configuración incluye `objective`; resume rechaza configuraciones
 antiguas sin ese campo en lugar de asumir equivalencia.
+
+## Aprendizaje incremental controlado
+
+```powershell
+python -m ai_home.foundation.continual --parent parent.pt --output-dir artifacts/candidate-v2 --validation holdout.json --replay previous.json --dataset incremental.json --training-config training.json --device cpu
+```
+
+Alternativamente usar `--reviewed-export reviewed.json` y objetivo `sft`.
+Replay y holdout deben ser corpus públicos revisados; para SFT deben contener
+conversaciones. Replay de exportaciones restringidas todavía no está conectado.
+Todos los datasets públicos usan el esquema versionado de `--dataset`.
+
+El padre debe tener hashes de documentos de entrenamiento/evaluación. Los
+checkpoints antiguos sin trazabilidad se rechazan. El candidato conserva
+arquitectura y BPE del padre; usa un optimizador nuevo. Resume conserva el
+optimizador del candidato y exige datasets/configuración idénticos.
+
+Cada lote contiene ejemplos nuevos y replay (25% solicitado, redondeado a
+muestras enteras con al menos una de cada clase). El informe registra el número
+real de muestras replay. Se rechaza contaminación exacta con el holdout actual
+y con todos los holdouts de la cadena de ancestros; no detecta paráfrasis ni
+contaminación semántica. El holdout de regresión no debe reutilizarse para elegir
+repetidamente hiperparámetros: reservar también una evaluación final independiente.
+
+La salida exige un directorio nuevo y nunca sustituye al padre. El reporte
+compara pérdida sobre exactamente los mismos tokens, registra hashes y marca
+el resultado candidato. Superar el umbral no autoriza promoción. Las restricciones
+de uso del padre se propagan aunque los datos incrementales sean públicos.
+
+Experimento reproducible ejecutado en CPU:
+
+```powershell
+python -m ai_home.foundation.continual_smoke --output-dir artifacts/continual-smoke-v2 --device cpu
+```
+
+Usar un directorio inexistente. Guarda corpus sintéticos declarados, configuraciones,
+padre, candidato, checkpoints intermedios y reporte. Evidencia conservada en
+`docs/CONTINUAL_SMOKE_CPU.json`: pérdida 5,621232 a 5,580207 sobre 1.536 tokens,
+ocho pasos iniciales y ocho incrementales. No demuestra calidad conversacional,
+control general de catastrophic forgetting ni mejora de razonamiento.

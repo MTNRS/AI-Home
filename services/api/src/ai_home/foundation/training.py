@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass
+import hashlib
 import math
 from pathlib import Path
 import time
@@ -7,7 +8,7 @@ import torch
 from torch.nn import functional as F
 
 from .checkpoint import FORMAT, atomic_save, load_checkpoint
-from .data import canonical_hash, split_records
+from .data import canonical_hash, prepare_records, split_records
 from .model import FoundationConfig, FoundationModel
 from .tokenizer import ByteBPE
 
@@ -99,8 +100,15 @@ def evaluate(model, sequences, device, batch_size=2):
 
 
 def train(records, output, config=None, training=None, device="auto", resume=None,
-          stop_after=None, on_step=None, reviewed_export=None):
+          stop_after=None, on_step=None, reviewed_export=None, initial_checkpoint=None,
+          validation_records=None, replay_records=None, replay_fraction=0.25):
     training = training or TrainingConfig()
+    if resume and initial_checkpoint:
+        raise ValueError("Resume and initialization are distinct operations")
+    if not 0 < replay_fraction < 1:
+        raise ValueError("Replay fraction must be between zero and one")
+    if replay_records and training.batch_size < 2:
+        raise ValueError("Replay requires at least two samples per batch")
     device = select_device(device)
     if device == "cpu" and training.precision != "fp32":
         raise ValueError("Reference CPU trainer requires fp32")
@@ -113,12 +121,24 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
         if training.objective != "sft":
             raise ValueError("Reviewed conversations require SFT")
         records = load_reviewed_export(reviewed_export)
-    train_records, validation_records = split_records(records, allow_reviewed=reviewed_export is not None)
-    dataset_hash = canonical_hash({"train": train_records, "validation": validation_records})
+    if validation_records is None:
+        train_records, validation_records = split_records(records, allow_reviewed=reviewed_export is not None)
+    else:
+        train_records = prepare_records(records, allow_reviewed=reviewed_export is not None)
+        validation_records = prepare_records(validation_records)
+    replay_records = prepare_records(replay_records) if replay_records else []
+    train_hashes = {r["sha256"] for r in train_records + replay_records}
+    validation_hashes = {r["sha256"] for r in validation_records}
+    if train_hashes & validation_hashes:
+        raise ValueError("Evaluation contamination: training and validation overlap")
+    dataset_hash = canonical_hash({"train": train_records, "validation": validation_records,
+                                   "replay": replay_records, "replay_fraction": replay_fraction})
     torch.manual_seed(training.seed)
     sampler = torch.Generator().manual_seed(training.seed)
     start, metrics = 0, []
     payload = None
+    lineage = None
+    parent_sha256 = None
     if resume:
         model, tokenizer, payload = load_checkpoint(resume, max_bytes=training.memory_budget_bytes)
         if payload["device"] != device:
@@ -129,6 +149,21 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
             raise ValueError("Resume architecture mismatch")
         config = model.config
         start, metrics = payload["step"], payload["metrics"]
+        lineage = payload
+        parent_sha256 = payload.get("parent_checkpoint_sha256")
+    elif initial_checkpoint:
+        initial_path = Path(initial_checkpoint).resolve()
+        output_path = Path(output).resolve()
+        if initial_path == output_path or any(initial_path == output_path.with_name(
+                f"{output_path.stem}.step-{s}.pt") for s in range(1, training.steps + 1)):
+            raise ValueError("A candidate must not overwrite its parent")
+        model, tokenizer, lineage = load_checkpoint(initial_path, max_bytes=training.memory_budget_bytes)
+        parent_sha256 = hashlib.sha256(initial_path.read_bytes()).hexdigest()
+        if config is not None and model.config != config:
+            raise ValueError("Fine-tuning must preserve architecture and vocabulary")
+        if "training_document_hashes" not in lineage or "validation_document_hashes" not in lineage:
+            raise ValueError("Parent lacks dataset lineage; cannot verify evaluation isolation")
+        config = model.config
     else:
         tokenizer = ByteBPE.train([r["text"] for r in train_records],
                                   vocab_size=config.vocab_size if config else 512)
@@ -148,9 +183,26 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
         if estimated > budget:
             raise ValueError(f"Estimated training bytes {estimated} exceed budget {budget}; reduce configuration")
         model = FoundationModel(config)
+    if lineage is not None:
+        if validation_hashes & set(lineage.get("training_document_hashes", [])):
+            raise ValueError("Evaluation contamination: parent trained on validation data")
+        if train_hashes & set(lineage.get("validation_document_hashes", [])):
+            raise ValueError("Evaluation contamination: training includes a previous holdout")
+        train_hashes.update(lineage.get("training_document_hashes", []))
+        validation_hashes.update(lineage.get("validation_document_hashes", []))
+    estimated = model.parameter_count * 20 + (
+        training.batch_size * config.context * config.width * config.layers * 32
+        + training.batch_size * config.heads * config.context ** 2 * config.layers * 4)
+    budget = training.memory_budget_bytes
+    if device == "cuda":
+        budget = min(budget, int(torch.cuda.mem_get_info()[0] * 0.8))
+    if estimated > budget:
+        raise ValueError("Training memory estimate exceeds budget")
     model.to(device).train()
     train_data = _sequences(train_records, tokenizer, config.context, training.objective)
     validation_data = _sequences(validation_records, tokenizer, config.context, training.objective)
+    replay_data = _sequences(replay_records, tokenizer, config.context, training.objective) if replay_records else None
+    replay_count = max(1, min(training.batch_size - 1, round(training.batch_size * replay_fraction))) if replay_data else 0
     optimizer = torch.optim.AdamW(model.parameters(), lr=training.learning_rate)
     scaler = torch.amp.GradScaler("cuda", enabled=training.precision == "fp16")
     if payload is not None:
@@ -180,9 +232,13 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
         optimizer.zero_grad(set_to_none=True)
         total_loss = 0.0
         for _ in range(training.accumulation):
-            indices = torch.randint(len(train_data[0]), (training.batch_size,), generator=sampler)
+            indices = torch.randint(len(train_data[0]), (training.batch_size - replay_count,), generator=sampler)
             batch = train_data[0][indices].to(device)
             labels = train_data[1][indices].to(device)
+            if replay_data is not None:
+                indices = torch.randint(len(replay_data[0]), (replay_count,), generator=sampler)
+                batch = torch.cat((batch, replay_data[0][indices].to(device)))
+                labels = torch.cat((labels, replay_data[1][indices].to(device)))
             with torch.autocast(device_type=device, dtype=dtype, enabled=training.precision != "fp32"):
                 logits, _ = model(batch)
                 loss = F.cross_entropy(logits.float().flatten(0, 1), labels.flatten())
@@ -215,7 +271,12 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
                        "cuda_rng": torch.cuda.get_rng_state_all() if device == "cuda" else [],
                        "device": device, "dataset_sha256": dataset_hash, "metrics": metrics,
                        "validation": validation, "status": "candidate",
-                       "data_visibility": "reviewed-training-only" if reviewed_export else "public",
+                       "data_visibility": "reviewed-training-only" if reviewed_export or (
+                           lineage is not None and lineage.get("data_visibility") != "public") else "public",
+                       "parent_checkpoint_sha256": parent_sha256,
+                       "training_document_hashes": sorted(train_hashes),
+                       "validation_document_hashes": sorted(validation_hashes),
+                       "replay_samples_per_batch": replay_count,
                        "dataset_provenance": sorted({(r.get("dataset_version", ""),
                                                        r.get("manifest_sha256", "")) for r in records}),
                        "embedding_delta_l2": (model.embedding.weight.detach().cpu() - initial).norm().item(),

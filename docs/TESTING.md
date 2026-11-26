@@ -24,3 +24,7 @@ La sesión anterior no disponía de torch/pytest y no pudo ejecutar la validaci�
 ## Contribuciones y SFT
 
 Suite completa tras integrar exportaciones revisadas: `python -m pytest -q` — 131 aprobadas, 5 omitidas, 12,65 segundos. `git diff --check`: exit 0. La prueba usa API local real y entrenamiento PyTorch CPU; no invoca proveedores externos. Se comprueban máscara de pérdida, colas cortas, bloqueo de exportación a usuario ordinario, hash y revisión, cambio de parámetros y recarga del candidato. CUDA y PostgreSQL siguen omitidos.
+
+## Aprendizaje incremental con replay
+
+`python -m pytest -q`: 132 aprobadas, 5 omitidas, 12,74 segundos. `git diff --check`: exit 0. La nueva prueba entrena padre y candidato, verifica tokenizador invariable, restricciones heredadas, padre intacto, reanudación bit a bit con replay y bloqueo de contaminación ancestral. Experimento persistente: `python -m ai_home.foundation.continual_smoke --output-dir artifacts/continual-smoke-v1 --device cpu`, exit 0; informe conservado en CONTINUAL_SMOKE_CPU.json.

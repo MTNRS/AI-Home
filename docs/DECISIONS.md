@@ -69,3 +69,7 @@ Foundation pasa a ser el backend HTTP predeterminado. El proxy externo se conser
 ## 2026-11-26: consentimiento de entrenamiento no implica publicación
 
 Las exportaciones revisadas entran por una opción explícita, separada del corpus público. Se mantienen como reviewed-training-only y SFT enmascara prompts. Se conserva manifiesto en el checkpoint y no se añade ninguna distribución a nodos. El hash no autentica el archivo: el operador debe obtenerlo por la API administrativa autorizada.
+
+## 2026-11-26: separar reanudación y aprendizaje incremental
+
+Resume restaura el optimizador y exige datos/configuración idénticos. Inicializar un candidato conserva pesos y tokenizador propios pero crea un optimizador nuevo. Los hashes de entrenamiento y holdout se acumulan por linaje; un checkpoint sin ese historial no puede demostrar aislamiento y se rechaza como padre incremental. Un resultado favorable de pérdida nunca activa publicación.
