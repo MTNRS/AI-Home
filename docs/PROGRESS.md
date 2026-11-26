@@ -839,3 +839,14 @@ reenvía y recupera ambos IDs, comprueba reserva única, procesa gradientes real
 verifica reintentos sin doble actualización ni nuevos jobs. Suite: 284 correctas,
 5 PostgreSQL omitidas; comprobación final del gate de padre: test enfocado correcto.
 Reinicio automático de servicios, failover y prueba multihost siguen pendientes.
+
+### Reanudación real del coordinador entre procesos
+
+El smoke HTTP admite --restart-coordinator: cuatro procesos CLI independientes
+recuperan/consultan/guardan/reconsultan la segunda ronda. Ensayo real CPU/CUDA con
+recompensa de tres créditos por job: mismos IDs y reservas al reiniciar, pesos
+idénticos a referencia, bytes inmutables al reintentar, cuatro jobs totales y seis
+créditos ganados por cada worker. Evidencia: COORDINATOR_RESTART_SMOKE.json.
+Suite local posterior: 284 correctas, 5 PostgreSQL omitidas. CI del código anterior
+0029fc3 pasó en runs 45815026730 (matriz) y 45815026912 (Foundation). El ensayo nuevo
+no demuestra reinicio del servidor, supervisor automático ni failover multihost.

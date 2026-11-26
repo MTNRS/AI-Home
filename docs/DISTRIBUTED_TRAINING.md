@@ -240,3 +240,29 @@ executes real gradient workers, commits the next checkpoint, and retries without
 changing bytes or job count. It also rejects a different authenticated owner.
 This test uses the real FastAPI/database/ledger implementation in-process; the
 separate prior recovery smoke provides real loopback CPU/CUDA transport evidence.
+
+### Real coordinator process restart smoke
+
+Run the existing HTTP experiment with `--restart-coordinator` and at least two
+rounds to exercise four independent coordinator CLI processes for round 2:
+
+```powershell
+python -m ai_home.foundation.distributed_smoke --output-dir artifacts/coordinator-restart --rounds 2 --reward-credits 3 --worker-devices cpu cuda --restart-coordinator
+```
+
+Round 1 bootstraps the parent checkpoint. The first coordinator process creates
+round-2 jobs and exits waiting; the second reconstructs the same request from the
+plan and finds identical IDs with unchanged reserves. CPU/CUDA worker processes
+complete those jobs over HTTP. A third coordinator process commits the new round,
+and a fourth verifies the already committed result. The smoke compares recovered
+weights exactly with an uninterrupted reference update, checks unchanged output
+bytes on retry, and asserts exactly two jobs per round. Tokens are passed through
+child-process environment only and are not stored in the plan/report.
+
+The actual two-round run in COORDINATOR_RESTART_SMOKE.json completed all four
+coordinator processes, paid six test credits to each worker and left no reserved
+credits. It used one physical Windows host and loopback networking. This proves
+fresh-process reconstruction at those boundaries; it does not demonstrate forced
+process termination during every instruction, API-server restart, automatic
+service supervision or multi-host failover. The separate fault-injection test
+covers interruption before checkpoint publication and lost HTTP creation replies.

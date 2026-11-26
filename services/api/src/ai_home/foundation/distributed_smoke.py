@@ -38,11 +38,14 @@ def main():
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--reward-credits", type=int, default=0)
     parser.add_argument("--worker-devices", nargs=2, choices=("cpu", "cuda"), default=["cpu", "cpu"])
+    parser.add_argument("--restart-coordinator", action="store_true")
     args = parser.parse_args()
     if not 1 <= args.rounds <= 10:
         parser.error("Reference experiment permits 1-10 rounds")
     if not 0 <= args.reward_credits <= 100:
         parser.error("Smoke reward must be between 0 and 100 internal test credits")
+    if args.restart_coordinator and args.rounds < 2:
+        parser.error("Coordinator restart requires at least two rounds")
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(2)
@@ -71,7 +74,7 @@ def main():
     server = uvicorn.Server(uvicorn.Config(app, log_level="error", access_log=False))
     thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
     thread.start()
-    metrics, workers = [], []
+    metrics, workers, coordinator_runs = [], [], []
     started = time.perf_counter()
     try:
         for _ in range(100):
@@ -96,6 +99,17 @@ def main():
             response = client.post("/api/v1/auth/login", json=credentials)
             response.raise_for_status()
             client.headers["Authorization"] = "Bearer " + response.json()["access_token"]
+            def advance_process(step):
+                process = subprocess.run([sys.executable, "-m", "ai_home.foundation.coordinator", "advance",
+                    str(output / f"round-{step}-plan.json"), str(output / f"round-{step-1}.pt"),
+                    str(output / f"coordinator-round-{step}.pt"), "--server", url],
+                    env={**os.environ, "AI_HOME_COORDINATOR_TOKEN": client.headers["Authorization"][7:],
+                         "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2"},
+                    capture_output=True, text=True, check=True, timeout=60,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+                result = json.loads(process.stdout)
+                coordinator_runs.append({"round": step, **result})
+                return result
             nodes, worker_sessions = [], []
             for i in range(2):
                 worker_credentials = {"email": f"worker-{i}@example.com", "password": secrets.token_urlsafe(32)}
@@ -119,11 +133,24 @@ def main():
                         "config": asdict(config), "parameters": parameters, "torch_version": str(torch.__version__),
                         "weights_public_and_redistributable": True}
                     round_payloads.append(payload)
+                    if args.restart_coordinator and step > 1:
+                        continue
                     response = client.post("/api/v1/jobs/foundation/gradient", json={"payload": payload,
                         "allow_public_node_processing": True, "idempotency_key": f"round-{step}-shard-{shard}",
                         "reward_credits": args.reward_credits})
                     response.raise_for_status()
                     ids.append(response.json()["job_id"])
+                if args.restart_coordinator and step > 1:
+                    from .coordinator import create_plan
+                    create_plan(output / f"round-{step-1}.pt", round_payloads, output / f"round-{step}-plan.json",
+                                server=url, owner_user_id=registration.json()["user_id"],
+                                reward_credits=args.reward_credits, allow_public_node_processing=True)
+                    first = advance_process(step)
+                    reserved = client.get("/api/v1/credits").json()
+                    second = advance_process(step)
+                    if first != second or reserved != client.get("/api/v1/credits").json():
+                        raise RuntimeError("Restart duplicated jobs or credit reservations")
+                    ids = [job["id"] for job in first["jobs"]]
                 for node, worker_device in zip(nodes, args.worker_devices):
                     environment = {**os.environ, "OMP_NUM_THREADS": "2", "MKL_NUM_THREADS": "2"}
                     worker = subprocess.run([sys.executable, "-m", "ai_home.foundation.node_smoke", "--worker"],
@@ -156,6 +183,17 @@ def main():
                     "dataset_sha256": canonical_hash(prepare_records(train_records)),
                     "gradient_artifact_sha256": [r["artifact_sha256"] for r in results]}
                 atomic_save(payload, output / f"round-{step}.pt")
+                if args.restart_coordinator and step > 1:
+                    committed = advance_process(step)
+                    recovered_path = output / f"coordinator-round-{step}.pt"
+                    recovered, _, _ = load_checkpoint(recovered_path)
+                    if not all(torch.equal(value, recovered.state_dict()[name]) for name, value in model.state_dict().items()):
+                        raise RuntimeError("Restarted coordinator weights differ from reference")
+                    digest = hashlib.sha256(recovered_path.read_bytes()).hexdigest()
+                    if advance_process(step) != committed or hashlib.sha256(recovered_path.read_bytes()).hexdigest() != digest:
+                        raise RuntimeError("Committed retry changed the round")
+                    if len(client.get("/api/v1/jobs").json()) != step * 2:
+                        raise RuntimeError("Restart created extra jobs")
                 for i, result in enumerate(results):
                     (output / f"round-{step}-shard-{i}.json").write_text(result["artifact_json"], encoding="utf-8")
             checkpoint = output / f"round-{args.rounds}.pt"
@@ -170,6 +208,7 @@ def main():
                 "checkpoint_sha256": hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
                 "elapsed_seconds": time.perf_counter() - started, "parameter_count": model.parameter_count,
                 "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim"}
+            report["coordinator_process_runs"] = coordinator_runs
             report["credits"] = {"reward_per_job": args.reward_credits,
                 "requester": client.get("/api/v1/credits").json(),
                 "workers": [client.get("/api/v1/credits", headers=h).json() for h in worker_sessions],

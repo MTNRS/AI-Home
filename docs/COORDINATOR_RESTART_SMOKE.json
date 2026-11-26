@@ -1,0 +1,134 @@
+{
+  "format": "ai-home-distributed-smoke-v1",
+  "torch_version": "2.14.1+cu130",
+  "transport": "loopback HTTP",
+  "device": "cpu",
+  "workers": [
+    {
+      "round": 1,
+      "node_id": "73277a9f-1b1b-4786-808a-ccf3e61f96a0",
+      "device": "cpu",
+      "pid": 23728,
+      "completed": true
+    },
+    {
+      "round": 1,
+      "node_id": "9b797b64-c543-478c-88ff-1f4cc770cbb5",
+      "device": "cuda",
+      "pid": 9244,
+      "completed": true
+    },
+    {
+      "round": 2,
+      "node_id": "73277a9f-1b1b-4786-808a-ccf3e61f96a0",
+      "device": "cpu",
+      "pid": 29092,
+      "completed": true
+    },
+    {
+      "round": 2,
+      "node_id": "9b797b64-c543-478c-88ff-1f4cc770cbb5",
+      "device": "cuda",
+      "pid": 46400,
+      "completed": true
+    }
+  ],
+  "metrics": [
+    {
+      "round": 1,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.7676215171813965,
+      "validation": {
+        "loss": 5.679264545440674,
+        "tokens": 32,
+        "perplexity": 292.73405813645076
+      }
+    },
+    {
+      "round": 2,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.677714109420776,
+      "validation": {
+        "loss": 5.602051734924316,
+        "tokens": 32,
+        "perplexity": 270.98182031589835
+      }
+    }
+  ],
+  "baseline_validation": {
+    "loss": 5.765335559844971,
+    "tokens": 32,
+    "perplexity": 319.04608513076136
+  },
+  "embedding_delta_l2": 0.1838996857404709,
+  "generated_text": "\ufffd\u065f\u0666\ufffd\ufffdZ\ufffd96D%J\ufffd\ufffd",
+  "checkpoint_sha256": "1c0bd7d9aab0c40ccbaa5cda4c562814c2f9e525499be02103f4dbefa978bfc7",
+  "elapsed_seconds": 28.61314929999935,
+  "parameter_count": 28192,
+  "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim",
+  "coordinator_process_runs": [
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "46354678-6804-4ff8-a34d-03a6f0b37ebf",
+          "status": "queued"
+        },
+        {
+          "id": "d5c53fb5-5922-47ba-aadf-b0912d065f93",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "46354678-6804-4ff8-a34d-03a6f0b37ebf",
+          "status": "queued"
+        },
+        {
+          "id": "d5c53fb5-5922-47ba-aadf-b0912d065f93",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "f9558bfad82be6108790f577b4cfee220dbb9bb1899c600e36af34f19e52f5e4"
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "f9558bfad82be6108790f577b4cfee220dbb9bb1899c600e36af34f19e52f5e4"
+    }
+  ],
+  "credits": {
+    "reward_per_job": 3,
+    "requester": {
+      "available": 0,
+      "reserved": 0,
+      "earned": 0
+    },
+    "workers": [
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      },
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      }
+    ],
+    "issuance": "Synthetic initial balance in disposable demo database; no money or cryptocurrency"
+  }
+}
