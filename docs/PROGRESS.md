@@ -1305,3 +1305,10 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   servidor/HTTP; no son ancho de banda físico ni RTT puro. Integración automática,
   persistencia/scheduler y ejecución entre equipos siguen pendientes.
 - Alcance en HTTP_TRANSFER_PROBE.md.
+
+## 2026-11-26 — Sonda de transferencia sobre HTTP real
+
+- Smoke Uvicorn/SQLite migrada y NodeAgent, credenciales sintéticas, transferencias
+  64 KiB y 1 MiB verificadas. Trabajos y transacciones permanecen 0; cierre comprobado.
+- Informe HTTP_TRANSFER_SMOKE.json. Solo loopback, no ancho de banda físico.
+- Gate de paquete instalado añadido a CI con informe; resultado remoto pendiente.

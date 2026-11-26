@@ -1,0 +1,43 @@
+{
+  "format": "ai-home-transfer-smoke-v1",
+  "transport": "real loopback HTTP",
+  "samples": [
+    {
+      "format": "ai-home-http-transfer-probe-v1",
+      "payload_bytes": 65536,
+      "empty_round_trip_seconds": [
+        0.0038477000052807853,
+        0.0021154999994905666,
+        0.0018849999905796722
+      ],
+      "download_seconds": 0.0019185999990440905,
+      "upload_seconds": 0.00210309999238234,
+      "download_bytes_per_second": 34158240.40063181,
+      "upload_bytes_per_second": 31161618.675944373,
+      "claim": "HTTP transfer service including authentication and server overhead; not physical bandwidth or network-only RTT"
+    },
+    {
+      "format": "ai-home-http-transfer-probe-v1",
+      "payload_bytes": 1048576,
+      "empty_round_trip_seconds": [
+        0.0015347000007750466,
+        0.001520300007541664,
+        0.0014923999988241121
+      ],
+      "download_seconds": 0.003090800004429184,
+      "upload_seconds": 0.003724900001543574,
+      "download_bytes_per_second": 339257149.76619893,
+      "upload_bytes_per_second": 281504469.80200195,
+      "claim": "HTTP transfer service including authentication and server overhead; not physical bandwidth or network-only RTT"
+    }
+  ],
+  "before": {
+    "jobs": 0,
+    "credit_transactions": 0
+  },
+  "after": {
+    "jobs": 0,
+    "credit_transactions": 0
+  },
+  "claim": "One machine, synthetic account; no physical-network bandwidth or multi-host evidence"
+}
