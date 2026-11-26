@@ -10,20 +10,48 @@ from .evaluation import ProbeSuite, evaluate_checkpoint
 from .training import TrainingConfig
 
 
+def probe_regressions(before, after):
+    for field in ("suite_sha256", "generation", "device", "torch_version"):
+        if field not in before or field not in after or before[field] != after[field]:
+            raise ValueError("Cannot compare different or incomplete evaluation protocols")
+    def indexed(report):
+        rows = report.get("results")
+        if not isinstance(rows, list) or not rows:
+            raise ValueError("Individual probe evidence required")
+        result, categories = {}, {}
+        for row in rows:
+            if (not isinstance(row.get("id"), str) or row["id"] in result
+                    or not isinstance(row.get("category"), str)
+                    or type(row.get("passed")) is not bool):
+                raise ValueError("Invalid individual probe evidence")
+            result[row["id"]] = row
+            values = categories.setdefault(row["category"], [0, 0])
+            values[0] += row["passed"]
+            values[1] += 1
+        expected = {key: {"passed": value[0], "total": value[1], "accuracy": value[0] / value[1]}
+                    for key, value in categories.items()}
+        if report.get("categories") != expected:
+            raise ValueError("Category metrics disagree with individual probes")
+        return result
+    old, new = indexed(before), indexed(after)
+    if set(old) != set(new) or any(old[key]["category"] != new[key]["category"] for key in old):
+        raise ValueError("Probe identities differ")
+    return sorted(key for key in old if old[key]["passed"] and not new[key]["passed"])
+
+
 def propose_decision(control, experiment, control_loss, experiment_loss, target):
-    if control["suite_sha256"] != experiment["suite_sha256"] or control["generation"] != experiment["generation"]:
-        raise ValueError("Cannot compare different evaluation protocols")
+    regressions = probe_regressions(control, experiment)
     if not control["all_prompts_fit"] or not experiment["all_prompts_fit"]:
         return "reject", "Evaluation prompts exceed context budget"
     if not control["training_lineage_available"] or not experiment["training_lineage_available"]:
         return "reject", "Missing training lineage"
+    if regressions:
+        return "reject", "Previously passing probes regressed: " + ", ".join(regressions)
     before, after = control["categories"], experiment["categories"]
-    if set(before) != set(after) or target not in before:
+    if target not in before:
         raise ValueError("Evaluation category mismatch")
-    if any(after[c]["accuracy"] < before[c]["accuracy"] for c in before):
-        return "reject", "Observed category regression"
-    if not math.isfinite(experiment_loss) or experiment_loss > control_loss:
-        return "reject", "Held-out loss did not match the control"
+    if not math.isfinite(control_loss) or not math.isfinite(experiment_loss) or experiment_loss > control_loss:
+        return "reject", "Held-out loss did not match the finite control"
     if after[target]["accuracy"] <= before[target]["accuracy"]:
         return "reject", "Targeted capability improvement not demonstrated"
     return "propose_acceptance", "Measured target improvement; independent review still required"
@@ -53,7 +81,7 @@ def run_experiment(parent, output_dir, suite, validation, replay, *, dataset=Non
         "hypothesis": "Changing the learning rate may improve the weakest measured category without regression",
         "change": {"learning_rate": [training.learning_rate, experimental.learning_rate]},
         "control_config": asdict(training), "experimental_config": asdict(experimental),
-        "acceptance_rule": "Strict target accuracy gain, no category regression, loss no worse than control",
+        "acceptance_rule": "Strict target accuracy gain, no individual probe regression, loss no worse than finite control",
         "publication": "disabled"}
     save("proposal.json", proposal)
     reports, evaluations = {}, {}
@@ -69,12 +97,14 @@ def run_experiment(parent, output_dir, suite, validation, replay, *, dataset=Non
         reports["control"]["candidate"]["loss"], reports["experiment"]["candidate"]["loss"], target)
     if not reports["experiment"]["regression_gate_passed"]:
         decision, reason = "reject", "Experimental candidate regressed against the parent holdout"
-    if any(evaluations["experiment"]["categories"][c]["accuracy"] < baseline["categories"][c]["accuracy"]
-           for c in baseline["categories"]):
-        decision, reason = "reject", "Experimental candidate regressed against parent generation probes"
+    parent_regressions = probe_regressions(baseline, evaluations["experiment"])
+    if parent_regressions:
+        decision, reason = "reject", "Experimental candidate regressed against parent generation probes: " + ", ".join(parent_regressions)
     result = {"format": "ai-home-evolution-result-v1", "proposal": proposal,
               "control": reports["control"], "experiment": reports["experiment"],
               "decision": decision, "reason": reason, "promoted": False,
+              "parent_probe_regressions": parent_regressions,
+              "control_probe_regressions": probe_regressions(evaluations["control"], evaluations["experiment"]),
               "suite_sha256": baseline["suite_sha256"],
               "control_categories": evaluations["control"]["categories"],
               "experiment_categories": evaluations["experiment"]["categories"]}

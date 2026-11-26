@@ -480,3 +480,14 @@ and reject inconsistent/oversized/invalid reports. A live Tk smoke loaded the
 actual baseline report into the text widget; layout has not been visually
 reviewed. Full suite: 245 passed, 4 PostgreSQL tests skipped. This provides report
 inspection, not yet desktop evaluation/experiment execution controls.
+
+
+### Evolution individual regression checks
+
+Replaced aggregate-only acceptance checks with per-probe regression checks
+against both control and baseline. Require matching execution protocols and
+consistent individual/category evidence; reject non-finite control losses as
+well as experimental losses. Reports retain the regressed probe IDs. Tests
+include increasing aggregate accuracy that conceals a lost correct response,
+protocol mismatches, inconsistent metrics and real two-candidate training.
+Validation: 245 passed, 4 PostgreSQL skips. No acceptance or quality gain claimed.

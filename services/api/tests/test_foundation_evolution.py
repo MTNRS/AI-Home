@@ -61,18 +61,32 @@ def test_evolution_trains_two_real_candidates_and_reports_evidence(tmp_path):
                        dataset=paths["new"], training=settings)
 
 
+def decision_report(passes):
+    rows = [{"id": str(i), "category": "mathematics", "passed": value} for i, value in enumerate(passes)]
+    return {"suite_sha256": "fixed", "generation": {"temperature": 0}, "device": "cpu",
+            "torch_version": "test", "all_prompts_fit": True, "training_lineage_available": True,
+            "results": rows, "categories": {"mathematics": {"passed": sum(passes),
+            "total": len(passes), "accuracy": sum(passes) / len(passes)}}}
+
+
 def test_decision_requires_measured_capability_gain_not_just_lower_loss():
-    control = {"suite_sha256": "fixed", "generation": {"temperature": 0},
-               "all_prompts_fit": True, "training_lineage_available": True,
-               "categories": {"mathematics": {"accuracy": 0.0}, "english": {"accuracy": 0.5}}}
+    control = decision_report([True, False, False])
+    candidate = decision_report([True, True, False])
     assert propose_decision(control, control, 5, 4, "mathematics")[0] == "reject"
-    candidate = copy.deepcopy(control)
-    candidate["categories"]["mathematics"]["accuracy"] = 0.5
     assert propose_decision(control, candidate, 5, 4, "mathematics")[0] == "propose_acceptance"
-    candidate["categories"]["english"]["accuracy"] = 0
-    assert propose_decision(control, candidate, 5, 4, "mathematics")[0] == "reject"
-    candidate["suite_sha256"] = "different"
-    with pytest.raises(ValueError, match="protocols"):
+    # Aggregate accuracy increases, but one previously correct answer is lost.
+    regression = decision_report([False, True, True])
+    decision, reason = propose_decision(control, regression, 5, 4, "mathematics")
+    assert decision == "reject" and "probes regressed: 0" in reason
+    for loss in (float("nan"), float("inf")):
+        assert propose_decision(control, candidate, loss, 4, "mathematics")[0] == "reject"
+    for field in ("suite_sha256", "device", "torch_version", "generation"):
+        invalid = copy.deepcopy(candidate)
+        invalid[field] = "different"
+        with pytest.raises(ValueError, match="protocols"):
+            propose_decision(control, invalid, 5, 4, "mathematics")
+    candidate["results"][0]["passed"] = False
+    with pytest.raises(ValueError, match="disagree"):
         propose_decision(control, candidate, 5, 4, "mathematics")
 
 

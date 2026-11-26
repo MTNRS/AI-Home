@@ -50,3 +50,15 @@ Aprendizaje incremental y SFT están descritos en TRAINING.md. Promoción aproba
 rollback centralizado, experimentos arquitectónicos y evaluaciones amplias
 continúan pendientes. La eliminación del archivo fuente no borra su influencia
 en pesos entrenados; no se promete unlearning exacto.
+
+
+## Individual regression gate
+
+Evolution decisions now require matching suite, generation configuration, device
+and PyTorch version, with identical probe IDs/categories and totals consistent
+with individual outcomes. Any previously passing probe that fails in the
+experiment rejects acceptance, even if the category accuracy rises overall.
+This check applies against both the control and the parent baseline. Result
+reports record `control_probe_regressions` and `parent_probe_regressions`. Both
+control and experimental held-out losses must be finite. Independent review
+remains required; no experimental decision activates a model.
