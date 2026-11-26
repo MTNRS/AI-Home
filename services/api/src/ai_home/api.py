@@ -497,7 +497,7 @@ def create_app(
     @app.get("/api/v1/credits/inference-price")
     def inference_price(request: Request, _user: AuthenticatedUser = Depends(get_current_user)):
         price = request.app.state.settings.foundation_inference_price
-        return {"credits_per_completion": price, "paid_streaming_available": False,
+        return {"credits_per_completion": price, "paid_streaming_available": True,
                 "billing_unit": "successfully_computed_completion"}
 
     def reserve_chat_credit(payload, request, user):
@@ -529,8 +529,9 @@ def create_app(
         settings = request.app.state.settings
         if settings.chat_backend != "foundation":
             raise HTTPException(status_code=503, detail="Streaming requires the Foundation backend.")
-        if settings.foundation_inference_price:
-            raise HTTPException(status_code=503, detail="Paid streaming is not yet available; use non-streaming completion.")
+        if settings.foundation_inference_price and (
+                payload.credit_request_id is None or payload.credit_limit < settings.foundation_inference_price):
+            raise HTTPException(status_code=402, detail="Explicit credit request ID and sufficient credit limit required.")
         if settings.foundation_checkpoint is None and settings.foundation_registry is None:
             raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
         if payload.model_version is not None and settings.foundation_registry is None:
@@ -578,7 +579,32 @@ def create_app(
             emit({"type": "done", "chunks": chunks, "characters": characters,
                   "generation_seconds": time.perf_counter() - started})
 
-        stream = InferenceStream(work, foundation_inference_lock)
+        def accounted_work(cancel, emit):
+            reservation, settled = None, False
+            if cancel.is_set():
+                return
+            try:
+                reservation = reserve_chat_credit(payload, request, _user)
+                def accounted_emit(event):
+                    nonlocal settled
+                    if event["type"] == "done":
+                        if cancel.is_set():
+                            return
+                        finish_chat_credit(request, _user, reservation)
+                        settled = True
+                        event = {**event, "charged_credits": settings.foundation_inference_price,
+                                 "credit_request_id": str(payload.credit_request_id) if payload.credit_request_id else None}
+                    elif event["type"] == "metadata":
+                        event = {**event, "reserved_credits": settings.foundation_inference_price}
+                    emit(event)
+                work(cancel, accounted_emit)
+            except HTTPException as error:
+                emit({"type": "error", "code": "insufficient_credits" if error.status_code == 402 else "credit_request_conflict"})
+            finally:
+                if reservation is not None and not settled:
+                    finish_chat_credit(request, _user, reservation, refund=True)
+
+        stream = InferenceStream(accounted_work, foundation_inference_lock)
         return StreamingResponse(stream.events(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 

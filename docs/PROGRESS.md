@@ -555,3 +555,16 @@ no deployment or real account was changed. Existing real-model API test now
 verifies a genuine generated completion charged once, retry rejection and corrupt
 checkpoint refund. Full suite: 251 passed, 4 PostgreSQL skips; final chat checks:
 11 passed. Desktop consent, streaming and crash reconciliation remain outstanding.
+
+
+### Streaming inference credit lifecycle
+
+Connected streaming reservations to the acquired worker slot, terminal success
+settlement and cancellation/failure refund. SSE metadata/final events disclose
+reserved/charged credits, with explicit insufficient-funds and duplicate-key
+errors. The real-model API test verifies successful streaming debit, duplicate
+rejection and insufficient funds. The actual loopback Uvicorn/httpx test now
+uses file-backed SQLite, disconnects after a real paid generated chunk, observes
+the reserved balance and verifies full refund after worker shutdown. Full suite:
+251 passed, 4 PostgreSQL skips. Crash reconciliation and desktop consent remain
+outstanding; default pricing remains free.

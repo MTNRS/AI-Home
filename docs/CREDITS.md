@@ -124,7 +124,7 @@ Conflicting requests are rejected. Neither prompts nor generated text are stored
 in this table. Hashes are integrity bindings, not encryption or proof of privacy
 against guessing. Accounting records remain pseudonymous and durable.
 
-Non-streaming Foundation chat now connects these primitives to a configurable
+Foundation chat now connects these primitives to a configurable
 flat completion price. Crash reconciliation remains to be implemented. SQLite transactional/concurrency tests cover the primitives; PostgreSQL
 runtime behavior remains unverified on this machine.
 
@@ -132,7 +132,7 @@ runtime behavior remains unverified on this machine.
 ## Foundation completion pricing
 
 `AI_HOME_FOUNDATION_INFERENCE_PRICE` is an integer credit price per successfully
-computed non-streaming completion (default 0). Authenticated clients can query
+computed completion (default 0). Authenticated clients can query
 `GET /api/v1/credits/inference-price`. A priced request must include a fresh UUID
 `credit_request_id` and integer `credit_limit` at least the configured price.
 Missing authorization or insufficient funds returns 402. No external-provider
@@ -146,8 +146,25 @@ include inference reservations; transaction history shows reserve/settle/refund.
 Charging covers completed computation, not guaranteed network delivery. A lost
 response is not cached or replayed, and a new key authorizes a new charge.
 
-Paid streaming currently returns 503 rather than bypassing charges. Desktop
-credit consent, streaming settlement and recovery of reservations left by a
-process crash are still outstanding. Keep the default free mode until those
+Desktop credit consent and recovery of reservations left by a process crash
+are still outstanding. Keep the default free mode until those
 operational requirements are met; an interrupted reservation remains visible in
 the ledger. No existing deployment configuration has been changed by this work.
+
+
+### Streaming settlement and cancellation
+
+The stream validates the spending limit before opening SSE, then reserves only
+once its worker acquires the inference lock. A busy stream cannot reserve funds.
+Metadata includes `reserved_credits`. Successful generation settles before the
+`done` event, which includes `charged_credits` and `credit_request_id`.
+Cancellation or failure before settlement refunds the reservation. A disconnect
+after settlement does not undo completed computation, even if the final event
+was not delivered. This is not an acknowledgement-based delivery charge.
+
+Insufficient balance and duplicate/conflicting IDs discovered by the worker
+produce SSE error codes `insufficient_credits` and `credit_request_conflict`.
+Other failures retain the generic redacted inference error. A crash or database
+outage can still leave a durable reservation pending reconciliation; automatic
+recovery is not implemented yet. A real loopback HTTP test closes after receiving
+a generated delta and verifies that the worker refunds its reservation.

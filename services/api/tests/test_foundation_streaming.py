@@ -61,7 +61,7 @@ def test_real_http_disconnect_stops_generation_and_next_request_succeeds(tmp_pat
     torch.set_num_threads(1)
     checkpoint = tmp_path / "real.pt"
     train(records(), checkpoint, config(), TrainingConfig(steps=1, warmup=0), "cpu")
-    engine = create_engine("sqlite+pysqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    engine = create_engine("sqlite+pysqlite:///" + str(tmp_path / "stream.db"), connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     app = create_app(Settings(environment="test", foundation_checkpoint=checkpoint,
                               foundation_device="cpu", foundation_max_new_tokens=8), engine=engine)
@@ -109,6 +109,39 @@ def test_real_http_disconnect_stops_generation_and_next_request_succeeds(tmp_pat
                 headers={"Authorization": f"Bearer {token}"})
             assert response.status_code == 200, response.text
             assert response.json()["choices"][0]["message"]["content"].strip()
+            from uuid import uuid4
+            from sqlalchemy import select
+            from ai_home.models import User
+            from ai_home.credits import CreditLedger
+            from ai_home.job_credits import user_account_id
+            from ai_home.inference_credits import InferenceFunding
+            with app.state.session_factory() as session:
+                owner = user_account_id(session.scalar(select(User.user_id)))
+            ledger = CreditLedger(engine)
+            ledger.create_account("stream-test-issuance", "test", allow_negative=True)
+            ledger.create_account(owner, "user")
+            ledger.post(idempotency_key="stream-fund", operation="test", postings={"stream-test-issuance": -10, owner: 10})
+            app.state.settings.foundation_inference_price = 7
+            monkeypatch.setattr(inference, "stream_text", observed)
+            stopped.clear()
+            with client.stream("POST", "/api/v1/chat/stream", headers={"Authorization": f"Bearer {token}"},
+                               json={"messages": [{"role": "user", "content": "Hi"}],
+                                     "credit_request_id": str(uuid4()), "credit_limit": 7}) as paid_stream:
+                assert paid_stream.status_code == 200
+                for line in paid_stream.iter_lines():
+                    if line.startswith("data: ") and json.loads(line[6:]).get("type") == "delta":
+                        assert ledger.balance(owner) == 3
+                        break
+                else:
+                    pytest.fail("No real paid-stream delta")
+            assert stopped.wait(5)
+            deadline = time.monotonic() + 5
+            while ledger.balance(owner) != 10 and time.monotonic() < deadline:
+                time.sleep(.01)
+            assert ledger.balance(owner) == 10
+            with app.state.session_factory() as session:
+                assert session.scalar(select(InferenceFunding.status)) == "refunded"
+
     finally:
         server.should_exit = True
         thread.join(timeout=10)

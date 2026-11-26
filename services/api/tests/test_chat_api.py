@@ -232,7 +232,17 @@ def test_foundation_chat_uses_real_trained_checkpoint(client, tmp_path, monkeypa
     assert ledger.balance(owner) == 13
     assert ledger.balance("service:foundation-inference") == 7
     assert client.get("/api/v1/credits", headers=headers).json()["reserved"] == 0
-    assert client.post("/api/v1/chat/stream", headers=headers, json=paid).status_code == 503
+    stream_duplicate = client.post("/api/v1/chat/stream", headers=headers, json=paid)
+    assert '"code": "credit_request_conflict"' in stream_duplicate.text
+    streamed = {**paid, "credit_request_id": str(uuid4())}
+    stream_response = client.post("/api/v1/chat/stream", headers=headers, json=streamed)
+    assert '"charged_credits": 7' in stream_response.text and '"type": "done"' in stream_response.text
+    assert ledger.balance(owner) == 6
+    assert ledger.balance("service:foundation-inference") == 14
+    insufficient = client.post("/api/v1/chat/stream", headers=headers,
+                               json={**paid, "credit_request_id": str(uuid4())})
+    assert '"code": "insufficient_credits"' in insufficient.text
+    ledger.post(idempotency_key="extra-chat-funding", operation="test", postings={"test-chat-issuance": -7, owner: 7})
     path.write_bytes(b"invalid checkpoint")
     failed = {**paid, "credit_request_id": str(uuid4())}
     assert client.post("/api/v1/chat/completions", headers=headers, json=failed).status_code == 503
