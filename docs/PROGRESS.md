@@ -332,3 +332,14 @@ profile change, rejects malformed data, and guards late callbacks after window
 closure. Verified actual funded ledger reads and separation from another account,
 plus hidden real Windows Tk rendering with fixture values. Full suite: 199 passed,
 4 skipped before the added ledger bridge test; final credit tests: 9 passed.
+
+
+### Foundation streaming API (2026-11-26)
+
+Added authenticated SSE generation with actual model-version/reference metadata,
+text deltas and completion metrics. A bounded worker queue supports cancellation
+and shares admission locking with ordinary inference. Private errors are redacted;
+partial streams require a done event before being considered complete. Retrieval
+context packing is shared between both routes. Validation: 202 passed, 4 skipped.
+Desktop integration and real-network disconnect/latency tests remain pending;
+see STREAMING.md for protocol details and cancellation limits.

@@ -116,10 +116,18 @@ def complete_with_knowledge(messages, checkpoint_path, index_path, device="auto"
     from ai_home.foundation.inference import stream_text
     from ai_home.foundation.training import select_device
 
+    model, tokenizer, _ = load_checkpoint(checkpoint_path, select_device(device), max_bytes=max_bytes)
+    request_messages, references = prepare_knowledge_context(messages, model, tokenizer, index_path)
+    answer = "".join(stream_text(model, tokenizer, request_messages, **options))
+    if not answer.strip():
+        raise RuntimeError("Foundation model produced no text")
+    return answer, references
+
+
+def prepare_knowledge_context(messages, model, tokenizer, index_path):
     query = next(m["content"] for m in reversed(messages) if m["role"] == "user")
     index = KnowledgeIndex(index_path)
     matches = index.search(query)
-    model, tokenizer, _ = load_checkpoint(checkpoint_path, select_device(device), max_bytes=max_bytes)
     # Refuse silent context truncation: references must actually reach the model.
     if len(tokenizer.conversation(messages)) > model.config.context:
         raise ValueError("Conversation exceeds the selected model context")
@@ -130,10 +138,7 @@ def complete_with_knowledge(messages, checkpoint_path, index_path, device="auto"
             references.append(match)
     if matches and not references:
         raise ValueError("Model context too small for retrieved evidence")
-    answer = "".join(stream_text(model, tokenizer, retrieval_messages(messages, references), **options))
-    if not answer.strip():
-        raise RuntimeError("Foundation model produced no text")
-    return answer, references
+    return retrieval_messages(messages, references), references
 
 
 def main():

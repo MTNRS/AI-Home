@@ -12,6 +12,7 @@ import uuid
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -482,6 +483,62 @@ def create_app(
             return {"models": ModelRegistry(settings.foundation_registry).catalog()}
         except Exception:
             raise HTTPException(status_code=503, detail="Model catalog unavailable.") from None
+
+    @app.post("/api/v1/chat/stream")
+    def stream_foundation_chat(payload: ChatCompletionRequest, request: Request,
+                               _user: AuthenticatedUser = Depends(get_current_user)):
+        settings = request.app.state.settings
+        if settings.chat_backend != "foundation":
+            raise HTTPException(status_code=503, detail="Streaming requires the Foundation backend.")
+        if settings.foundation_checkpoint is None and settings.foundation_registry is None:
+            raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
+        if payload.model_version is not None and settings.foundation_registry is None:
+            raise HTTPException(status_code=503, detail="Model selection requires a registry.")
+        if payload.use_knowledge and settings.knowledge_index is None:
+            raise HTTPException(status_code=503, detail="Knowledge retrieval is not configured.")
+        from ai_home.foundation.streaming import InferenceStream
+
+        def work(cancel, emit):
+            from ai_home.foundation.checkpoint import load_checkpoint
+            from ai_home.foundation.inference import stream_text
+            from ai_home.foundation.training import select_device
+            checkpoint, version = settings.foundation_checkpoint, None
+            if settings.foundation_registry is not None:
+                if checkpoint is not None:
+                    raise ValueError("Ambiguous checkpoint configuration")
+                from ai_home.foundation.registry import ModelRegistry
+                version, checkpoint = ModelRegistry(settings.foundation_registry).resolve(
+                    str(payload.model_version) if payload.model_version else None)
+            model, tokenizer, _ = load_checkpoint(checkpoint, select_device(settings.foundation_device),
+                                                  max_bytes=settings.foundation_memory_budget_bytes)
+            if cancel.is_set():
+                return
+            messages = [message.model_dump() for message in payload.messages]
+            references = []
+            if payload.use_knowledge:
+                from ai_home.knowledge import prepare_knowledge_context
+                messages, references = prepare_knowledge_context(messages, model, tokenizer, settings.knowledge_index)
+            emit({"type": "metadata", "model_version": version, "references": references})
+            started = time.perf_counter()
+            chunks, characters, nonempty = 0, 0, False
+            for content in stream_text(model, tokenizer, messages, cancel=cancel,
+                                       max_new_tokens=settings.foundation_max_new_tokens):
+                if cancel.is_set():
+                    return
+                chunks += 1
+                characters += len(content)
+                nonempty = nonempty or bool(content.strip())
+                emit({"type": "delta", "content": content})
+            if cancel.is_set():
+                return
+            if not nonempty:
+                raise RuntimeError("No generated text")
+            emit({"type": "done", "chunks": chunks, "characters": characters,
+                  "generation_seconds": time.perf_counter() - started})
+
+        stream = InferenceStream(work, foundation_inference_lock)
+        return StreamingResponse(stream.events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     @app.post(
         "/api/v1/chat/completions",

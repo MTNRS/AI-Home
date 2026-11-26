@@ -98,6 +98,21 @@ def test_real_foundation_generation_with_retrieved_context(tmp_path, client):
     assert response.status_code == 200, response.text
     assert len(response.json()["references"]) == 1
     assert response.json()["references"][0]["text"] == references[0]["text"]
+    headers = {"Authorization": f"Bearer {token}"}
+    streamed = client.post("/api/v1/chat/stream", json={
+        "messages": [{"role": "user", "content": "Marte"}], "use_knowledge": True,
+    }, headers=headers)
+    assert streamed.status_code == 200
+    assert streamed.headers["content-type"].startswith("text/event-stream")
+    events = [json.loads(line[6:]) for line in streamed.text.splitlines() if line.startswith("data: ")]
+    assert events[0]["type"] == "metadata"
+    assert events[0]["references"][0]["text"] == references[0]["text"]
+    assert events[-1]["type"] == "done"
+    text = "".join(e["content"] for e in events if e["type"] == "delta")
+    assert text.strip() and len(text) == events[-1]["characters"]
+    assert client.post("/api/v1/chat/stream", json={
+        "messages": [{"role": "user", "content": "Marte"}]}).status_code == 401
+
 
 
 def test_knowledge_requires_auth_and_explicit_foundation_configuration(client):
