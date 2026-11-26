@@ -568,3 +568,16 @@ uses file-backed SQLite, disconnects after a real paid generated chunk, observes
 the reserved balance and verifies full refund after worker shutdown. Full suite:
 251 passed, 4 PostgreSQL skips. Crash reconciliation and desktop consent remain
 outstanding; default pricing remains free.
+
+
+### Desktop per-response credit authorization
+
+Added server price discovery and an explicit per-response limit in the credits
+window (zero by default, in-memory only, reset on account/profile transition).
+Requests snapshot the limit and UUID for streaming or ordinary completion,
+validate returned charge/identity and display consumed credits. No automatic
+retry or total-session budget is implied. Client transport tests verify both
+request forms and receipt rejection; privacy fixtures updated for the new state.
+An initial source encoding issue and two outdated fixture failures were fixed.
+Final full suite: 257 passed, 4 PostgreSQL skips. Credit dialog layout has not
+been visually reviewed. Crash reconciliation remains outstanding.

@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 import httpx
 import keyring
 
+from ai_home.chat_credits import credit_authorization, validate_credit_receipt
 from ai_home.chat_stream import GenerationCancelled, stream_server_chat
 from ai_home.inference import chat_completion, extract_chat_content
 from ai_home.memory import (
@@ -362,12 +363,13 @@ class ServerChatResult:
     answer: str
     references: tuple[KnowledgeReference, ...] = ()
     model_version: str | None = None
+    charged_credits: int = 0
 
 
 def server_stream_result(server_url, user_token, messages, **options):
     result = stream_server_chat(server_url, user_token, messages, **options)
     return ServerChatResult(result["answer"], tuple(KnowledgeReference.model_validate(r)
-                            for r in result["references"]), result["model_version"])
+                            for r in result["references"]), result["model_version"], result.get("charged_credits", 0))
 
 
 def server_chat_completion(server_url, user_token, messages, **options) -> str:
@@ -379,12 +381,15 @@ def server_chat_result(
     user_token: str,
     messages: list[dict[str, str]],
     *,
+    credit_limit: int = 0,
+    credit_request_id: str | None = None,
     generation: dict | None = None,
     use_knowledge: bool = False,
     model_version: str | None = None,
     timeout_seconds: float = 180,
     transport: httpx.BaseTransport | None = None,
 ) -> ServerChatResult:
+    authorization = credit_authorization(credit_limit, credit_request_id)
     with httpx.Client(
         base_url=normalize_base_url(server_url),
         headers={"Authorization": f"Bearer {user_token}"},
@@ -393,7 +398,7 @@ def server_chat_result(
     ) as client:
         response = client.post(
             "/api/v1/chat/completions",
-            json={"messages": messages,
+            json={"messages": messages, **authorization,
                   **({"generation": FoundationGeneration.model_validate(generation).model_dump(exclude_none=True)} if generation is not None else {}),
                   **({"use_knowledge": True} if use_knowledge else {}),
                   **({"model_version": str(UUID(model_version))} if model_version else {})},
@@ -404,7 +409,7 @@ def server_chat_result(
         actual_version = str(UUID(data["model_version"])) if data.get("model_version") else None
         if model_version is not None and actual_version != str(UUID(model_version)):
             raise ValueError("El servidor respondió con una versión distinta de la solicitada.")
-        return ServerChatResult(extract_chat_content(data), references, actual_version)
+        return ServerChatResult(extract_chat_content(data), references, actual_version, validate_credit_receipt(data, authorization))
 
 
 DEFAULT_SERVER_VERSION = "Versión activa del servidor"
@@ -417,6 +422,16 @@ def server_model_versions(server_url, user_token, *, transport=None):
         response.raise_for_status()
         models = response.json()["models"]
         return [str(UUID(model["id"])) for model in models]
+
+
+def server_inference_price(server_url, user_token, *, transport=None):
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
+                      headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
+        response = client.get("/api/v1/credits/inference-price")
+        response.raise_for_status()
+        price = response.json()["credits_per_completion"]
+        credit_authorization(price)
+        return price
 
 
 def server_credits(server_url, user_token, *, transport=None):
@@ -576,6 +591,7 @@ def main() -> None:
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
             self.generation_settings = None
+            self.chat_credit_limit = 0
             self.chat_cancel = None
             self.chat_request_active = False
             self.training_submission_active = False
@@ -1951,7 +1967,28 @@ def main() -> None:
             window = tk.Toplevel(self)
             self.private_windows.append(window)
             window.title("Créditos de mi cuenta")
-            window.geometry("800x480")
+            window.geometry("800x620")
+            controls = ttk.Frame(window, padding=12)
+            controls.pack(fill="x")
+            price_label = tk.StringVar(value="Precio del servidor: pendiente de consulta")
+            ttk.Label(controls, textvariable=price_label).pack(anchor="w")
+            ttk.Label(controls, text="Máximo de créditos por respuesta (0 = no autorizar gasto):").pack(anchor="w")
+            limit = tk.StringVar(value=str(self.chat_credit_limit))
+            ttk.Entry(controls, textvariable=limit, width=12).pack(anchor="w")
+            def apply_limit():
+                try:
+                    value = int(limit.get())
+                    credit_authorization(value)
+                except ValueError as error:
+                    messagebox.showerror("AI@Home", str(error), parent=window)
+                    return
+                self.chat_credit_limit = value
+                self.status_var.set(f"Límite autorizado: {value} créditos por respuesta del servidor.")
+            ttk.Button(controls, text="Aplicar límite a próximas respuestas", command=apply_limit).pack(anchor="w", pady=6)
+            ttk.Label(controls, text="El límite es por respuesta, no un presupuesto total. Se cobra el cálculo completado, aunque se pierda la conexión. Una nueva solicitud puede generar otro cobro. El límite se borra al cambiar de cuenta.", wraplength=740).pack(anchor="w")
+            self._background(lambda: server_inference_price(server_url, token),
+                             lambda price: price_label.set(f"Precio actual: {price} créditos por respuesta completada"),
+                             is_current=lambda: bool(window.winfo_exists()))
             content = tk.Text(window, wrap="word", state="disabled")
             content.pack(fill="both", expand=True, padx=12, pady=12)
 
@@ -2306,6 +2343,8 @@ def main() -> None:
             try:
                 use_server = self.use_server_ai_var.get()
                 use_stream = self.stream_enabled_var.get()
+                credit_limit = self.chat_credit_limit
+                credit_request_id = str(uuid4()) if credit_limit else None
                 generation = dict(self.generation_settings) if self.generation_settings is not None else None
                 if generation is not None and not use_server:
                     raise ValueError("Los ajustes personalizados requieren el servidor Foundation.")
@@ -2346,6 +2385,7 @@ def main() -> None:
                         operation = lambda: server_stream_result(
                             server_url, user_token, request_messages,
                             use_knowledge=use_knowledge, model_version=requested_version, generation=generation,
+                            credit_limit=credit_limit, credit_request_id=credit_request_id,
                             cancel=request_cancel,
                             on_delta=lambda content: self.events.put(("chat_delta", (
                                 request_conversation_id, request_cancel, content))),
@@ -2354,6 +2394,7 @@ def main() -> None:
                         operation = lambda: server_chat_result(
                             server_url, user_token, request_messages,
                             use_knowledge=use_knowledge, model_version=requested_version, generation=generation,
+                            credit_limit=credit_limit, credit_request_id=credit_request_id,
                         )
                 else:
                     provider_id, provider_url = self._selected_provider()
@@ -2440,7 +2481,8 @@ def main() -> None:
                 )
                 self._append_chat("IA", answer)
                 suffix = f" · {len(references)} fuentes recuperadas" if use_knowledge else ""
-                self.status_var.set(f"Respuesta de {model}{suffix}")
+                charge = f" · {result.charged_credits} créditos" if isinstance(result, ServerChatResult) else ""
+                self.status_var.set(f"Respuesta de {model}{suffix}{charge}")
 
             self._background(
                 operation,
@@ -2469,6 +2511,7 @@ def main() -> None:
             self.use_knowledge_var.set(False)
             self.stream_enabled_var.set(False)
             self.generation_settings = None
+            self.chat_credit_limit = 0
             self.server_version_combo.configure(values=[DEFAULT_SERVER_VERSION])
 
         def _show_knowledge_references(self) -> None:

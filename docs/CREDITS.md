@@ -146,8 +146,7 @@ include inference reservations; transaction history shows reserve/settle/refund.
 Charging covers completed computation, not guaranteed network delivery. A lost
 response is not cached or replayed, and a new key authorizes a new charge.
 
-Desktop credit consent and recovery of reservations left by a process crash
-are still outstanding. Keep the default free mode until those
+Recovery of reservations left by a process crash is still outstanding. Keep the default free mode until those
 operational requirements are met; an interrupted reservation remains visible in
 the ledger. No existing deployment configuration has been changed by this work.
 
@@ -168,3 +167,19 @@ Other failures retain the generic redacted inference error. A crash or database
 outage can still leave a durable reservation pending reconciliation; automatic
 recovery is not implemented yet. A real loopback HTTP test closes after receiving
 a generated delta and verifies that the worker refunds its reservation.
+
+
+### Desktop spending authorization
+
+**Créditos y movimientos** shows the server completion price and lets the user
+apply a maximum credit amount per future response. The initial limit is zero;
+it is kept only in memory and reset on profile/account transitions. Setting a
+positive limit authorizes each subsequent server response up to that amount,
+not a total session budget. Changing the limit does not change in-flight requests.
+
+Each send snapshots the limit and creates one fresh request UUID, shared by the
+chosen streaming or ordinary request. There is no automatic request retry. The
+client validates the reported charge and request ID and displays credits consumed
+in the completion status. A receipt mismatch is reported as an error, not an
+automatic refund. The balance/transaction view remains authoritative after a
+lost response or cancellation that raced with completed computation.

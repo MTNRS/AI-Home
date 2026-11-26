@@ -5,6 +5,7 @@ from uuid import UUID
 
 import httpx
 
+from ai_home.chat_credits import credit_authorization, validate_credit_receipt
 from ai_home.schemas import KnowledgeReference, FoundationGeneration
 from ai_home.urls import normalize_base_url
 
@@ -14,10 +15,11 @@ class GenerationCancelled(RuntimeError):
 
 
 def stream_server_chat(server_url, user_token, messages, *, cancel, on_delta,
-                       model_version=None, use_knowledge=False, generation=None, transport=None):
+                       model_version=None, use_knowledge=False, generation=None, transport=None, credit_limit=0, credit_request_id=None):
     """Run in a background thread; callbacks must not directly mutate Tk widgets."""
+    authorization = credit_authorization(credit_limit, credit_request_id)
     async def consume():
-        body = {"messages": messages, "use_knowledge": use_knowledge}
+        body = {"messages": messages, "use_knowledge": use_knowledge, **authorization}
         if generation is not None:
             body["generation"] = FoundationGeneration.model_validate(generation).model_dump(exclude_none=True)
         if model_version is not None:
@@ -40,7 +42,9 @@ def stream_server_chat(server_url, user_token, messages, *, cancel, on_delta,
                         raise ValueError("Evento de streaming inválido.")
                     kind = event.get("type")
                     if kind == "error":
-                        raise RuntimeError("El servidor no pudo completar la inferencia.")
+                        raise RuntimeError({"insufficient_credits": "Saldo insuficiente para esta inferencia.",
+                                            "credit_request_conflict": "La solicitud ya fue procesada; no se repitió el cobro."}.get(
+                                                event.get("code"), "El servidor no pudo completar la inferencia."))
                     if kind == "metadata":
                         if metadata is not None or pieces:
                             raise ValueError("Metadatos repetidos o fuera de orden.")
@@ -60,7 +64,7 @@ def stream_server_chat(server_url, user_token, messages, *, cancel, on_delta,
                         answer = "".join(pieces)
                         if metadata is None or not answer.strip() or type(event.get("characters")) is not int or event.get("characters") != len(answer) or event.get("chunks") != len(pieces):
                             raise ValueError("Flujo incompleto o métricas incoherentes.")
-                        return {"answer": answer, **metadata}
+                        return {"answer": answer, **metadata, "charged_credits": validate_credit_receipt(event, authorization)}
                     else:
                         raise ValueError("Tipo de evento desconocido.")
                 raise RuntimeError("La conexión terminó sin completar la respuesta.")

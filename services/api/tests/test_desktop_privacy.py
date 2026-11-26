@@ -18,7 +18,7 @@ def method(name):
 def test_late_answer_cannot_enter_another_conversation():
     app = SimpleNamespace(
         chat_request_active=False, prompt_is_placeholder=False,
-        stream_enabled_var=Mock(), chat_preview_var=Mock(), generation_settings=None,
+        stream_enabled_var=Mock(), chat_preview_var=Mock(), generation_settings=None, chat_credit_limit=0,
         prompt=Mock(), messages=[], memory_notes=[],
         pinned_server_version=None, server_version_var=Mock(),
         use_server_ai_var=Mock(), use_knowledge_var=Mock(return_value=False), session_token="private-token",
@@ -90,7 +90,7 @@ def test_server_response_pins_next_turn_and_records_version_provenance():
     version = str(uuid4())
     app = SimpleNamespace(
         chat_request_active=False, prompt_is_placeholder=False,
-        stream_enabled_var=Mock(), chat_preview_var=Mock(), generation_settings=None,
+        stream_enabled_var=Mock(), chat_preview_var=Mock(), generation_settings=None, chat_credit_limit=0,
         prompt=Mock(), messages=[], memory_notes=[], use_server_ai_var=Mock(),
         use_knowledge_var=Mock(), pinned_server_version=None, server_version_var=Mock(),
         session_token="token", session_server_url="https://example.org", conversation_source=None,

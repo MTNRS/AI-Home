@@ -25,7 +25,7 @@ def test_client_stream_protocol_and_version():
                              {"type": "delta", "content": "Hola"},
                              {"type": "done", "characters": 4, "chunks": 1}]))
     assert chunks == ["Hola"]
-    assert result == {"answer": "Hola", "model_version": version, "references": []}
+    assert result == {"answer": "Hola", "model_version": version, "references": [], "charged_credits": 0}
 
 
 @pytest.mark.parametrize("events", [
