@@ -24,6 +24,7 @@ class TrainingConfig:
     checkpoint_every: int = 25
     precision: str = "fp32"
     memory_budget_bytes: int = 2_000_000_000
+    objective: str = "causal"
 
     def __post_init__(self):
         for key in ("steps", "batch_size", "accumulation", "checkpoint_every", "memory_budget_bytes"):
@@ -33,6 +34,8 @@ class TrainingConfig:
             raise ValueError("Warmup outside training schedule")
         if self.precision not in ("fp32", "bf16", "fp16"):
             raise ValueError("Unknown precision")
+        if self.objective not in ("causal", "sft"):
+            raise ValueError("Unknown training objective")
         if any(not math.isfinite(v) or v <= 0 for v in (self.learning_rate, self.clip)):
             raise ValueError("Invalid optimization settings")
 
@@ -47,15 +50,32 @@ def select_device(device="auto"):
     return device
 
 
-def _sequences(records, tokenizer, context):
-    samples = []
+def _sequences(records, tokenizer, context, objective="causal"):
+    samples, targets = [], []
     for record in records:
-        ids = [257, *tokenizer.encode(record["text"]), 258]
-        for start in range(0, len(ids) - context, context):
-            samples.append(ids[start:start + context + 1])
+        if objective == "sft":
+            ids, labels = [257], [-100]
+            for message in record["messages"]:
+                role = message["role"]
+                if role not in ("user", "assistant"):
+                    raise ValueError("SFT supports user/assistant roles")
+                body = [*tokenizer.encode(message["content"]), 258]
+                ids.extend([260 if role == "user" else 261, *body])
+                labels.extend([-100, *(body if role == "assistant" else [-100] * len(body))])
+        else:
+            ids = [257, *tokenizer.encode(record["text"]), 258]
+            labels = ids
+        for start in range(0, len(ids) - 1, context):
+            x = ids[start:start + context]
+            y = labels[start + 1:start + context + 1]
+            x = x[:len(y)]
+            if not any(t != -100 for t in y):
+                continue
+            samples.append(x + [256] * (context - len(x)))
+            targets.append(y + [-100] * (context - len(y)))
     if not samples:
         raise ValueError("Split has no full sequences; reduce context or supply longer documents")
-    return torch.tensor(samples, dtype=torch.long)
+    return torch.tensor(samples, dtype=torch.long), torch.tensor(targets, dtype=torch.long)
 
 
 @torch.no_grad()
@@ -64,12 +84,12 @@ def evaluate(model, sequences, device, batch_size=2):
     model.eval()
     total, tokens = 0.0, 0
     try:
-        for batch in sequences.split(batch_size):
-            batch = batch.to(device)
-            logits, _ = model(batch[:, :-1])
-            loss = F.cross_entropy(logits.float().flatten(0, 1), batch[:, 1:].flatten(), reduction="sum")
+        for inputs, labels in zip(sequences[0].split(batch_size), sequences[1].split(batch_size)):
+            labels = labels.to(device)
+            logits, _ = model(inputs.to(device))
+            loss = F.cross_entropy(logits.float().flatten(0, 1), labels.flatten(), reduction="sum")
             total += loss.item()
-            tokens += batch[:, 1:].numel()
+            tokens += (labels != -100).sum().item()
     finally:
         model.train(was_training)
     value = total / tokens
@@ -79,14 +99,21 @@ def evaluate(model, sequences, device, batch_size=2):
 
 
 def train(records, output, config=None, training=None, device="auto", resume=None,
-          stop_after=None, on_step=None):
+          stop_after=None, on_step=None, reviewed_export=None):
     training = training or TrainingConfig()
     device = select_device(device)
     if device == "cpu" and training.precision != "fp32":
         raise ValueError("Reference CPU trainer requires fp32")
     if training.precision == "bf16" and not torch.cuda.is_bf16_supported():
         raise ValueError("GPU does not support bf16")
-    train_records, validation_records = split_records(records)
+    if reviewed_export is not None:
+        from .contributions import load_reviewed_export
+        if records:
+            raise ValueError("Use either public records or a reviewed export")
+        if training.objective != "sft":
+            raise ValueError("Reviewed conversations require SFT")
+        records = load_reviewed_export(reviewed_export)
+    train_records, validation_records = split_records(records, allow_reviewed=reviewed_export is not None)
     dataset_hash = canonical_hash({"train": train_records, "validation": validation_records})
     torch.manual_seed(training.seed)
     sampler = torch.Generator().manual_seed(training.seed)
@@ -122,8 +149,8 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
             raise ValueError(f"Estimated training bytes {estimated} exceed budget {budget}; reduce configuration")
         model = FoundationModel(config)
     model.to(device).train()
-    train_data = _sequences(train_records, tokenizer, config.context)
-    validation_data = _sequences(validation_records, tokenizer, config.context)
+    train_data = _sequences(train_records, tokenizer, config.context, training.objective)
+    validation_data = _sequences(validation_records, tokenizer, config.context, training.objective)
     optimizer = torch.optim.AdamW(model.parameters(), lr=training.learning_rate)
     scaler = torch.amp.GradScaler("cuda", enabled=training.precision == "fp16")
     if payload is not None:
@@ -153,11 +180,12 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
         optimizer.zero_grad(set_to_none=True)
         total_loss = 0.0
         for _ in range(training.accumulation):
-            indices = torch.randint(len(train_data), (training.batch_size,), generator=sampler)
-            batch = train_data[indices].to(device)
+            indices = torch.randint(len(train_data[0]), (training.batch_size,), generator=sampler)
+            batch = train_data[0][indices].to(device)
+            labels = train_data[1][indices].to(device)
             with torch.autocast(device_type=device, dtype=dtype, enabled=training.precision != "fp32"):
-                logits, _ = model(batch[:, :-1])
-                loss = F.cross_entropy(logits.float().flatten(0, 1), batch[:, 1:].flatten())
+                logits, _ = model(batch)
+                loss = F.cross_entropy(logits.float().flatten(0, 1), labels.flatten())
             if not torch.isfinite(loss):
                 raise FloatingPointError("Non-finite training loss")
             scaler.scale(loss / training.accumulation).backward()
@@ -187,6 +215,9 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
                        "cuda_rng": torch.cuda.get_rng_state_all() if device == "cuda" else [],
                        "device": device, "dataset_sha256": dataset_hash, "metrics": metrics,
                        "validation": validation, "status": "candidate",
+                       "data_visibility": "reviewed-training-only" if reviewed_export else "public",
+                       "dataset_provenance": sorted({(r.get("dataset_version", ""),
+                                                       r.get("manifest_sha256", "")) for r in records}),
                        "embedding_delta_l2": (model.embedding.weight.detach().cpu() - initial).norm().item(),
                        "parameter_count": model.parameter_count}
             atomic_save(payload, output.with_name(f"{output.stem}.step-{step}.pt"))

@@ -25,6 +25,17 @@ def records():
             for i in range(8)]
 
 
+def test_sft_masks_prompts_and_padding_and_keeps_assistant_eos():
+    from ai_home.foundation.tokenizer import ByteBPE
+    from ai_home.foundation.training import _sequences
+    tokenizer = ByteBPE()
+    messages = [{"role": "user", "content": "Q"}, {"role": "assistant", "content": "A"}]
+    inputs, labels = _sequences([{"messages": messages}], tokenizer, 16, "sft")
+    assert inputs[0, :7].tolist() == [257, 260, ord("Q"), 258, 261, ord("A"), 256]
+    assert labels[0, :6].tolist() == [-100, -100, -100, -100, ord("A"), 258]
+    assert (labels[0, 6:] == -100).all()
+
+
 def test_causality_cache_gradients_and_rope():
     torch.manual_seed(7)
     model = FoundationModel(config()).eval()

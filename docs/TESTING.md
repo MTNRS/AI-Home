@@ -20,3 +20,7 @@ La sesión anterior no disponía de torch/pytest y no pudo ejecutar la validaci�
 ## Integración HTTP posterior
 
 `python -m pytest -q`: 129 aprobadas, 5 omitidas, 11,59 segundos. `git diff --check`: exit 0. El test de chat entrena pesos reales, verifica autenticación, compara HTTP con inferencia directa en dos conversaciones y comprueba errores con checkpoints corruptos/ausentes sin fallback externo. La generación neuronal no se simula.
+
+## Contribuciones y SFT
+
+Suite completa tras integrar exportaciones revisadas: `python -m pytest -q` — 131 aprobadas, 5 omitidas, 12,65 segundos. `git diff --check`: exit 0. La prueba usa API local real y entrenamiento PyTorch CPU; no invoca proveedores externos. Se comprueban máscara de pérdida, colas cortas, bloqueo de exportación a usuario ordinario, hash y revisión, cambio de parámetros y recarga del candidato. CUDA y PostgreSQL siguen omitidos.

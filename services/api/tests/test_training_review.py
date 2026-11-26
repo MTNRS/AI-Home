@@ -14,6 +14,52 @@ from ai_home.models import TrainingContribution, TrainingDataset
 REVIEW_TOKEN = "test-training-review-token-0123456789"
 
 
+def test_frozen_contributions_reach_real_sft_without_public_release(client, tmp_path):
+    torch = pytest.importorskip("torch")
+    from ai_home.foundation.contributions import load_reviewed_export
+    from ai_home.foundation.data import canonical_hash, prepare_records
+    from ai_home.foundation.model import FoundationConfig
+    from ai_home.foundation.training import TrainingConfig, train
+    from ai_home.foundation.checkpoint import load_checkpoint
+
+    torch.set_num_threads(1)
+    token = register_and_login(client)
+    ids = [create_candidate(client, token, str(i)) for i in range(1, 5)]
+    for contribution_id in ids:
+        approve_candidate(client, contribution_id)
+    headers = {"Authorization": f"Bearer {REVIEW_TOKEN}"}
+    frozen = client.post("/api/v1/admin/training/datasets", headers=headers,
+                         json={"dataset_version": "sft-test-v1", "contribution_ids": ids})
+    assert frozen.status_code == 201
+    route = "/api/v1/admin/training/datasets/" + frozen.json()["dataset_id"]
+    assert client.get(route, headers={"Authorization": f"Bearer {token}"}).status_code == 401
+    exported = client.get(route, headers=headers).json()
+    path = tmp_path / "reviewed.json"
+    path.write_text(json.dumps(exported), encoding="utf-8")
+    records = load_reviewed_export(path)
+    assert all(r["visibility"] == "reviewed-training-only" for r in records)
+    with pytest.raises(ValueError, match="public"):
+        prepare_records(records)
+    output = tmp_path / "sft.pt"
+    settings = TrainingConfig(steps=2, warmup=1, objective="sft")
+    result = train(None, output, FoundationConfig(vocab_size=280, width=32, layers=2,
+                   heads=4, kv_heads=2, hidden=64, context=16), settings, "cpu", reviewed_export=path)
+    assert result["embedding_delta_l2"] > 0
+    assert result["validation"]["tokens"] > 0
+    assert load_checkpoint(output)[2]["data_visibility"] == "reviewed-training-only"
+    assert result["status"] == "candidate"
+    exported["records"][0]["messages"][1]["content"] = "tampered"
+    path.write_text(json.dumps(exported), encoding="utf-8")
+    with pytest.raises(ValueError, match="manifest"):
+        load_reviewed_export(path)
+    exported["records"][0]["review_checklist"] = {}
+    exported["manifest_sha256"] = canonical_hash({"dataset_version": exported["dataset_version"],
+                                                 "records": exported["records"]})
+    path.write_text(json.dumps(exported), encoding="utf-8")
+    with pytest.raises(ValueError, match="review"):
+        load_reviewed_export(path)
+
+
 @pytest.fixture
 def client():
     engine = create_engine(

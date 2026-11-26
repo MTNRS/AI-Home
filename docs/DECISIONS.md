@@ -65,3 +65,7 @@ Consultar [auditoría y matriz completa](FOUNDATION_AUDIT.md), [modelo](FOUNDATI
 ## 2026-11-26: backend Foundation explícito y aislamiento por petición
 
 Foundation pasa a ser el backend HTTP predeterminado. El proxy externo se conserva con selección explícita. No se comparte KV cache ni se ingieren mensajes del chat; el checkpoint es configuración del servidor. El bloqueo no espera ni acumula peticiones: responde ocupado. El límite es por proceso, no un scheduler global.
+
+## 2026-11-26: consentimiento de entrenamiento no implica publicación
+
+Las exportaciones revisadas entran por una opción explícita, separada del corpus público. Se mantienen como reviewed-training-only y SFT enmascara prompts. Se conserva manifiesto en el checkpoint y no se añade ninguna distribución a nodos. El hash no autentica el archivo: el operador debe obtenerlo por la API administrativa autorizada.
