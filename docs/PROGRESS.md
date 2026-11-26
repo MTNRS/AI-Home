@@ -1036,3 +1036,19 @@ visual. Suite completa: 298 correctas, 6 PostgreSQL omitidas (44,26 s); ajuste f
 de avisos/buffer vuelto a comprobar con pruebas de nodos y Tk. CI previa df0bd9e
 pasó Foundation y matriz PostgreSQL 3.11/3.12. Pendiente crear/cancelar/paginar desde
 esta vista y diagnosticar disponibilidad; no se declara interfaz integral terminada.
+
+### Paginación estable de trabajos propios
+
+Resumen API admite límite 1–100 y cursor pareado fecha/UUID, manteniendo filtro de
+propietario en cada página. Escritorio muestra 50 y sondea 51, permite Inicio /
+Más recientes / Más antiguos, y solo avanza historial tras éxito. No descarga
+artefactos. Prueba con 105 trabajos encontró y corrigió repetición por timestamps
+SQLite sin fracción frente a binds con .000000; normalización conserva microsegundos.
+Verificados empates, precisión, nuevas inserciones, ausencia de duplicados/omisiones,
+cursores inválidos y controles Tk reales ocultos (incluido fallo sin cambiar página).
+PostgreSQL local: 7 pruebas correctas (8,55 s), incluida paginación nativa.
+Suite completa: 296 correctas, 7 omitidas y 3 fallos por RAM disponible insuficiente
+para tareas neuronales (60,38 s). Sin modificar protecciones: reintento de las tres
+pasó las dos primeras; la tercera aún sin RAM, y pasó en proceso separado. No se
+presenta como una única ejecución completa correcta. CI anterior d3a2b70 pasó.
+Revisión visual/DPI sigue pendiente; build/ temporal previo permanece sin versionar.

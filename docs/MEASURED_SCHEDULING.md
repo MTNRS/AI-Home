@@ -91,7 +91,7 @@ without changing the original published plan.
 ## Desktop job summaries
 
 The node page now includes **Mis trabajos distribuidos**. The authenticated
-read-only window lists up to the newest 100 jobs owned by the current account,
+read-only window lists jobs owned by the current account in pages of 50,
 with status/type/ID, creation time, attempts, failure code and scheduling limits.
 It does not display prompts, gradient artifacts, payloads, lease credentials or
 other accounts' jobs. `GET /api/v1/jobs/summary` projects only summary columns in
@@ -109,4 +109,33 @@ Tests cover authentication/account isolation, omitted payload/result fields,
 HTTP-helper parsing/limits and constraint rendering. A hidden real-Tk functional
 smoke verified list population, selection, displayed requirements and read-only
 text. This is not visual, DPI or accessibility validation. The view does not yet
-create/cancel jobs, browse older pages or diagnose all reasons for waiting.
+create/cancel jobs or diagnose all reasons for waiting.
+
+
+## Stable summary pagination
+
+The summary API keeps its default response shape/list and 100-row default limit.
+Optional `limit` (1–100) and the paired `before_created_at` / `before_job_id` cursor
+select older records by descending creation timestamp and UUID. Both cursor
+fields are required together; invalid datetime/UUID/limit values return 422.
+Every page independently filters the authenticated owner. A cursor is a sorting
+boundary, not proof of ownership or a resource authorization token.
+
+The desktop requests 51 rows to display 50 and detect another page, with Inicio,
+Más recientes and Más antiguos controls. History advances only after a successful
+response; failures keep the previous page and cursor. Inicio retrieves the latest
+page, including newly inserted jobs. This is a live view, not a transaction-wide
+snapshot: statuses/deletions may change between requests. Newer insertions do not
+shift the older-page boundary as offset pagination would.
+
+SQLite CURRENT_TIMESTAMP stores whole seconds without a fractional suffix while
+SQLAlchemy binds six-digit fractions. The query normalizes SQLite date strings
+to six digits for both ordering and cursor comparison, preserving microseconds;
+PostgreSQL compares its native timestamps. This avoids repeated tied pages.
+SQLite normalization is a correctness measure, not a large-scale query benchmark.
+
+Verified 105 jobs across tied timestamps, mixed zero/nonzero microsecond storage,
+a newer insert between pages, no duplicates/omissions, invalid cursor pairs and
+limits. A PostgreSQL integration test separately exercised native tied timestamps.
+Hidden real-Tk widgets verified forward/back navigation, latest-page return and
+preservation of the old page on failed navigation. Visual/DPI review remains open.

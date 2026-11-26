@@ -436,10 +436,15 @@ def server_chat_result(
 DEFAULT_SERVER_VERSION = "Versión activa del servidor"
 
 
-def server_job_summaries(server_url, user_token, *, transport=None):
+def server_job_summaries(server_url, user_token, *, limit=100, before=None, transport=None):
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise ValueError("Límite de página inválido.")
+    params = {"limit": limit}
+    if before is not None:
+        params.update(before_created_at=before[0], before_job_id=before[1])
     with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
                       headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
-        with client.stream("GET", "/api/v1/jobs/summary") as response:
+        with client.stream("GET", "/api/v1/jobs/summary", params=params) as response:
             response.raise_for_status()
             raw = bytearray()
             for chunk in response.iter_bytes(chunk_size=65_536):
@@ -447,7 +452,7 @@ def server_job_summaries(server_url, user_token, *, transport=None):
                 if len(raw) > 2_000_000:
                     raise ValueError("El resumen de trabajos supera el límite de lectura.")
     data = json.loads(raw)
-    if not isinstance(data, list) or len(data) > 100:
+    if not isinstance(data, list) or len(data) > limit:
         raise ValueError("Lista de trabajos inválida.")
     return [JobSummaryResponse.model_validate(row) for row in data]
 
@@ -2459,7 +2464,7 @@ def main() -> None:
             window.minsize(640, 480)
             frame = ttk.Frame(window, padding=12)
             frame.pack(fill="both", expand=True)
-            notice = tk.StringVar(value="Consultando los 100 trabajos más recientes de esta cuenta…")
+            notice = tk.StringVar(value="Consultando trabajos de esta cuenta…")
             ttk.Label(frame, textvariable=notice, wraplength=600).pack(anchor="w", pady=6)
             controls = ttk.Frame(frame)
             controls.pack(fill="x")
@@ -2473,6 +2478,7 @@ def main() -> None:
             detail = ScrolledText(frame, wrap="word", state="disabled", height=10)
             detail.pack(fill="both", expand=True)
             records = []
+            history, has_more = [None], False
             def selected(*args):
                 indices = listing.curselection()
                 detail.configure(state="normal")
@@ -2481,26 +2487,43 @@ def main() -> None:
                     detail.insert("end", format_job_summary(records[indices[0]]))
                 detail.configure(state="disabled")
             listing.bind("<<ListboxSelect>>", selected)
-            def refresh():
-                button.configure(state="disabled")
+            def restore_controls():
+                button.configure(state="normal")
+                first_button.configure(state="normal")
+                previous_button.configure(state="normal" if len(history) > 1 else "disabled")
+                next_button.configure(state="normal" if has_more else "disabled")
+            def refresh(target_history=None):
+                pending = list(history if target_history is None else target_history)
+                for control in (button, first_button, previous_button, next_button):
+                    control.configure(state="disabled")
                 notice.set("Actualizando; los datos visibles pueden pertenecer a la consulta anterior.")
                 def success(result):
-                    records[:] = result
+                    nonlocal has_more
+                    history[:] = pending
+                    has_more = len(result) > 50
+                    records[:] = result[:50]
                     listing.delete(0, "end")
                     for job in records:
                         listing.insert("end", f"{job.status} | {job.job_type} | {job.job_id}")
                     if records:
                         listing.selection_set(0)
                     selected()
-                    notice.set(f"{len(records)} trabajos recientes de tu cuenta (máximo 100). Vista de solo lectura.")
-                    button.configure(state="normal")
+                    notice.set(f"Página {len(history)}: {len(records)} trabajos de tu cuenta. Vista de solo lectura.")
+                    restore_controls()
                 def failure():
                     notice.set("No se pudo actualizar. Los datos visibles, si los hay, pertenecen a la consulta anterior.")
-                    button.configure(state="normal")
-                self._background(lambda: server_job_summaries(server_url, token), success,
+                    restore_controls()
+                self._background(lambda: server_job_summaries(server_url, token, limit=51, before=pending[-1]), success,
                     failure, is_current=lambda: bool(window.winfo_exists()))
             button = ttk.Button(controls, text="Actualizar", command=refresh)
-            button.pack(anchor="w")
+            button.pack(side="left")
+            first_button = ttk.Button(controls, text="Inicio", command=lambda: refresh([None]))
+            first_button.pack(side="left", padx=4)
+            previous_button = ttk.Button(controls, text="Más recientes", command=lambda: refresh(history[:-1]))
+            previous_button.pack(side="left", padx=4)
+            next_button = ttk.Button(controls, text="Más antiguos", command=lambda: refresh(
+                [*history, (records[-1].created_at.isoformat(), records[-1].job_id)]))
+            next_button.pack(side="left", padx=4)
             refresh()
 
         def _build_node_tab(self, ttk, parent) -> None:

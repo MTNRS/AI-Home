@@ -261,3 +261,37 @@ def test_postgres_scheduler_measurement_json_predicate(postgres_engine):
             assert set(session.scalars(query.where(_measurement_eligibility(node, now+121)))) == {jobs[0].job_id}
         finally:
             session.rollback()
+
+def test_postgres_job_summary_keyset_pagination(postgres_engine):
+    from datetime import datetime, timezone
+    from sqlalchemy import update
+    email = f'{uuid4()}@example.com'
+    owner = None
+    app = create_app(Settings(environment='test', database_url=DATABASE_URL), engine=postgres_engine)
+    try:
+        with TestClient(app) as client:
+            credentials = {'email':email,'password':'a-strong-password-123'}
+            registration=client.post('/api/v1/auth/register',json=credentials)
+            registration.raise_for_status()
+            owner=registration.json()['user_id']
+            login=client.post('/api/v1/auth/login',json=credentials)
+            login.raise_for_status()
+            headers={'Authorization':'Bearer '+login.json()['access_token']}
+            ids=[]
+            for i in range(5):
+                job=client.post('/api/v1/jobs',headers=headers,json={'values':[1,2],
+                    'idempotency_key':str(i),'allow_public_node_processing':True})
+                job.raise_for_status(); ids.append(job.json()['job_id'])
+            with Session(postgres_engine) as session, session.begin():
+                session.execute(update(ComputeJob).where(ComputeJob.owner_user_id==owner).values(
+                    created_at=datetime(2026,11,26,12,tzinfo=timezone.utc)))
+            first=client.get('/api/v1/jobs/summary',headers=headers,params={'limit':2}).json()
+            last=first[-1]
+            second=client.get('/api/v1/jobs/summary',headers=headers,params={'limit':3,
+                'before_created_at':last['created_at'],'before_job_id':last['job_id']}).json()
+            observed=[row['job_id'] for row in first+second]
+            assert observed == sorted(ids,reverse=True)
+    finally:
+        if owner:
+            with Session(postgres_engine) as session, session.begin():
+                session.execute(delete(User).where(User.user_id==owner))

@@ -631,3 +631,41 @@ def test_owned_job_summary_omits_payloads_results_and_reaches_desktop(client):
     huge = httpx.MockTransport(lambda request: httpx.Response(200,content=b' '*2_000_001))
     with pytest.raises(ValueError, match='límite'):
         server_job_summaries('http://localhost', owner, transport=huge)
+
+def test_summary_keyset_pages_tied_timestamps_and_new_insert(client):
+    from datetime import datetime, timezone
+    from ai_home.desktop import server_job_summaries
+    from sqlalchemy import update
+    owner = register(client, 'pages@example.com')
+    token = login(client, 'pages@example.com')
+    ids = {create_job(client, token, key=f'page-{i}').json()['job_id'] for i in range(105)}
+    # Exercise database-generated second-resolution timestamps, including ties.
+    with client.app.state.session_factory() as session, session.begin():
+        from sqlalchemy import text
+        session.execute(text("UPDATE compute_jobs SET created_at = '2026-11-26 12:00:00' WHERE owner_user_id = :owner"), {'owner':owner['user_id']})
+        precision_ids = sorted(ids)[:3]
+        for microsecond, job_id in enumerate(precision_ids):
+            session.execute(update(ComputeJob).where(ComputeJob.job_id == job_id).values(
+                created_at=datetime(2026, 11, 26, 12, 0, 0, microsecond, tzinfo=timezone.utc)))
+    def forward(request):
+        response = client.get(str(request.url), headers={'Authorization':request.headers['Authorization']})
+        return httpx.Response(response.status_code, content=response.content, request=request)
+    transport = httpx.MockTransport(forward)
+    page = server_job_summaries('http://localhost',token,limit=51,transport=transport)
+    assert [job.job_id for job in page[:2]] == [precision_ids[2], precision_ids[1]]
+    seen = [job.job_id for job in page[:50]]
+    newer = create_job(client,token,key='arrived-between-pages').json()['job_id']
+    with client.app.state.session_factory() as session, session.begin():
+        session.execute(update(ComputeJob).where(ComputeJob.job_id == newer).values(
+            created_at=datetime(2026, 11, 27, tzinfo=timezone.utc)))
+    while len(page) > 50:
+        last = page[49]
+        page = server_job_summaries('http://localhost',token,limit=51,
+            before=(last.created_at.isoformat(),last.job_id),transport=transport)
+        seen.extend(job.job_id for job in page[:50])
+        assert len(seen) <= 150, 'cursor repeated a page'
+    assert len(seen) == len(set(seen)) == 105
+    assert set(seen) == ids and newer not in seen
+    for params in ({'limit':101},{'before_job_id':newer},{'before_created_at':'2026-11-26T12:00:00'},
+                   {'before_created_at':'bad','before_job_id':newer}):
+        assert client.get('/api/v1/jobs/summary',headers=user_headers(token),params=params).status_code == 422

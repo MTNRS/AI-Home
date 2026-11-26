@@ -1,6 +1,7 @@
 """HTTP API for initial identity and account-isolation flows."""
 
 from collections.abc import Generator
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
@@ -14,7 +15,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import and_, or_, case, cast, String, delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -1404,11 +1405,31 @@ def create_app(
         return job
 
     @app.get("/api/v1/jobs/summary", response_model=list[JobSummaryResponse])
-    def get_own_job_summaries(current_user: AuthenticatedUser = Depends(get_current_user),
+    def get_own_job_summaries(limit: int = Query(default=100, ge=1, le=100),
+                              before_created_at: datetime | None = None, before_job_id: uuid.UUID | None = None,
+                              current_user: AuthenticatedUser = Depends(get_current_user),
                               session: Session = Depends(get_db)):
+        if (before_created_at is None) != (before_job_id is None):
+            raise HTTPException(status_code=422, detail="Both cursor fields are required together.")
         fields = [getattr(ComputeJob, name) for name in JobSummaryResponse.model_fields]
-        return list(session.execute(select(*fields).where(ComputeJob.owner_user_id == current_user.user_id)
-            .order_by(ComputeJob.created_at.desc(), ComputeJob.job_id.desc()).limit(100)).mappings())
+        query = select(*fields).where(ComputeJob.owner_user_id == current_user.user_id)
+        created = ComputeJob.created_at
+        sqlite = session.get_bind().dialect.name == "sqlite"
+        if sqlite:
+            # CURRENT_TIMESTAMP has no fraction; SQLAlchemy datetime binds have
+            # six digits. Normalize text without discarding microsecond precision.
+            raw_date = cast(created, String)
+            created = func.substr(case((func.instr(raw_date, ".") > 0, raw_date),
+                                      else_=raw_date + ".") + "000000", 1, 26)
+        if before_created_at is not None:
+            if before_created_at.tzinfo is None:
+                before_created_at = before_created_at.replace(tzinfo=timezone.utc)
+            cursor_date = (before_created_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+                           if sqlite else before_created_at)
+            query = query.where(or_(created < cursor_date,
+                and_(created == cursor_date, ComputeJob.job_id < str(before_job_id))))
+        return list(session.execute(query.order_by(created.desc(), ComputeJob.job_id.desc())
+                                    .limit(limit)).mappings())
 
     @app.get("/api/v1/credits")
     def get_own_credits(current_user: AuthenticatedUser = Depends(get_current_user),
