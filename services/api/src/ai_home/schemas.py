@@ -376,13 +376,13 @@ class HardwareReport(BaseModel):
 
 class NodeCapabilities(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    supported_job_types: list[Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1"]] = Field(
-        default_factory=lambda: ["math.sum.v1"], min_length=1, max_length=3)
+    supported_job_types: list[Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1", "foundation.evaluate.v1"]] = Field(
+        default_factory=lambda: ["math.sum.v1"], min_length=1, max_length=4)
     foundation_torch_version: StrictStr | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
     def require_gradient_runtime(self):
-        if "foundation.gradient.v1" in self.supported_job_types and not self.foundation_torch_version:
+        if {"foundation.gradient.v1", "foundation.evaluate.v1"}.intersection(self.supported_job_types) and not self.foundation_torch_version:
             raise ValueError("Gradient workers must declare their PyTorch runtime")
         return self
 
@@ -462,7 +462,7 @@ class JobResponse(JobSummaryResponse):
 
 class ClaimedJobResponse(BaseModel):
     job_id: str
-    job_type: Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1"]
+    job_type: Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1", "foundation.evaluate.v1"]
     payload: dict
     lease_token: str
     lease_expires_epoch: int
@@ -477,7 +477,7 @@ class RenewJobLeaseRequest(BaseModel):
 class WorkerServiceMeasurement(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     format: Literal["ai-home-worker-service-measurement-v1"]
-    job_type: Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1"]
+    job_type: Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1", "foundation.evaluate.v1"]
     device: Literal["cpu", "cuda"]
     heartbeat_service_seconds: float = Field(gt=0, le=600, allow_inf_nan=False)
     claim_service_seconds: float = Field(gt=0, le=600, allow_inf_nan=False)
@@ -549,3 +549,17 @@ class CreateGradientJobRequest(BaseModel):
             raise ValueError("Public node processing requires explicit consent")
         return self
 
+
+
+class CreateEvaluationJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    payload: dict
+    allow_public_node_processing: StrictBool
+    idempotency_key: str = Field(min_length=1, max_length=160)
+    reward_credits: StrictInt = Field(default=0, ge=0, le=1_000_000)
+
+    @model_validator(mode="after")
+    def require_consent(self):
+        if not self.allow_public_node_processing:
+            raise ValueError("Public node processing requires explicit consent")
+        return self

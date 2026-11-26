@@ -19,6 +19,8 @@ from ai_home.schemas import HardwareReport
 SUPPORTED_JOB_TYPES = ("math.sum.v1",)
 FOUNDATION_JOB_TYPE = "foundation.tokenize.v1"
 GRADIENT_JOB_TYPE = "foundation.gradient.v1"
+EVALUATION_JOB_TYPE = "foundation.evaluate.v1"
+NEURAL_JOB_TYPES = (GRADIENT_JOB_TYPE, EVALUATION_JOB_TYPE)
 TOKENIZE_MIN_RAM_BYTES = 256 * 1024**2
 MAX_JOB_ATTEMPTS = 3
 NODE_HEARTBEAT_TIMEOUT_SECONDS = 120
@@ -76,9 +78,9 @@ def register_node(
         raise ValueError("Node name cannot be empty.")
     node_token = secrets.token_urlsafe(32)
     supported_job_types = supported_job_types if supported_job_types is not None else list(SUPPORTED_JOB_TYPES)
-    if not supported_job_types or set(supported_job_types) - {*SUPPORTED_JOB_TYPES, FOUNDATION_JOB_TYPE, GRADIENT_JOB_TYPE}:
+    if not supported_job_types or set(supported_job_types) - {*SUPPORTED_JOB_TYPES, FOUNDATION_JOB_TYPE, *NEURAL_JOB_TYPES}:
         raise ValueError("Unsupported node capabilities")
-    if GRADIENT_JOB_TYPE in supported_job_types and not foundation_torch_version:
+    if set(NEURAL_JOB_TYPES).intersection(supported_job_types) and not foundation_torch_version:
         raise ValueError("Gradient workers must declare their PyTorch runtime")
     node = ComputeNode(
         node_id=str(uuid4()),
@@ -229,7 +231,7 @@ def list_owner_jobs(session: Session, owner_user_id: str) -> list[ComputeJob]:
     )
 
 
-def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=False) -> ClaimedJob | None:
+def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=False, allow_foundation_evaluation=False) -> ClaimedJob | None:
     now = int(time.time())
     if node.revoked_at is not None or (
         node.last_heartbeat_epoch < now - NODE_HEARTBEAT_TIMEOUT_SECONDS
@@ -274,18 +276,20 @@ def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=
         if (node.hardware.get("resources_epoch") or 0) < now - NODE_HEARTBEAT_TIMEOUT_SECONDS:
             available_ram = 0
         if snapshot["foundation_device"] == "cuda" and snapshot["cuda_free_bytes"] < 256 * 1024**2:
-            compatible = [name for name in compatible if name != GRADIENT_JOB_TYPE]
+            compatible = [name for name in compatible if name not in NEURAL_JOB_TYPES]
     if available_ram < TOKENIZE_MIN_RAM_BYTES:
         compatible = [name for name in compatible if name != FOUNDATION_JOB_TYPE]
     if not allow_foundation_training or available_ram < 1024**3:
         compatible = [name for name in compatible if name != GRADIENT_JOB_TYPE]
+    if not allow_foundation_evaluation or available_ram < 1024**3:
+        compatible = [name for name in compatible if name != EVALUATION_JOB_TYPE]
     job = session.scalar(
         select(ComputeJob)
         .where(
             ComputeJob.status == "queued",
             ComputeJob.job_type.in_(compatible),
             _measurement_eligibility(node, now),
-            or_(ComputeJob.job_type != GRADIENT_JOB_TYPE,
+            or_(ComputeJob.job_type.notin_(NEURAL_JOB_TYPES),
                 ComputeJob.payload["torch_version"].as_string() == node.hardware.get("foundation_torch_version")),
         )
         .order_by(ComputeJob.created_at, ComputeJob.job_id)
@@ -349,6 +353,11 @@ def submit_job_result(
     elif job.job_type == FOUNDATION_JOB_TYPE:
         from ai_home.foundation.tasks import execute_tokenize
         expected = execute_tokenize(job.payload)
+    elif job.job_type == EVALUATION_JOB_TYPE:
+        from ai_home.foundation.distributed_evaluation import verified_evaluation_result
+        if not verified_evaluation_result(job.payload, result):
+            raise InvalidJobResult
+        expected = result
     elif job.job_type == GRADIENT_JOB_TYPE:
         from ai_home.foundation.distributed import verified_gradient_result
         if not verified_gradient_result(job.payload, result):
@@ -427,6 +436,16 @@ def create_gradient_job(session: Session, *, owner_user_id: str, idempotency_key
         scheduling = {**GradientSchedulingRequirements.model_validate(scheduling).model_dump(exclude_none=True),
                       "profile_sha256": _gradient_profile(payload)}
     return _create_foundation_job(session, owner_user_id, idempotency_key, payload, GRADIENT_JOB_TYPE, reward_credits, scheduling)
+
+
+def create_evaluation_job(session: Session, *, owner_user_id: str, idempotency_key: str,
+                          payload: dict, allow_public_node_processing: bool, reward_credits=0):
+    from ai_home.foundation.distributed import GradientPayload
+    if allow_public_node_processing is not True:
+        raise ValueError("Public node processing requires explicit consent")
+    payload = GradientPayload.model_validate(payload).model_dump()
+    return _create_foundation_job(session, owner_user_id, idempotency_key, payload,
+                                  EVALUATION_JOB_TYPE, reward_credits)
 
 
 def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job_type, reward_credits, scheduling=None):

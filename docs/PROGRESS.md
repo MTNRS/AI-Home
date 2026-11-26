@@ -1663,3 +1663,16 @@ protocolo. Once pruebas de evaluacion/gradientes/rondas aprobadas en 6,69 s,
 incluidas ejecuciones CPU/CUDA, rechazos de alteraciones y privacidad. Pendiente
 conectar API, capacidades, scheduler, creditos y control de linaje del coordinador;
 no se declara disponible como tarea remota aun.
+
+### API y scheduler para evaluacion neuronal
+
+Conectada `foundation.evaluate.v1` a creacion autenticada, capacidades/runtime,
+recursos, leases, verificacion CPU y creditos. Nuevo interruptor de servidor y
+opt-in independiente de NodeAgent, ambos desactivados por defecto. No usa mediciones
+de velocidad de gradientes para asignar evaluaciones. Prueba HTTP en proceso
+verifica autenticacion, consentimiento, falta de saldo, idempotencia, incompatibilidad
+de runtime, RAM, bloqueo del servidor, permiso del trabajador, resultado alterado,
+liquidacion unica, aislamiento y telemetria de una ejecucion NodeAgent real.
+Suite completa: 403 aprobadas y siete PostgreSQL omitidas, 67,73 s. Pendientes
+smoke con sockets, coordinador con linaje/holdout y selector de escritorio; no
+se afirma evaluacion de capacidad ni ejecucion multihost.

@@ -405,7 +405,7 @@ ocho de nodos tras añadir conservación de grupos en tokenización y compatibil
 de serialización sin etiqueta (conjunto solapado). Los rechazos y una ronda
 permitida se verificaron con cálculo real de gradientes y checkpoint resultante.
 
-### Ejecutor experimental de evaluacion de perdida (integracion pendiente)
+### Evaluacion distribuida experimental de perdida
 
 `foundation.distributed_evaluation.execute_evaluation` calcula perdida causal
 sin backward ni optimizador para un payload publico con los mismos limites de
@@ -419,8 +419,25 @@ gradientes, entrada y RNG CPU intactos, resultados alterados rechazados y
 restricciones de datos/pesos preservadas. La reserva de memoria es conservadora:
 reutiliza el presupuesto del entrenamiento de referencia.
 
-Este ejecutor aun no esta en la lista de tareas del scheduler ni tiene ruta HTTP,
-capacidad anunciada por nodos o liquidacion de creditos. El nombre reservado es
-`foundation.evaluate.v1`; no se afirma evaluacion distribuida operativa todavia.
+El ejecutor esta conectado a `POST /api/v1/jobs/foundation/evaluate`, con tipo
+`foundation.evaluate.v1`. El servidor exige
+`AI_HOME_FOUNDATION_DISTRIBUTED_EVALUATION_ENABLED=true` (por defecto false),
+independientemente del permiso de entrenamiento. La peticion autenticada contiene
+`payload` (mismo esquema acotado de pesos y shard que gradientes),
+`allow_public_node_processing: true`, `idempotency_key` y `reward_credits` opcional.
+No admite restricciones de scheduling basadas en mediciones de gradientes.
+
+El nodo debe anunciar esa capacidad y la version exacta de PyTorch. El scheduler
+exige RAM suficiente, respeta snapshots de recursos/caducidad y VRAM CUDA, y no
+entrega estas tareas a trabajadores antiguos. En Python se habilita mediante
+`NodeAgent(..., allow_foundation_evaluation=True)`, seguido de
+`configure_capabilities()` y el bucle habitual `run_once()`. El permiso es
+independiente de `allow_foundation_training`; el escritorio todavia no expone
+esta nueva opcion. No se habilita por instalar una actualizacion.
+
+Resultados alterados se rechazan antes de liquidar creditos. Se reutilizan reservas,
+leases, idempotencia y liquidacion transaccional. El test de API usa transporte
+HTTP en proceso con FastAPI y NodeAgent reales, dos trabajos remunerados y
+recomputacion CPU; no es aun un smoke con sockets ni dos equipos fisicos.
 Tampoco demuestra capacidad linguistica ni ausencia de contaminacion: el payload
 no aporta linaje de entrenamiento y requiere un coordinador que valide el holdout.

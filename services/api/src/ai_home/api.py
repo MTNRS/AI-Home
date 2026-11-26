@@ -53,6 +53,7 @@ from ai_home.jobs import (
     create_math_sum_job,
     create_tokenize_job,
     create_gradient_job,
+    create_evaluation_job,
     find_existing_math_sum_job,
     heartbeat_node,
     is_job_idempotency_violation,
@@ -81,6 +82,7 @@ from ai_home.schemas import (
     CreateMathSumJobRequest,
     CreateTokenizeJobRequest,
     CreateGradientJobRequest,
+    CreateEvaluationJobRequest,
     JobResponse,
     JobSummaryResponse,
     LoginRequest,
@@ -1378,7 +1380,7 @@ def create_app(
         hardware = dict(current_node.hardware)
         hardware.pop("foundation_torch_version", None)
         hardware.pop("service_measurement", None)
-        if "foundation.gradient.v1" in payload.supported_job_types:
+        if {"foundation.gradient.v1", "foundation.evaluate.v1"}.intersection(payload.supported_job_types):
             hardware["foundation_torch_version"] = payload.foundation_torch_version
         current_node.hardware = hardware
         session.commit()
@@ -1498,6 +1500,38 @@ def create_app(
             raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
         return job
 
+    @app.post("/api/v1/jobs/foundation/evaluate", response_model=JobResponse, status_code=201)
+    def create_foundation_evaluation_job(
+        payload: CreateEvaluationJobRequest, request: Request,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeJob:
+        if not request.app.state.settings.foundation_distributed_evaluation_enabled:
+            raise HTTPException(status_code=503, detail="Experimental evaluation jobs are disabled.")
+        arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing,
+                         reward_credits=payload.reward_credits)
+        try:
+            try:
+                job = create_evaluation_job(session, **arguments)
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                if not is_job_idempotency_violation(error):
+                    raise
+                job = create_evaluation_job(session, **arguments)
+                session.commit()
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
+        except (ValueError, ImportError):
+            session.rollback()
+            raise HTTPException(status_code=422, detail="Invalid or unsupported evaluation task.") from None
+        except InsufficientCredits:
+            session.rollback()
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
+        return job
+
     @app.get("/api/v1/jobs/summary", response_model=list[JobSummaryResponse])
     def get_own_job_summaries(limit: int = Query(default=100, ge=1, le=100),
                               before_created_at: datetime | None = None, before_job_id: uuid.UUID | None = None,
@@ -1583,7 +1617,8 @@ def create_app(
         heartbeat_node(session, current_node)
         try:
             claim = claim_job(session, current_node,
-                              allow_foundation_training=request.app.state.settings.foundation_distributed_training_enabled)
+                              allow_foundation_training=request.app.state.settings.foundation_distributed_training_enabled,
+                              allow_foundation_evaluation=request.app.state.settings.foundation_distributed_evaluation_enabled)
         except NodeNotFound:
             session.rollback()
             raise HTTPException(
