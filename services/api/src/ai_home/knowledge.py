@@ -21,7 +21,7 @@ def terms(text):
 
 
 def _validate(records):
-    records = prepare_records(records)
+    records = prepare_records(records, purpose="retrieval")
     for record in records:
         parsed = urlsplit(record["url"])
         if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
@@ -149,7 +149,7 @@ def main():
     search.add_argument("query")
     args = parser.parse_args()
     if args.command == "build":
-        records, _ = load_records(args.dataset)
+        records, _ = load_records(args.dataset, purpose="retrieval")
         print(build_index(records, args.index))
     else:
         print(json.dumps(KnowledgeIndex(args.index).search(args.query), ensure_ascii=True, indent=2))

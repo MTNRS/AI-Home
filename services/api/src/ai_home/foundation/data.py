@@ -12,15 +12,24 @@ def canonical_hash(value):
                                      separators=(",", ":")).encode()).hexdigest()
 
 
-def prepare_records(records, allow_reviewed=False):
+def prepare_records(records, allow_reviewed=False, *, purpose="training"):
+    if purpose not in {"training", "retrieval"}:
+        raise ValueError("Unknown dataset purpose")
+    if purpose == "retrieval" and allow_reviewed:
+        raise ValueError("Private reviewed training exports cannot be retrieved")
     result = []
     seen = set()
     for record in records:
         required = ("source", "url", "license", "date", "language", "text")
         if any(not isinstance(record.get(k), str) or not record[k].strip() for k in required):
             raise ValueError("Incomplete source provenance")
-        if record.get("training_allowed") is not True or record.get("privacy_reviewed") is not True:
-            raise ValueError("Training authorization and privacy review required")
+        permission = record.get("training_allowed")
+        if purpose == "retrieval":
+            # Legacy public datasets predate the separate retrieval permission.
+            # An explicit retrieval denial always overrides that legacy default.
+            permission = record.get("retrieval_allowed", permission)
+        if permission is not True or record.get("privacy_reviewed") is not True:
+            raise ValueError(f"{purpose.title()} authorization and privacy review required")
         if record.get("visibility") != "public" and not (
             allow_reviewed and record.get("visibility") == "reviewed-training-only"
         ):
@@ -52,12 +61,12 @@ def split_records(records, validation_fraction=0.2, allow_reviewed=False):
     return records[count:], records[:count]
 
 
-def load_records(path, max_bytes=8_000_000):
+def load_records(path, max_bytes=8_000_000, *, purpose="training"):
     path = Path(path)
     if path.stat().st_size > max_bytes:
         raise ValueError("Reference dataset loader budget exceeded")
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("format_version") != 1 or not isinstance(data.get("records"), list):
         raise ValueError("Invalid knowledge dataset")
-    records = prepare_records(data["records"])
+    records = prepare_records(data["records"], purpose=purpose)
     return records, canonical_hash(records)

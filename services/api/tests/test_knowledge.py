@@ -107,3 +107,49 @@ def test_knowledge_requires_auth_and_explicit_foundation_configuration(client):
     response = client.post("/api/v1/chat/completions", json=payload,
                            headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 503
+
+
+def test_retrieval_only_permission_never_authorizes_training(tmp_path):
+    from ai_home.foundation.data import load_records, prepare_records, split_records
+    data = [{**record, "retrieval_allowed": True, "training_allowed": False}
+            for record in records()]
+    dataset = tmp_path / "retrieval-only.json"
+    dataset.write_text(json.dumps({"format_version": 1, "records": data}), encoding="utf-8")
+    prepared, digest = load_records(dataset, purpose="retrieval")
+    assert all(record["training_allowed"] is False for record in prepared)
+    assert len(digest) == 64
+    path = tmp_path / "index.json"
+    build_index(prepared, path)
+    assert KnowledgeIndex(path).search("Marte")
+    for operation in (lambda: load_records(dataset), lambda: prepare_records(data),
+                      lambda: split_records(data)):
+        with pytest.raises(ValueError, match="Training authorization"):
+            operation()
+    with pytest.raises(ValueError, match="Private reviewed"):
+        prepare_records(data, purpose="retrieval", allow_reviewed=True)
+    with pytest.raises(ValueError, match="Unknown dataset purpose"):
+        prepare_records(data, purpose="anything")
+
+
+@pytest.mark.parametrize("permission", [False, None, 1, "true"])
+def test_explicit_retrieval_permission_is_strict_and_overrides_training(tmp_path, permission):
+    data = [{**record, "retrieval_allowed": permission} for record in records()]
+    with pytest.raises(ValueError, match="Retrieval authorization"):
+        build_index(data, tmp_path / "index.json")
+
+
+def test_updated_index_preserves_old_version_and_new_provenance(tmp_path):
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    data = records()
+    old_version = build_index(data, first)
+    original = first.read_bytes()
+    data[0] = {**data[0], "text": "Marte es un planeta. Sus lunas son Fobos y Deimos.",
+               "date": "2026-11-27", "url": "https://example.org/fixture/revision-2"}
+    new_version = build_index(data, second)
+    assert new_version != old_version
+    assert first.read_bytes() == original
+    old_hit = KnowledgeIndex(first).search("Marte")[0]
+    new_hit = KnowledgeIndex(second).search("Marte")[0]
+    assert old_hit["document_sha256"] != new_hit["document_sha256"]
+    assert new_hit["date"] == "2026-11-27"
+    assert new_hit["url"].endswith("revision-2")

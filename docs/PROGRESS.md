@@ -241,3 +241,15 @@ Account transitions reset retrieval selection and close private viewers. Trainin
 submission of retrieval conversations is held pending a provenance-preserving
 export/review workflow. Validation: 175 passed, 4 skipped; actual hidden Windows
 Tk construction/viewer/clear/profile-switch check passed. See KNOWLEDGE.md.
+
+
+### Separate knowledge-use permissions (2026-11-26)
+
+Added a retrieval purpose to the shared dataset validator and loader. Public
+retrieval-only documents can now be indexed without granting training permission.
+The trainer and train/validation splitter still reject them. Explicit retrieval
+denials override legacy training permissions; private reviewed conversation
+exports remain excluded. Index update tests verify immutable earlier versions and
+independent source metadata on the replacement version.
+
+Validation: CUDA-enabled full suite 181 passed, 4 PostgreSQL tests skipped.

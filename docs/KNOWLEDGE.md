@@ -9,11 +9,14 @@ cosine similarity; they are not learned semantic embeddings or a pretrained mode
 
 Use the existing Foundation dataset JSON format (`format_version: 1`, `records`).
 Each record requires source, HTTP(S) provenance URL, license, date, language, text,
-`training_allowed: true`, `privacy_reviewed: true`, and `visibility: public`.
+`retrieval_allowed: true`, `privacy_reviewed: true`, and `visibility: public`.
+`training_allowed` is independent and may be false for retrieval-only material.
 These permissions are operator attestations: software cannot determine a license
 or prove the absence of all personal data. The existing reviewed-public dataset
 validator and additional metadata filtering reject common credentials/emails.
-Private memory and consented conversation exports are not index inputs.
+Private memory and consented conversation exports are not index inputs, even
+when a record claims retrieval permission. The training loader and train/validation
+split retain their training-only default and reject retrieval-only records.
 
 ```powershell
 $env:PYTHONPATH = "services/api/src"
@@ -63,9 +66,10 @@ There is no network ingestion, online refresh scheduler, semantic neural encoder
 or large-scale vector database in this increment.
 Existing Wikipedia ingestion remains separate. Arbitrary source connectors,
 review workflows and semantic retrieval evaluation remain
-part of the full objective. The current public training permission requirement is
-stricter than retrieval-only licensing and needs a distinct permission model in
-a later pipeline revision.
+part of the full objective. The dataset validator distinguishes retrieval from training permission. Legacy
+records without `retrieval_allowed` retain the prior public-training permission
+behavior for compatibility. Any explicit retrieval denial takes precedence.
+New source integrations should always supply both permission flags.
 
 
 ## Desktop
@@ -90,3 +94,11 @@ Validation: 175 tests passed, 4 PostgreSQL tests skipped. A real Windows Tk
 construction check (windows hidden, settings/memory loaders isolated) opened the
 reference viewer and exercised chat clearing and profile switching successfully.
 This is a widget/function check, not a visual layout review.
+
+
+Permission separation validation: the loader preserves `training_allowed: false`
+through indexing, rejects retrieval-only data through every training entry path,
+and accepts only the literal boolean true for retrieval. Version update tests
+prove that old index bytes remain unchanged and the new version retains its own
+source URL, date and document hash. Revoking access requires selecting an updated
+index or removing the old index from service; versioning itself is not revocation.
