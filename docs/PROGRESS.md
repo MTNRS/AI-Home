@@ -397,3 +397,13 @@ and reserved status-bar space. Rechecked corrected chat and scrolled provider
 controls visually; closed the isolated review instance. No account/credential
 changes. Full suite: 229 passed, 4 skipped. Scope and remaining visual checks are
 recorded in DESKTOP_VISUAL_REVIEW.md.
+
+
+### Foundation checkpoint inspection interface (2026-11-26)
+
+Added read-only desktop Model/Training views and CLI inspection of local Foundation
+checkpoints. Counts derive from validated tensors; file/tokenizer hashes, actual
+architecture and retained training metrics are exposed without tensor/optimizer
+payloads. Inspection does not activate or approve models. Validation: 230 passed,
+4 skipped; hidden real Windows Tk inspection of the CUDA experiment checkpoint
+passed. Broader training/evaluation/evolution control panels remain incomplete.

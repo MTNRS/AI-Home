@@ -554,7 +554,7 @@ def save_settings(settings: dict[str, str]) -> None:
 
 def main() -> None:
     import tkinter as tk
-    from tkinter import messagebox, ttk
+    from tkinter import filedialog, messagebox, ttk
 
     class AIHomeDesktop(tk.Tk):
         def __init__(self) -> None:
@@ -1565,6 +1565,8 @@ def main() -> None:
             self.server_version_combo.pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Actualizar versiones aprobadas",
                        command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
+            ttk.Button(routing, text="Inspeccionar checkpoint local",
+                       command=self._inspect_checkpoint_dialog).pack(anchor="w", pady=(6, 0))
             ttk.Button(routing, text="Ajustes de generación Foundation",
                        command=self._generation_dialog).pack(anchor="w", pady=(6, 0))
             self.stream_enabled_var = tk.BooleanVar(value=False)
@@ -1587,6 +1589,47 @@ def main() -> None:
                 text="La clave nunca se envía al servidor AI@Home.",
                 foreground="#52606d",
             ).pack(anchor="w", pady=(6, 0))
+
+        def _inspect_checkpoint_dialog(self) -> None:
+            path = filedialog.askopenfilename(parent=self, title="Checkpoint Foundation",
+                                             filetypes=[("PyTorch checkpoint", "*.pt"), ("Todos", "*.*")])
+            if not path:
+                return
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Foundation: arquitectura y entrenamiento")
+            window.geometry("820x580")
+            notebook = ttk.Notebook(window)
+            notebook.pack(fill="both", expand=True, padx=12, pady=12)
+            views = {}
+            for name in ("Modelo", "Entrenamiento"):
+                frame = ttk.Frame(notebook)
+                notebook.add(frame, text=name)
+                scrollbar = ttk.Scrollbar(frame)
+                scrollbar.pack(side="right", fill="y")
+                content = tk.Text(frame, wrap="word", state="disabled", yscrollcommand=scrollbar.set)
+                content.pack(fill="both", expand=True)
+                scrollbar.configure(command=content.yview)
+                views[name] = content
+            ttk.Label(window, text="Inspección local. Los datos del checkpoint no certifican capacidades ni aprobación.",
+                      wraplength=760).pack(padx=12, pady=(0, 12))
+
+            def inspect():
+                from ai_home.foundation.inspection import inspect_checkpoint
+                return inspect_checkpoint(path)
+
+            def display(report):
+                training_keys = {"training_config", "metrics", "validation", "embedding_delta_l2",
+                                 "training_device", "step", "training_document_count", "validation_document_count"}
+                sections = {"Modelo": {k: v for k, v in report.items() if k not in training_keys},
+                            "Entrenamiento": {k: v for k, v in report.items() if k in training_keys}}
+                for name, value in sections.items():
+                    views[name].configure(state="normal")
+                    views[name].insert("end", json.dumps(value, indent=2, ensure_ascii=False))
+                    views[name].configure(state="disabled")
+                self.status_var.set("Checkpoint inspeccionado; no se ha cambiado el modelo de chat.")
+
+            self._background(inspect, display, is_current=lambda: bool(window.winfo_exists()))
 
         def _generation_dialog(self) -> None:
             window = tk.Toplevel(self)
