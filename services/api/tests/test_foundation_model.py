@@ -135,3 +135,44 @@ def test_controlled_training_stop_saves_exactly_resumable_optimizer_boundary(tmp
     with pytest.raises(TrainingCancelled):
         train(records(), tmp_path / "never.pt", config(), settings, device, cancel=cancel)
     assert not (tmp_path / "never.pt").exists()
+
+
+@pytest.mark.parametrize("tied", [True, False])
+def test_vocabulary_migration(tmp_path, tied):
+    from ai_home.foundation.vocabulary import expand_checkpoint
+    from ai_home.foundation.data import split_records
+    parent = tmp_path / "parent.pt"
+    train(records(), parent, replace(config(), tied_embeddings=tied), TrainingConfig(steps=1, warmup=0), "cpu")
+    before = parent.read_bytes()
+    old, tokenizer, previous = load_checkpoint(parent)
+    corpus, holdout = split_records(records())
+    target = tmp_path / "expanded.pt"
+    report = expand_checkpoint(parent, target, corpus, tokenizer.vocab_size + 8)
+    new, expanded, payload = load_checkpoint(target)
+    assert parent.read_bytes() == before
+    assert report["new_size"] > report["old_size"]
+    assert expanded.merges[:len(tokenizer.merges)] == tokenizer.merges
+    assert expanded.pieces[:tokenizer.vocab_size] == tokenizer.pieces
+    text = "Documento Unicode: " + chr(0x6f22)
+    assert expanded.decode(expanded.encode(text)) == text
+    for name, tensor in old.state_dict().items():
+        value = new.state_dict()[name]
+        if name in ("embedding.weight", "output.weight"):
+            value = value[:tokenizer.vocab_size]
+        assert torch.equal(tensor, value)
+    assert (new.output.weight is new.embedding.weight) == tied
+    assert "optimizer" not in payload and not payload["training_complete"]
+    assert set(payload["training_document_hashes"]) >= set(previous["training_document_hashes"])
+    duplicate = tmp_path / "duplicate.pt"
+    expand_checkpoint(parent, duplicate, corpus, tokenizer.vocab_size + 8)
+    for name, tensor in load_checkpoint(duplicate)[0].state_dict().items():
+        assert torch.equal(tensor, new.state_dict()[name])
+    with pytest.raises(ValueError, match="new output"):
+        expand_checkpoint(parent, target, corpus, tokenizer.vocab_size + 8)
+    with pytest.raises(ValueError, match="holdout"):
+        expand_checkpoint(parent, tmp_path / "bad.pt", holdout, tokenizer.vocab_size + 8)
+    with pytest.raises(ValueError, match="fresh training"):
+        train(records(), tmp_path / "resume.pt", training=TrainingConfig(steps=1, warmup=0), device="cpu", resume=target)
+    trained = train(records(), tmp_path / "trained.pt", training=TrainingConfig(steps=1, warmup=0),
+                    device="cpu", initial_checkpoint=target)
+    assert trained["embedding_delta_l2"] > 0

@@ -64,6 +64,30 @@ class ByteBPE:
             sequences = [cls._merge(seq, pair, token_id) for seq in sequences]
         return cls(merges)
 
+    def extend(self, texts, vocab_size, max_bytes=8_000_000):
+        """Append merges without changing any existing token ID or piece."""
+        if type(vocab_size) is not int or not self.vocab_size < vocab_size <= 65536:
+            raise ValueError("Expansion requires a larger vocabulary, at most 65536")
+        sequences, total = [], 0
+        for text in texts:
+            total += len(text.encode("utf-8"))
+            if total > max_bytes:
+                raise ValueError("Reference BPE trainer memory budget exceeded")
+            sequences.append(self.encode(text))
+        if not total:
+            raise ValueError("Empty tokenizer training corpus")
+        merges = list(self.merges)
+        for token_id in range(self.vocab_size, vocab_size):
+            counts = Counter(pair for seq in sequences for pair in zip(seq, seq[1:]))
+            if not counts:
+                break
+            pair = min(counts, key=lambda p: (-counts[p], p))
+            if counts[pair] < 2:
+                break
+            merges.append(pair)
+            sequences = [self._merge(seq, pair, token_id) for seq in sequences]
+        return type(self)(merges)
+
     def encode(self, text):
         tokens = list(text.encode("utf-8"))
         for token_id, pair in enumerate(self.merges, 262):

@@ -443,3 +443,17 @@ uninterrupted run and cancellation before initialization creates no checkpoint.
 Validation: 237 passed, 4 PostgreSQL tests skipped (server unavailable). The signal
 handler was inspected; an interactive Windows Ctrl+C run has not been demonstrated.
 See TRAINING.md for cancellation latency and second-interrupt limitations.
+
+
+### Explicit vocabulary migration
+
+Added an authorized-corpus CLI and Python migration path for append-only BPE
+expansion. Preserves existing rows and other weights, initializes new rows from
+a seed, retains privacy/holdout lineage, exclusively writes a separate candidate
+and requires fresh optimizer training. Tests cover tied/untied models, exact
+weight preservation, Unicode roundtrip, deterministic initialization, overwrite
+and holdout rejection, resume rejection and real follow-up training.
+Validation: full existing suite 237 passed, 4 PostgreSQL skips; after adding
+migration cases the focused model suite passed all 12 tests. Initial new tests
+used invalid warmup settings, corrected before the passing run. No quality
+improvement or automatic promotion is claimed. See TOKENIZER.md for usage.

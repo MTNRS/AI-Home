@@ -148,6 +148,8 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
     parent_sha256 = None
     if resume:
         model, tokenizer, payload = load_checkpoint(resume, max_bytes=training.memory_budget_bytes)
+        if "optimizer" not in payload:
+            raise ValueError("Checkpoint requires fresh training via initial_checkpoint, not resume")
         if payload["device"] != device:
             raise ValueError("Exact resume requires the original device family")
         if payload["dataset_sha256"] != dataset_hash or payload["training_config"] != asdict(training):
