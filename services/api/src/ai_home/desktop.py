@@ -265,6 +265,23 @@ def list_training_candidates(
     return [TrainingContributionResponse.model_validate(item) for item in body]
 
 
+def submit_training_correction(server_url, user_token, contribution_id, message_index, replacement,
+                               *, consent, reviewed, conversation_id, transport=None):
+    from ai_home.schemas import TrainingCorrectionRequest
+    payload = TrainingCorrectionRequest(conversation_id=conversation_id, message_index=message_index,
+        replacement=replacement, consent=consent, consent_version="training_consent_v1",
+        consent_scope="conversation_for_aihome_training_candidates", provider_terms_allow_reuse=reviewed,
+        content_reviewed_for_sensitive_data=reviewed)
+    if not consent or not reviewed:
+        raise ValueError("Renueva consentimiento y revisión antes de enviar la corrección.")
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20, transport=transport,
+                      headers={"Authorization": f"Bearer {user_token}"}) as client:
+        response = client.post(f"/api/v1/training/conversations/{contribution_id}/corrections",
+                               json=payload.model_dump(mode="json"))
+        response.raise_for_status()
+        return TrainingContributionResponse.model_validate(response.json())
+
+
 def get_training_candidate(
     server_url: str,
     user_token: str,
@@ -2981,6 +2998,68 @@ def main() -> None:
                 is_current=lambda: self.conversation_id == conversation_id,
             )
 
+        def _correction_dialog(self, contribution, server_url, user_token) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Corregir respuesta: nueva aportación")
+            window.geometry("800x620")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            indices = [i for i, message in enumerate(contribution.messages) if message.role == "assistant"]
+            selected = tk.StringVar(value=str(indices[-1]))
+            ttk.Label(frame, text="Respuesta del asistente (índice del mensaje)").pack(anchor="w")
+            selector = ttk.Combobox(frame, textvariable=selected, values=[str(i) for i in indices], state="readonly")
+            selector.pack(fill="x")
+            original = tk.Text(frame, height=7, wrap="word", state="disabled")
+            original.pack(fill="both", expand=True, pady=8)
+            replacement = tk.Text(frame, height=7, wrap="word")
+            ttk.Label(frame, text="Respuesta corregida").pack(anchor="w")
+            replacement.pack(fill="both", expand=True)
+            consent, reviewed = tk.BooleanVar(value=False), tk.BooleanVar(value=False)
+            ttk.Checkbutton(frame, text="Consiento enviar el prefijo y esta corrección como nuevo candidato.", variable=consent).pack(anchor="w", pady=(10, 0))
+            ttk.Checkbutton(frame, text="He revisado datos sensibles y derechos de reutilización.", variable=reviewed).pack(anchor="w")
+            ttk.Label(frame, text="El original no se modifica. Se excluyen los turnos posteriores; requiere nueva revisión humana.",
+                      wraplength=750).pack(anchor="w", pady=8)
+            def show_original(*args):
+                index = int(selected.get())
+                original.configure(state="normal")
+                original.delete("1.0", "end")
+                original.insert("end", "\n\n".join(f"{message.role}: {message.content}"
+                    for message in contribution.messages[:index + 1]))
+                original.configure(state="disabled")
+                replacement.delete("1.0", "end")
+                replacement.insert("end", contribution.messages[index].content)
+                consent.set(False); reviewed.set(False)
+            selector.bind("<<ComboboxSelected>>", show_original)
+            show_original()
+            candidate_id = str(uuid4())
+            busy = False
+            def send():
+                nonlocal busy
+                if busy:
+                    return
+                if not consent.get() or not reviewed.get():
+                    messagebox.showerror("Corrección", "Confirma consentimiento y revisión.", parent=window)
+                    return
+                index, text = int(selected.get()), replacement.get("1.0", "end-1c")
+                if not text.strip() or text == contribution.messages[index].content or len(text) > 8192:
+                    messagebox.showerror("Corrección", "Escribe una corrección distinta de hasta 8192 caracteres.", parent=window)
+                    return
+                busy = True
+                button.configure(state="disabled")
+                def failure():
+                    nonlocal busy
+                    busy = False
+                    button.configure(state="normal")
+                def success(result):
+                    self.status_var.set(f"Corrección pendiente de revisión: {result.contribution_id}")
+                    window.destroy()
+                self._background(lambda: submit_training_correction(server_url, user_token, contribution.contribution_id,
+                    index, text, consent=True, reviewed=True, conversation_id=candidate_id), success, failure,
+                    is_current=lambda: bool(window.winfo_exists()))
+            button = ttk.Button(frame, text="Enviar nueva corrección", command=send)
+            button.pack(anchor="e", pady=8)
+
         def _manage_training_candidates(self) -> None:
             if self.session_token is None or self.session_server_url is None:
                 messagebox.showerror(
@@ -3056,6 +3135,16 @@ def main() -> None:
                     on_success,
                 )
 
+            def correct_selected():
+                selection = listing.curselection()
+                if not selection:
+                    messagebox.showerror("Corrección", "Selecciona una aportación.", parent=window)
+                    return
+                contribution_id = records[selection[0]].contribution_id
+                self._background(lambda: get_training_candidate(server_url, user_token, contribution_id),
+                    lambda result: self._correction_dialog(result, server_url, user_token),
+                    is_current=lambda: bool(window.winfo_exists()))
+
             buttons = ttk.Frame(window)
             buttons.pack(fill="x", padx=10, pady=(0, 10))
             previous_button = ttk.Button(
@@ -3081,6 +3170,7 @@ def main() -> None:
                 text="Retirar seleccionada",
                 command=withdraw_selected,
             ).pack(side="left")
+            ttk.Button(buttons, text="Corregir respuesta", command=correct_selected).pack(side="left", padx=6)
             ttk.Label(
                 window,
                 text=(

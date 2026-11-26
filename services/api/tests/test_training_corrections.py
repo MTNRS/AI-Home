@@ -1,5 +1,6 @@
 import hashlib
 import json
+import httpx
 from uuid import uuid4
 
 from test_training_review import client, register_and_login, create_candidate, approve_candidate, REVIEW_TOKEN
@@ -60,9 +61,13 @@ def test_correction_is_separate_consented_reviewed_and_exported(client, tmp_path
         assert client.post(route + "/corrections", headers=headers, json={**correction, **change}).status_code == 422
     approved = {"Authorization": f"Bearer {REVIEW_TOKEN}"}
     approve_candidate(client, source)
-    response = client.post(route + "/corrections", headers=headers, json=correction)
-    assert response.status_code == 201
-    candidate = response.json()
+    from ai_home.desktop import submit_training_correction
+    def transport(request):
+        response = client.request(request.method, str(request.url), headers=dict(request.headers), content=request.content)
+        return httpx.Response(response.status_code, content=response.content)
+    candidate = submit_training_correction("http://127.0.0.1", token, source, 1, correction["replacement"],
+        consent=True, reviewed=True, conversation_id=correction["conversation_id"],
+        transport=httpx.MockTransport(transport)).model_dump(mode="json")
     assert candidate["status"] == "pending_review"
     assert candidate["correction"]["source_contribution_id"] == source
     assert candidate["correction"]["original_content_sha256"] == hashlib.sha256(b"Answer 1").hexdigest()

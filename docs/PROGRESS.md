@@ -895,3 +895,15 @@ Prueba real sustituye el archivo durante generación y verifica identidad origin
 +rechazo del siguiente turno. Smoke Tk real verifica generación, pin, contrato de
 envío y reset; captura/valida el envío sin red, no se presenta como prueba HTTP.
 Suite: 288 correctas, 5 PostgreSQL omitidas. No cambia permisos ni gates de revisión.
+
+### Editor de correcciones en escritorio
+
+Mis aportaciones permite cargar una contribución propia, elegir una respuesta,
+revisar el prefijo y enviar un reemplazo con consentimiento/revisión renovados.
+Nuevo UUID estable por editor, candidato pendiente, original intacto y callbacks
+inválidos descartados al cerrar/cambiar perfil. Smoke con Tk real y API/DB en
+proceso verifica ausencia de envío sin confirmaciones y nueva corrección con
+procedencia. El test de correcciones/SFT atraviesa ahora el helper HTTP de escritorio.
+Suite previa al último ajuste del test: 288 correctas, 5 PostgreSQL omitidas;
+tests finales de correcciones: 2 correctos. Revisión visual pendiente. CI del código
+anterior 27d005d pasó (Foundation y matriz PostgreSQL 3.11/3.12).

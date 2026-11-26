@@ -40,8 +40,8 @@ Tests cover cross-account rejection, consent/rights/privacy denials, invalid rol
 secret filtering, a distinct pending candidate, unchanged original, duplicate
 submission, review gates, frozen hash/export, and real restricted SFT parameter
 updates. This is a correction-to-SFT pipeline, not preference optimization or proof
-that a suggested correction is true. UI editing and preference-pair learning remain
-separate pending work. Initial contribution providers retain their existing limits.
+that a suggested correction is true. Preference-pair learning remains separate pending work; desktop editing is
+described below. Initial contribution providers retain their existing limits.
 
 ## Contributions from the own Foundation model
 
@@ -66,3 +66,22 @@ changed checkpoint before generating the next answer. Consented submission uses
 that digest rather than a filename or a file reread after generation. Clearing
 the chat clears the pin. Server-proxy chats remain excluded until equivalent exact
 provenance is available; they are not silently relabeled.
+
+
+## Desktop correction flow
+
+In Mis aportaciones, select an existing contribution and choose Corregir respuesta.
+The editor loads only the authenticated owner's contribution, offers its assistant
+message indices, shows the included prefix and pre-fills the original reply for
+editing. The new-candidate consent and rights/privacy review boxes start unchecked
+and reset when selecting another reply. Sending requires a distinct nonempty
+replacement of at most 8192 characters. The original remains unchanged; the new
+candidate starts pending review. Closing/changing profile discards stale callbacks.
+
+Each editor holds one new conversation UUID, so retrying after a lost response
+cannot create multiple candidates. A duplicate response is reported as an error;
+inspect Mis aportaciones to reconcile rather than creating repeated corrections.
+The window does not optimize preferences, approve its own content or start SFT.
+A real Tk functional smoke routed its desktop HTTP helper into the real in-process
+FastAPI/database, verified the unchecked-consent gate and new candidate/provenance.
+This is functional evidence, not a visual layout or real-network transport review.
