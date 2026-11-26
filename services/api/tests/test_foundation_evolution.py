@@ -19,6 +19,36 @@ def records(prefix):
             for i in range(4)]
 
 
+def test_evaluation_rejects_known_training_families_before_generation(tmp_path, monkeypatch):
+    import ai_home.foundation.evaluation as module
+    torch.set_num_threads(1)
+    training = [{**r, 'split_group_sha256': 'a' * 64} for r in records('train')]
+    validation = [{**r, 'split_group_sha256': 'b' * 64} for r in records('validation')]
+    parent = tmp_path / 'grouped.pt'
+    train(training, parent, FoundationConfig(vocab_size=262, width=16, layers=1, heads=2,
+          kv_heads=1, hidden=32, context=16), TrainingConfig(steps=1, warmup=0), 'cpu',
+          validation_records=validation)
+    suite = {'version': 'group-test', 'source': 'authored fixture', 'license': 'Apache-2.0',
+             'cases': [{'id': 'one', 'category': 'mathematics', 'prompt': '1+1=', 'answers': ['2']}]}
+    assert ProbeSuite.model_validate(suite).model_dump() == suite
+    suite['cases'][0]['split_group_sha256'] = 'a' * 64
+    calls = []
+    original = module.stream_tokens
+    def observed(*args, **kwargs):
+        calls.append(True)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(module, 'stream_tokens', observed)
+    with pytest.raises(ValueError, match='Probe family overlaps'):
+        evaluate_checkpoint(parent, suite, device='cpu', max_new_tokens=2)
+    assert not calls
+    suite['cases'][0]['split_group_sha256'] = 'c' * 64
+    result = evaluate_checkpoint(parent, suite, device='cpu', max_new_tokens=2)
+    assert calls and result['grouped_probe_count'] == 1 and result['group_lineage_available']
+    suite['cases'][0]['split_group_sha256'] = 'invalid'
+    with pytest.raises(ValueError):
+        ProbeSuite.model_validate(suite)
+
+
 def test_evolution_trains_two_real_candidates_and_reports_evidence(tmp_path):
     torch.set_num_threads(1)
     paths = {}

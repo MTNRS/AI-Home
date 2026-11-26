@@ -1534,3 +1534,10 @@ rechazada contaminación en planificación y commit, conservado linaje en nuevas
 rondas. 18 pruebas de flujos distribuidos y ocho de nodos posteriores aprobadas
 (con solapamiento). Incluye gradientes reales y compatibilidad de registros sin
 etiquetas. Clientes/nodos antiguos requieren actualización para nuevos campos.
+
+### Evaluación con familias documentales
+
+Probes admiten grupo opcional; el evaluador rechaza familias entrenadas antes de
+inferir e informa cobertura de etiquetas y linaje. Suites sin etiqueta conservan
+su huella. Doce pruebas de evaluación/evolución/comparación aprobadas. La
+protección depende de etiquetas correctas; no es detección semántica automática.

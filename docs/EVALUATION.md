@@ -85,3 +85,19 @@ Evaluation reports use that identity, not a later read of the pathname. If the
 path is replaced after loading, the report still identifies the bytes actually
 loaded. Tests change the path between probes and mutate a file during loading.
 This is content identity checking, not signature-based publisher authentication.
+
+## Familias declaradas en probes
+
+Cada probe puede incluir `split_group_sha256` (64 hexadecimales en minúsculas).
+Antes de generar ninguna respuesta, el evaluador rechaza cualquier grupo que
+figure en `training_split_groups` del checkpoint. Esto detecta reformulaciones
+de una familia conocida aunque el texto no coincida con documentos entrenados.
+La etiqueta se omite al serializar cuando falta, conservando las huellas de
+suites anteriores. El informe añade `grouped_probe_count` y
+`group_lineage_available` para indicar el alcance de esta evidencia.
+
+No descubre relaciones por sí mismo: preguntas sin etiqueta, familias mal
+asignadas y checkpoints anteriores sin linaje de grupos mantienen sus límites.
+La protección de coincidencia textual existente sigue activa. Doce pruebas de
+evaluación/evolución/comparación aprobadas, incluido rechazo antes de inferencia,
+evaluación real de otra familia, validación de formato y serialización anterior.

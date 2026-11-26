@@ -7,7 +7,7 @@ import time
 import unicodedata
 
 import psutil
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator, model_serializer
 import torch
 
 from .checkpoint import load_checkpoint
@@ -26,6 +26,14 @@ class Probe(BaseModel):
     category: StrictStr
     prompt: StrictStr = Field(min_length=1, max_length=8192)
     answers: list[StrictStr] = Field(min_length=1, max_length=20)
+    split_group_sha256: StrictStr | None = Field(default=None, pattern=r'^[0-9a-f]{64}$')
+
+    @model_serializer(mode='wrap')
+    def serialize_probe(self, handler):
+        result = handler(self)
+        if result.get('split_group_sha256') is None:
+            result.pop('split_group_sha256', None)
+        return result
 
     @model_validator(mode="after")
     def validate_probe(self):
@@ -68,6 +76,10 @@ def evaluate_checkpoint(path, suite, *, device="auto", max_new_tokens=64, max_by
         raise ValueError("Invalid generation budget")
     model, tokenizer, payload = load_checkpoint(path, device, max_bytes)
     training_hashes = set(payload.get("training_document_hashes", []))
+    training_groups = set(payload.get('training_split_groups', []))
+    if any(probe.split_group_sha256 in training_groups for probe in suite.cases
+           if probe.split_group_sha256 is not None):
+        raise ValueError('Probe family overlaps known training split groups')
     results = []
     if device == "cuda":
         torch.cuda.reset_peak_memory_stats()
@@ -101,6 +113,8 @@ def evaluate_checkpoint(path, suite, *, device="auto", max_new_tokens=64, max_by
         passed = sum(r["passed"] for r in rows)
         categories[category] = {"passed": passed, "total": len(rows), "accuracy": passed / len(rows)}
     return {"format": "ai-home-evaluation-v1", "checkpoint_sha256": model.checkpoint_sha256,
+            'group_lineage_available': 'training_split_groups' in payload,
+            'grouped_probe_count': sum(p.split_group_sha256 is not None for p in suite.cases),
             "suite_sha256": canonical_hash(suite.model_dump()), "suite_version": suite.version,
             "tokenizer_sha256": tokenizer.fingerprint, "device": device,
             "torch_version": str(torch.__version__), "generation": {"temperature": 0, "max_new_tokens": max_new_tokens},
