@@ -1,4 +1,4 @@
-"""Experimental local FP32 visual SFT, with exact-schedule optimizer resume."""
+"""Experimental local visual SFT, with exact-schedule optimizer resume."""
 
 from dataclasses import asdict
 import math
@@ -18,11 +18,15 @@ from .vision_checkpoint import load_vision_weights, vision_weights_payload
 
 def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
                  device="cpu", prompt="Describe the image.", resume=None, stop_after=None, cancel=None):
-    if training.precision != "fp32" or training.objective != "sft":
-        raise ValueError("Visual training currently requires FP32 SFT")
+    if training.objective != "sft":
+        raise ValueError("Visual training requires SFT")
     if stop_after is not None and (type(stop_after) is not int or not 1 <= stop_after <= training.steps):
         raise ValueError("Invalid interruption step")
     device = select_device(device)
+    if training.precision == "fp16" and device != "cuda":
+        raise ValueError("FP16 visual training requires CUDA")
+    if training.precision == "bf16" and device == "cuda" and not torch.cuda.is_bf16_supported():
+        raise ValueError("CUDA device does not support BF16")
     estimate = estimate_training_bytes(config, training.batch_size) + 20 * config.width * 3 * vision.patch_size ** 2
     if estimate > min(training.memory_budget_bytes, available_training_bytes(device)):
         raise ValueError("Visual training exceeds memory budget")
@@ -42,6 +46,8 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
         if payload.get("training_state", {}).get("binding") != binding:
             raise ValueError("Visual resume dataset or training protocol mismatch")
     optimizer = torch.optim.AdamW(model.parameters(), lr=training.learning_rate)
+    scaler = torch.amp.GradScaler("cuda", enabled=training.precision == "fp16")
+    dtype = torch.bfloat16 if training.precision == "bf16" else torch.float16
     start, history = 0, []
     if payload is not None:
         state = payload["training_state"]
@@ -53,6 +59,7 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
             if any(isinstance(v, torch.Tensor) and not torch.isfinite(v).all() for v in values.values()):
                 raise ValueError("Non-finite visual optimizer state")
         sampler.set_state(state["sampler"])
+        scaler.load_state_dict(state.get("scaler", {}))
         history = list(state["history"])
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
@@ -62,7 +69,7 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
         data = vision_weights_payload(model, tokenizer, provenance={"dataset_sha256": train.dataset_sha256,
             "visibility": "public", "training_allowed": True, "privacy_reviewed": True})
         data["training_state"] = {"binding": binding, "step": step, "optimizer": optimizer.state_dict(),
-                                  "sampler": sampler.get_state(), "history": history}
+                                  "sampler": sampler.get_state(), "scaler": scaler.state_dict(), "history": history}
         path = destination / f"visual-step-{step}.pt"
         atomic_save(data, path)
         return path
@@ -85,15 +92,18 @@ def train_visual(manifest, tokenizer, config, vision, training, output_dir, *,
         for _ in range(training.accumulation):
             indices = torch.randint(len(train), (training.batch_size,), generator=sampler).tolist()
             images, inputs, targets = (torch.stack(values).to(device) for values in zip(*(train[i] for i in indices)))
-            logits, _ = model(inputs, images)
-            loss = F.cross_entropy(logits.float().flatten(0, 1), targets.flatten())
+            with torch.autocast(device_type=device, dtype=dtype, enabled=training.precision != "fp32"):
+                logits, _ = model(inputs, images)
+                loss = F.cross_entropy(logits.float().flatten(0, 1), targets.flatten())
             if not torch.isfinite(loss):
                 raise ValueError("Non-finite visual training loss")
-            (loss / training.accumulation).backward()
+            scaler.scale(loss / training.accumulation).backward()
             total_loss += loss.item() / training.accumulation
             tokens += targets.ne(-100).sum().item()
+        scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), training.clip, error_if_nonfinite=True)
-        optimizer.step()
+        scaler.step(optimizer)
+        scaler.update()
         if device == "cuda":
             torch.cuda.synchronize()
         elapsed = time.perf_counter() - began

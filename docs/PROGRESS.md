@@ -1229,3 +1229,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   Verifica cancelación, destrucción de ventana y descarte de salida antigua.
 - Ejecución Windows pasó tras corregir UUID del harness; nueva ventana vacía.
 - Gate añadido a CI instalado/Xvfb. Resultado remoto de esta adición pendiente.
+
+## 2026-11-26 — Entrenamiento visual FP16/BF16 y reanudación
+
+- Autocast y GradScaler siguiendo el entrenador textual; pesos maestros FP32,
+  estado scaler persistido, validación FP32 y rechazo FP16 CPU explícito.
+- 5 pruebas pasaron en 5.45s. CUDA FP16/BF16 con acumulación y checkpointing:
+  ejecución continua y reanudada producen pesos exactamente iguales.
+- Sin afirmaciones de rendimiento/calidad; BF16 CPU no medido en este cambio.

@@ -340,3 +340,19 @@ Ejecución Windows pasó. Primer intento del harness usó un identificador de us
 no UUID y falló antes del cambio; se corrigió a UUID sintético válido y se repitió
 correctamente. CI añade la misma prueba sobre paquete instalado con Xvfb/Python -I;
 resultado remoto de esta adición todavía pendiente. Revisión visual/DPI pendiente.
+
+## Precisión mixta visual
+
+El entrenador admite ahora `precision=fp16` (solo CUDA) y `precision=bf16`
+(autocast; en CUDA comprueba soporte), además de FP32. Los pesos maestros y los
+checkpoints siguen en FP32. FP16 usa GradScaler, cuyo estado queda en training_state
+para reanudar. Los checkpoints FP32 previos sin scaler siguen aceptándose.
+La validación teacher-forced permanece en FP32, independientemente de la precisión
+de entrenamiento. Gradientes no finitos detienen la corrida antes de guardar un
+nuevo candidato; no hay cambio silencioso de dispositivo o precisión.
+
+Pruebas reales en RTX 4070 Super: `test_foundation_vision_training.py`, **5 passed
+in 5.45s**. FP16/BF16 con acumulación y gradient checkpointing: cuatro pasos continuos
+coinciden bit a bit con dos + reanudación en el mismo entorno. Estado scaler FP16
+presente y pesos maestros FP32 comprobados. Esto no mide ahorro de memoria ni
+mejora de velocidad/calidad. BF16 CPU no se ha medido en esta ampliación.
