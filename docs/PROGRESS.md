@@ -1696,3 +1696,13 @@ cancelacion automatica de trabajos al interrumpir el observador. Tres pruebas
 aprobadas en 12,00 s, incluida creacion real del plan en proceso Python separado
 y rechazo de advance sin credencial antes de contactar al servidor. Smoke por
 sockets y selector de escritorio siguen pendientes.
+
+### Evaluacion por HTTP loopback con trabajadores en procesos
+
+Nuevo smoke reproducible con servidor migrado aislado, dos trabajadores y tres
+procesos sucesivos del coordinador. Ejecuciones CPU/CUDA y CPU/CPU completadas:
+468 tokens, dos trabajos, tres creditos por trabajador sin duplicaciones, pesos
+intactos y perdida coincidente con referencia dentro de tolerancia. Informes
+DISTRIBUTED_EVALUATION_SMOKE.json y DISTRIBUTED_EVALUATION_CPU_SMOKE.json.
+Anadido gate CPU/CPU de paquete instalado en CI (ejecucion remota pendiente).
+No son dos equipos fisicos ni evidencia de capacidad linguistica.

@@ -1,0 +1,62 @@
+{
+  "format": "ai-home-evaluation-smoke-v1",
+  "transport": "real loopback HTTP",
+  "workers": [
+    {
+      "format": "ai-home-worker-service-measurement-v1",
+      "job_type": "foundation.evaluate.v1",
+      "device": "cpu",
+      "heartbeat_service_seconds": 0.004863900001510046,
+      "claim_service_seconds": 0.010390499999630265,
+      "execution_seconds": 1.2222485000093002,
+      "submit_service_seconds": 0.03672109999752138,
+      "claim_response_bytes": 38603,
+      "submit_request_bytes": 651,
+      "claim_service_bytes_per_second": 3715220.634365396,
+      "submit_service_bytes_per_second": 17728.22709679017
+    },
+    {
+      "format": "ai-home-worker-service-measurement-v1",
+      "job_type": "foundation.evaluate.v1",
+      "device": "cuda",
+      "heartbeat_service_seconds": 0.0057010000018635765,
+      "claim_service_seconds": 0.0071007999940775335,
+      "execution_seconds": 1.8072512999933679,
+      "submit_service_seconds": 0.0421652999939397,
+      "claim_response_bytes": 38603,
+      "submit_request_bytes": 651,
+      "claim_service_bytes_per_second": 5436429.702596478,
+      "submit_service_bytes_per_second": 15439.235582186453
+    }
+  ],
+  "worker_balances": [
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    },
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    }
+  ],
+  "owner_balance": {
+    "available": 0,
+    "reserved": 0,
+    "earned": 0
+  },
+  "coordinator_processes": 3,
+  "completed_jobs": 2,
+  "checkpoint_sha256": "e0871895497ea62761f670ac6b6406342a1e11d02e6386fabc6023ff424b4c01",
+  "training_embedding_delta_l2": 0.012670348398387432,
+  "reference": {
+    "loss": 5.634302383814102,
+    "tokens": 468,
+    "perplexity": 279.86361180874,
+    "checkpoint_sha256": "e0871895497ea62761f670ac6b6406342a1e11d02e6386fabc6023ff424b4c01"
+  },
+  "distributed_loss": 5.634302514231103,
+  "tokens": 468,
+  "scope": "One machine, two worker processes; no multi-host or general capability claim"
+}

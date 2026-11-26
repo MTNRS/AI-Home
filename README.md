@@ -310,8 +310,8 @@ Existe una demostración reproducible de gradientes reales aportados por dos ide
 La API experimental tambien admite `foundation.evaluate.v1` para perdida causal
 sobre pesos y datos publicos acotados, con recomputacion CPU antes de conceder
 creditos. Requiere habilitacion independiente en servidor y trabajador; no esta
-activada por defecto ni disponible aun como selector del escritorio. La prueba
-actual de esta tarea usa HTTP en proceso, no sockets ni equipos distintos.
+activada por defecto ni disponible aun como selector del escritorio. Hay un smoke reproducible con sockets HTTP loopback y trabajadores CPU/CUDA
+en procesos separados; no se ha demostrado entre equipos distintos.
 
 
 ## Créditos por contribuciones verificadas

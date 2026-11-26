@@ -438,7 +438,8 @@ esta nueva opcion. No se habilita por instalar una actualizacion.
 Resultados alterados se rechazan antes de liquidar creditos. Se reutilizan reservas,
 leases, idempotencia y liquidacion transaccional. El test de API usa transporte
 HTTP en proceso con FastAPI y NodeAgent reales, dos trabajos remunerados y
-recomputacion CPU; no es aun un smoke con sockets ni dos equipos fisicos.
+recomputacion CPU. El smoke por sockets se describe debajo; siguen sin verificarse
+dos equipos fisicos.
 El endpoint de bajo nivel no aporta linaje de entrenamiento. Para preparar una
 evaluacion contra un checkpoint debe usarse el coordinador descrito debajo;
 la perdida no demuestra por si sola capacidad linguistica.
@@ -483,3 +484,23 @@ hace una pasada y devuelve `waiting` o `evaluated`. Repetirla tras ejecutar los
 trabajadores o tras reiniciar reanuda los mismos trabajos. Ctrl+C detiene el
 observador, no cancela reservas o tareas ya enviadas. No sigue redirecciones
 HTTP ni utiliza proxies ambientales. La interfaz grafica sigue pendiente.
+
+### Smoke de evaluacion con sockets y procesos reales
+
+```powershell
+python -m ai_home.foundation.evaluation_smoke --output-dir artifacts/evaluation-run --worker-devices cpu cuda
+```
+
+Crea una base SQLite aislada con migraciones, checkpoint propio entrenado, corpus
+sintetico autorizado, dos cuentas de trabajadores y un servidor HTTP en loopback.
+Cada trabajador ejecuta una tarea en su propio proceso. Tres procesos CLI sucesivos
+del coordinador someten, agregan y repiten el informe sin duplicar trabajos o
+creditos. Exige carpeta nueva; no utiliza cuentas ni datos personales existentes.
+Credenciales efimeras se transmiten por entorno, no se guardan en informes.
+
+Ejecucion local CPU/CUDA: 468 tokens, perdida distribuida 5.634302514231103 frente
+a 5.634302383814102 local; tres creditos por trabajador, dos jobs completados,
+checkpoint intacto. [Informe](DISTRIBUTED_EVALUATION_SMOKE.json). Son medidas de
+servicio en un equipo, no ancho de banda fisico ni escalabilidad multihost. No
+miden calidad linguistica. CI incorpora el recorrido CPU/CPU desde el paquete
+instalado y publica su informe; confirmar su ejecucion remota antes de afirmarla.
