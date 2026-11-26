@@ -31,6 +31,8 @@ jobs:
       - run: python -I -m ai_home.foundation.vision_smoke --output-dir artifacts/installed-visual --device cpu
       - name: Install virtual display for real Tk navigation
         run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk
+      - name: Verify desktop distributed evaluation planning
+        run: xvfb-run -a python -I scripts/verify_desktop_evaluation_plan.py --require-installed --checkpoint artifacts/installed-evaluation/model.pt --dataset artifacts/installed-evaluation/holdout.json --output artifacts/installed-evaluation/desktop-plan.json
       - name: Verify installed desktop control sections
         run: xvfb-run -a python -I scripts/verify_desktop_sections.py --require-installed
       - name: Verify visual stream isolation on profile switch

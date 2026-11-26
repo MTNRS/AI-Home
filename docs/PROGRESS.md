@@ -1820,3 +1820,15 @@ de payload y linaje. Los errores de tamano identifican el fragmento. Siete
 pruebas aprobadas en 26.01 segundos, incluido texto multibyte que excede bytes
 sin exceder caracteres y rechazo con checkpoint inexistente como evidencia
 del orden de validacion. Flujo real de evaluacion y creditos sigue aprobado.
+
+
+### Formulario de planificacion distribuida
+
+EVALUATION incorpora creacion local de planes con dataset y checkpoint,
+consentimientos separados y recompensa explicita. Usa el coordinador real
+en segundo plano y muestra coste previsto, sin envios ni reservas. Smoke Tk
+real aprobado con checkpoint del entrenamiento CPU: rechaza cero/un permiso,
+crea dos fragmentos a tres creditos y verifica propietario/consentimientos.
+37 pruebas de escritorio/privacidad aprobadas (1.13 s). Primer fallo del script
+por referencia incorrecta a messagebox corregido antes de repetir el smoke.
+Agregada verificacion instalada en CI, aun no declarada aprobada remotamente.

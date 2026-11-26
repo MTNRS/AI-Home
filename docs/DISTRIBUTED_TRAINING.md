@@ -587,3 +587,19 @@ el limite de 4096 bytes UTF-8 de texto por fragmento. Los errores de tamano
 y duplicacion identifican el fragmento (numeracion desde uno). El texto no
 se recorta para hacerlo caber. Las comprobaciones del linaje y de los tensores
 siguen realizandose al cargar el modelo y validar los payloads completos.
+
+### Planificacion desde escritorio
+
+EVALUATION incluye Planificar evaluacion distribuida. El formulario pide
+checkpoint, dataset holdout, archivo nuevo, servidor, ID del propietario,
+fragmentos y creditos por fragmento. Ambos consentimientos empiezan desactivados
+y son obligatorios. La validacion y escritura se ejecutan fuera del hilo Tk
+mediante el coordinador existente; no se envian trabajos ni se reservan creditos.
+El archivo contiene textos y pesos publicos. La ejecucion posterior sigue
+disponible mediante advance autenticado; el formulario no sustituye ese paso.
+
+La ventana pertenece al perfil y se cierra al cambiarlo; los resultados tardios
+se descartan de la interfaz. Cerrar no cancela una escritura local iniciada.
+Prueba Tk real: scripts/verify_desktop_evaluation_plan.py crea un plan con un
+checkpoint entrenado y rechaza cero o un consentimiento. Integrada en la CI
+del paquete instalado bajo Xvfb; no equivale a revision visual de DPI/layout.

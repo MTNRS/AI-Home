@@ -758,7 +758,7 @@ def main() -> None:
                  [("Entrenar o reanudar", self._run_training_dialog), ("Entrenamiento visual (experimental)", self._visual_training_dialog), ("Inspeccionar entrenamiento", self._inspect_checkpoint_dialog),
                   ("Mis aportaciones consentidas", self._manage_training_candidates)]),
                 ("EVALUATION", "Ejecuta una suite reproducible o consulta sus resultados. Una prueba ejecutable no demuestra una capacidad adquirida.",
-                 [("Ejecutar evaluación", self._run_evaluation_dialog), ("Abrir informe", self._experiment_report_dialog)]),
+                 [("Ejecutar evaluación", self._run_evaluation_dialog), ("Planificar evaluación distribuida", self._evaluation_plan_dialog), ("Abrir informe", self._experiment_report_dialog)]),
                 ("EVOLUTION", "Ejecuta un experimento controlado y consulta su comparación y decisión. No activa modelos automáticamente.",
                  [("Nuevo experimento", self._run_evolution_dialog), ("Abrir resultado", self._experiment_report_dialog)]),
                 ("KNOWLEDGE", "Consulta fuentes y fragmentos de índices revisados o crea una versión nueva. La recuperación no modifica los pesos.",
@@ -800,6 +800,10 @@ def main() -> None:
         def _visual_inference_dialog(self):
             from ai_home.visual_desktop import open_visual_dialog
             open_visual_dialog(self)
+
+        def _evaluation_plan_dialog(self):
+            from ai_home.evaluation_plan_desktop import open_evaluation_plan_dialog
+            open_evaluation_plan_dialog(self)
 
         def _visual_training_dialog(self):
             from ai_home.visual_training_desktop import open_visual_training_dialog
