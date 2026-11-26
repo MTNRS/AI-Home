@@ -1595,3 +1595,12 @@ La prueba extremo a extremo conserva candidato sin informe de exito, tanto con
 cache como en memoria. 21 pruebas modelo/continuo aprobadas en 25,79 s; despues
 de ampliar el caso extremo a extremo, seis pruebas de continuo aprobadas en
 5,37 s. No cambia la politica de checkpoints de validacion periodica.
+
+### Validacion conjunta de aprendizaje continuo
+
+Suite completa en `a3885b0`: 392 aprobadas, siete PostgreSQL omitidas, 65,56 s.
+Confirmadas ejecuciones remotas satisfactorias en `d23c974`: matriz Python
+3.11/3.12 con PostgreSQL (45847739167) y todos los pasos Foundation
+(45847739148), incluidos paquete instalado, Tk, API y distribuido. El inventario
+separa esa evidencia de los cambios mas recientes de cache/cancelacion continuos,
+validados localmente. No se declara completado el objetivo general.
