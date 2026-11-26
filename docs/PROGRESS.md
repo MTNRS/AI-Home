@@ -827,3 +827,15 @@ retry sin doble actualización. Evidencia: DISTRIBUTED_RECOVERY.json. Suite comp
 283 correctas, 5 PostgreSQL omitidas; ajuste final de metadatos de dataset probado
 con test enfocado y reconstrucción real. Reinicio automático del coordinador y
 recuperación de descubrimiento/envío de jobs siguen pendientes.
+
+### Coordinador reanudable con jobs y créditos idempotentes
+
+Añadidos plan inmutable y CLI advance para reencontrar jobs tras reinicio con claves
+deterministas vinculadas a servidor, cuenta, padre, shards y recompensa. Rechaza
+cambios de identidad y conserva el opt-in explícito. Integra commit_round al acabar
+los jobs; una pasada devuelve waiting o committed, sin daemon/polling ilimitado.
+Test con FastAPI/DB/ledger real pierde la respuesta tras crear el segundo job,
+reenvía y recupera ambos IDs, comprueba reserva única, procesa gradientes reales y
+verifica reintentos sin doble actualización ni nuevos jobs. Suite: 284 correctas,
+5 PostgreSQL omitidas; comprobación final del gate de padre: test enfocado correcto.
+Reinicio automático de servicios, failover y prueba multihost siguen pendientes.

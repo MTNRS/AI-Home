@@ -202,3 +202,41 @@ This covers the aggregation commit boundary only: automatic service restart,
 persisted job discovery/resubmission, multi-host failover and credit/job recovery
 coordination remain outstanding. Local checkpoint/envelope storage is trusted;
 this is not an authenticated remote coordinator protocol.
+
+### Restartable job submission and discovery
+
+`foundation.coordinator` adds an immutable round plan binding the server URL,
+owner account ID, exact parent checkpoint, public typed payloads and per-job reward.
+Plan creation requires explicit public-node consent and checks parameter/tokenizer
+identity and disjoint shards/validation data before any jobs are submitted. Plans
+contain public training material but no login token. Keep them in local trusted
+storage; a hash detects accidental changes, not a malicious operator rewriting it.
+
+```powershell
+python -m ai_home.foundation.coordinator plan round-1.pt payloads.json round-plan.json --server https://your-server.example --owner YOUR_USER_ID --allow-public-node-processing --reward-credits 3
+# Supply the current owner's session token via AI_HOME_COORDINATOR_TOKEN.
+python -m ai_home.foundation.coordinator advance round-plan.json round-1.pt round-2.pt --server https://your-server.example
+```
+
+`payloads.json` is a list of the existing typed gradient payloads (the `payload`
+fields in smoke envelopes). `advance` verifies server/account/parent identity,
+then submits the same deterministic owner-scoped key for each shard. Existing jobs
+are returned with their current status, including after a lost creation response.
+A pass returns `waiting` with IDs/statuses or verifies and commits the completed
+round. Re-run the same command after a process restart; a fresh access token is
+allowed for the same account. Failed/cancelled jobs stop the round instead of
+creating replacement keys or spending another reward. Already funded jobs remain
+subject to the existing server expiry/cancel/refund rules.
+
+This is an explicit one-pass CLI/API coordinator, not a background daemon. It does
+not persist tokens, poll forever, restart workers, or cancel outstanding jobs on
+CLI exit. The operator can inspect/cancel those jobs through existing endpoints.
+It does not bootstrap the first distributed checkpoint or provide multi-host
+failover. Independent verification remains intentionally expensive and bounded.
+
+An API integration test loses the second job reply after its database commit,
+restarts submission, verifies both original IDs and a single six-credit reserve,
+executes real gradient workers, commits the next checkpoint, and retries without
+changing bytes or job count. It also rejects a different authenticated owner.
+This test uses the real FastAPI/database/ledger implementation in-process; the
+separate prior recovery smoke provides real loopback CPU/CUDA transport evidence.
