@@ -126,3 +126,24 @@ Pruebas locales: `test_foundation_vision_data.py` junto con
 procedurales propios, carga, modificación posterior de imagen/caption, permisos,
 privacidad, rutas, duplicados y presupuestos. Todavía falta conectar este formato
 con entrenamiento reanudable y evaluación visual independiente.
+
+## Lotes de caption SFT
+
+`foundation.vision_batches.VisualCaptionDataset` valida el manifiesto y selecciona
+exclusivamente `train` o `validation`. Construye la conversación con la instrucción
+configurable (por defecto `Describe the image.`), descripción y EOS. Desplaza los
+objetivos un token y enmascara instrucción, marcadores y padding con -100: solo
+caption y EOS contribuyen a la pérdida. Reserva el contexto de todos los parches.
+Rechaza ejemplos demasiado largos sin truncarlos silenciosamente. El tokenizador
+se proporciona explícitamente y debe coincidir con el vocabulario del modelo.
+
+Las secuencias de texto se preparan en memoria; los píxeles se cargan por ejemplo,
+verificando de nuevo su hash. Cada elemento devuelve imagen [3,H,W], inputs y
+labels de longitud fija, compatibles con DataLoader. La instrucción y la versión
+del tokenizador deben registrarse en el futuro checkpoint de entrenamiento.
+
+Validación: 15 pruebas batches/dataset pasaron en 2.95s; tras añadir ejecución CUDA,
+4 pruebas batches pasaron en 3.12s. La prueba CPU/CUDA usa PNG procedimental del
+manifiesto, DataLoader, forward, cross-entropy, backward y AdamW, y comprueba que
+cambian los pesos visuales. Es un paso técnico, sin medición de comprensión visual.
+Falta el bucle persistente con validación, métricas y reanudación del optimizador.

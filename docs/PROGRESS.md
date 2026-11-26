@@ -1144,3 +1144,12 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - 16 pruebas imágenes/datasets pasaron en 2.76s. Revisión visual humana necesaria;
   no hay detector de datos personales en píxeles ni duplicados perceptuales.
 - Documentación del formato en [VISION_PREFIX.md](VISION_PREFIX.md).
+
+## 2026-11-26 — Lotes visuales SFT y actualización CPU/CUDA
+
+- Dataset conecta manifiesto revisado, carga de imagen y objetivos assistant-only
+  con EOS; reserva contexto de parches y rechaza overflow sin truncamiento.
+- 15 pruebas batches/dataset pasaron; ampliación CUDA: 4 pruebas batches pasaron
+  en 3.12s. PNG real -> DataLoader -> pérdida -> gradientes -> AdamW cambia pesos
+  visuales tanto en CPU como en CUDA.
+- Pendientes entrenamiento persistente/reanudable, métricas y evaluación visual.
