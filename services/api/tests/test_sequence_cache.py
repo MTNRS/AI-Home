@@ -1,4 +1,5 @@
 import json
+import threading
 import pytest
 
 torch = pytest.importorskip('torch')
@@ -6,6 +7,7 @@ from ai_home.foundation.arithmetic_experiment import protocol
 from ai_home.foundation.model import FoundationConfig
 from ai_home.foundation.tokenizer import ByteBPE
 from ai_home.foundation.training import TrainingConfig, _sequences, train
+from ai_home.foundation.training import TrainingCancelled, _sequence_rows
 
 
 @pytest.mark.parametrize('objective', ['causal', 'sft'])
@@ -42,3 +44,30 @@ def test_disk_training_and_resume_match_in_memory_exactly(tmp_path, device):
     assert reference['dataset_sha256'] == resumed['dataset_sha256']
     for name in reference['model_state']:
         assert torch.equal(reference['model_state'][name], resumed['model_state'][name])
+
+
+@pytest.mark.parametrize('disk', [False, True])
+def test_training_cancels_while_building_sequences_without_checkpoint(tmp_path, monkeypatch, disk):
+    import ai_home.foundation.training as module
+    cancel = threading.Event()
+    def rows(*args, **kwargs):
+        iterator = _sequence_rows(*args, **kwargs)
+        yield next(iterator)
+        cancel.set()
+        yield from iterator
+    monkeypatch.setattr(module, '_sequence_rows', rows)
+    records = protocol()[0]
+    config = FoundationConfig(vocab_size=262, width=16, layers=1, heads=2,
+                              kv_heads=1, hidden=32, context=16)
+    with pytest.raises(TrainingCancelled, match='sequence preparation'):
+        train(records['train'], tmp_path / 'candidate.pt', config=config,
+              training=TrainingConfig(steps=2, warmup=1), device='cpu',
+              validation_records=records['validation'], cancel=cancel,
+              sequence_cache_dir=tmp_path / 'cache' if disk else None)
+    assert not list(tmp_path.glob('*.pt'))
+    if disk:
+        assert (tmp_path / 'cache/train/sequences.i64').stat().st_size > 0
+        assert not (tmp_path / 'cache/train/manifest.json').exists()
+        # The interrupted writer released its handle; partial data is inspectable.
+        with (tmp_path / 'cache/train/sequences.i64').open('ab'):
+            pass

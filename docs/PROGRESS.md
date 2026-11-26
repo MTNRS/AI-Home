@@ -1465,3 +1465,11 @@ filas idénticas por SHA256. Incremento de pico durante preparación 70,6 MiB en
 memoria frente a 25,7 MiB con caché; tras leer todas las filas, 73,6 frente a
 37,8 MiB. Informe conservado. Alcance: microbenchmark local, no memoria total
 de entrenamiento ni garantía de rendimiento general.
+
+### Cancelación en preparación de datos
+
+El entrenador atiende cancelación entre documentos, mensajes SFT y filas antes
+del primer paso, en memoria y en disco. No publica checkpoint ni manifiesto de
+caché completa si se interrumpe; cierra el archivo parcial. Seis pruebas de caché
+aprobadas. Persisten límites durante una llamada individual al tokenizador y
+el entrenamiento BPE; no se afirma cancelación inmediata en esas fases.

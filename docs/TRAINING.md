@@ -277,3 +277,18 @@ Es un microbenchmark de dos documentos en este equipo, con páginas/allocator
 gestionados por el SO. No mide memoria total de entrenamiento, coste del BPE,
 corpus diversos, discos lentos ni rendimiento distribuido. No garantiza esa
 reducción en otros tamaños o máquinas ni sustituye límites de recursos.
+
+### Cancelación durante preparación de secuencias
+
+El evento de cancelación del entrenador se comprueba también antes de cada
+documento, mensaje SFT y secuencia emitida, tanto en memoria como con caché.
+Detener esta fase eleva `TrainingCancelled` y no crea un checkpoint. Los archivos
+parciales se cierran y permanecen sin manifiesto de finalización; no se reutilizan
+automáticamente y no se borran sin intervención. La CLI conserva su salida de
+cancelación antes de actualización. No se interrumpe el interior de una llamada
+individual a `tokenizer.encode`, ni el entrenamiento inicial del BPE; la latencia
+de cancelación puede depender del documento actual.
+
+Seis pruebas de caché aprobadas, incluyendo cancelación después de escribir una
+fila, ausencia de checkpoint/manifiesto y liberación del archivo, además de
+igualdad causal/SFT y reanudación CPU/CUDA.

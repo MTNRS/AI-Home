@@ -56,11 +56,16 @@ def select_device(device="auto"):
     return device
 
 
-def _sequence_rows(records, tokenizer, context, objective="causal"):
+def _sequence_rows(records, tokenizer, context, objective="causal", cancel=None):
+    def check_cancel():
+        if cancel is not None and cancel.is_set():
+            raise TrainingCancelled("Training cancelled during sequence preparation")
     for record in records:
+        check_cancel()
         if objective == "sft":
             ids, labels = [257], [-100]
             for message in record["messages"]:
+                check_cancel()
                 role = message["role"]
                 if role not in ("user", "assistant"):
                     raise ValueError("SFT supports user/assistant roles")
@@ -71,6 +76,7 @@ def _sequence_rows(records, tokenizer, context, objective="causal"):
             ids = [257, *tokenizer.encode(record["text"]), 258]
             labels = ids
         for start in range(0, len(ids) - 1, context):
+            check_cancel()
             x = ids[start:start + context]
             y = labels[start + 1:start + context + 1]
             x = x[:len(y)]
@@ -79,8 +85,8 @@ def _sequence_rows(records, tokenizer, context, objective="causal"):
             yield x + [256] * (context - len(x)), y + [-100] * (context - len(y))
 
 
-def _sequences(records, tokenizer, context, objective="causal", cache_path=None):
-    rows = _sequence_rows(records, tokenizer, context, objective)
+def _sequences(records, tokenizer, context, objective="causal", cache_path=None, cancel=None):
+    rows = _sequence_rows(records, tokenizer, context, objective, cancel)
     if cache_path is not None:
         from .sequence_cache import write_sequences
         return write_sequences(rows, cache_path, context)
@@ -212,7 +218,8 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
         sequence_cache_dir.mkdir(parents=True, exist_ok=False)
     def sequences(records, name):
         return _sequences(records, tokenizer, config.context, training.objective,
-                          sequence_cache_dir / name if sequence_cache_dir is not None else None)
+                          sequence_cache_dir / name if sequence_cache_dir is not None else None,
+                          cancel=cancel)
     train_data = sequences(train_records, 'train')
     validation_data = sequences(validation_records, 'validation')
     replay_data = sequences(replay_records, 'replay') if replay_records else None
