@@ -20,7 +20,7 @@ from .models import ComputeJob
 from .node_worker import NodeAgent
 
 
-def run(output):
+def run(output, publish=False):
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     settings = Settings(_env_file=None, environment="test",
@@ -59,7 +59,8 @@ def run(output):
         before = counts()
         agent = NodeAgent(server_url=url, node_token=node["node_token"])
         try:
-            samples = [agent.measure_transfer(size) for size in (65536, 1048576)]
+            sizes = (1048576,) if publish else (65536, 1048576)
+            samples = [agent.measure_transfer(size, publish=publish) for size in sizes]
         finally:
             agent.close()
         after = counts()
@@ -82,8 +83,9 @@ def run(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--publish", action="store_true")
     args = parser.parse_args()
-    print(json.dumps(run(args.output_dir), indent=2))
+    print(json.dumps(run(args.output_dir, args.publish), indent=2))
 
 
 if __name__ == "__main__":

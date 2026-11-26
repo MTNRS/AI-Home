@@ -34,6 +34,7 @@ from ai_home.auth import (
     verify_password,
 )
 from ai_home.config import Settings
+from ai_home.network_probe import TransferMeasurement
 from ai_home.credits import Account, InsufficientCredits, LedgerTransaction, Posting, IdempotencyConflict
 from ai_home.inference_credits import InferenceFunding, reserve_inference, resolve_inference, refund_expired_inference, refund_pending_inference
 from ai_home.job_credits import JobFunding, refund_job, user_account_id
@@ -1297,6 +1298,19 @@ def create_app(
         if not transfer_probe_limiter.admit(str(node.node_id), size):
             raise HTTPException(status_code=429, detail="Transfer probe budget exhausted; retry later.",
                                 headers={"Retry-After": "60"})
+
+    @app.post("/api/v1/node/transfer-measurement")
+    def node_transfer_measurement(payload: TransferMeasurement,
+                                  current_node: ComputeNode = Depends(get_current_node),
+                                  session: Session = Depends(get_db)):
+        admit_transfer_probe(current_node, 0)
+        session.refresh(current_node, with_for_update=True)
+        if current_node.revoked_at is not None:
+            raise HTTPException(status_code=401, detail="Node credential revoked.")
+        stored = payload.summary(int(time.time()))
+        current_node.hardware = {**current_node.hardware, "transfer_measurement": stored}
+        session.commit()
+        return stored
 
     @app.get("/api/v1/node/transfer-probe")
     def node_transfer_download(size: int = Query(default=65536, ge=0, le=1048576),

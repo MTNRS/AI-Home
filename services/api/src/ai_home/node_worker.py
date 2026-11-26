@@ -193,10 +193,16 @@ class NodeAgent:
             transport=transport,
         )
 
-    def measure_transfer(self, size=65536):
+    def measure_transfer(self, size=65536, *, publish=False):
         """Explicit HTTP transfer probe; does not claim jobs or change credits."""
         from ai_home.network_probe import measure_transfer
-        return measure_transfer(self._client, size=size)
+        report = measure_transfer(self._client, size=size)
+        if publish:
+            fields = ("format", "payload_bytes", "empty_round_trip_seconds", "download_seconds", "upload_seconds")
+            response = self._client.post("/api/v1/node/transfer-measurement", json={key: report[key] for key in fields})
+            response.raise_for_status()
+            report["stored_measurement"] = response.json()
+        return report
 
     def run_once(self) -> bool:
         # Only publish a sample after the server accepts a result; never reuse it

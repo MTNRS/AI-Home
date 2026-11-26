@@ -57,3 +57,24 @@ Pruebas: 4 passed in 1.13s, límite HTTP, admisión concurrente, presupuesto de 
 y expiración. El primer intento detectó uso incorrecto de id en vez de node_id;
 corregido antes de repetir la suite. Smoke HTTP repetido con éxito en
 artifacts/network-probe-http-v2, sin cambios en trabajos/créditos.
+
+## Publicación explícita de la muestra
+
+`NodeAgent.measure_transfer(size, publish=True)` envía solo tamaño y tiempos crudos
+a POST `/api/v1/node/transfer-measurement`. El esquema rechaza campos extra,
+valores no finitos, tiempos fuera de (0,60] segundos, tamaño fuera de 1–1 MiB y
+listas de RTT distintas de tres elementos. El servidor deriva tasas y mínimo HTTP,
+añade received_epoch/expires_epoch (120 s) y conserva únicamente la última muestra
+en hardware.transfer_measurement del nodo autenticado. Consume cuota de sonda.
+No permite elegir otro nodo ni fecha, y no altera créditos/trabajos.
+
+Los tiempos siguen siendo declarados por el cliente; no están vinculados a un
+recibo verificable de transferencia. Se pueden falsear. La caducidad es metadata
+para futuros consumidores; todavía no afecta al scheduler. La telemetría no es
+prueba de ejecución ni autoridad de recompensas.
+
+5 pruebas pasaron en 1.23s: validación, aislamiento de nodos y tiempos del servidor.
+Smoke HTTP real `--publish` pasó con un payload 1 MiB (seis peticiones) en
+artifacts/network-probe-published-v1; reporte HTTP_TRANSFER_PUBLISHED_SMOKE.json.
+No hubo creación de trabajos/transacciones. La modalidad sin --publish conserva
+las dos transferencias originales y no envía telemetría.

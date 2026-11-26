@@ -1319,3 +1319,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   por minuto; concurrencia bajo lock, respuesta 429/Retry-After.
 - 4 pruebas pasaron en 1.13s tras corregir atributo node_id; smoke HTTP real repetido
   sin efectos en trabajos/créditos. Cuota compartida entre procesos pendiente.
+
+## 2026-11-26 — Telemetría de transferencia opcional por nodo
+
+- Publicación explícita con esquema acotado, tasas derivadas y vigencia 120 s
+  fijada por servidor; solo último sample del nodo autenticado, sin créditos.
+- 5 pruebas pasaron en 1.23s y smoke HTTP --publish real pasó (1 MiB), informe
+  HTTP_TRANSFER_PUBLISHED_SMOKE.json. Son tiempos declarados, no atestados.
+- Scheduler todavía no usa esta muestra; vinculación a recibo verificable pendiente.

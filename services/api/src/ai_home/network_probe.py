@@ -1,6 +1,25 @@
 """Explicit transfer-only HTTP measurements, never a physical-link benchmark."""
 import hashlib
 import time
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from typing import Annotated, Literal
+
+
+class TransferMeasurement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    format: Literal["ai-home-http-transfer-probe-v1"]
+    payload_bytes: Annotated[StrictInt, Field(ge=1, le=1048576)]
+    empty_round_trip_seconds: list[Annotated[float, Field(gt=0, le=60, allow_inf_nan=False)]] = Field(min_length=3, max_length=3)
+    download_seconds: float = Field(gt=0, le=60, allow_inf_nan=False)
+    upload_seconds: float = Field(gt=0, le=60, allow_inf_nan=False)
+
+    def summary(self, received_epoch):
+        return {**self.model_dump(), "received_epoch": received_epoch,
+            "expires_epoch": received_epoch + 120,
+            "download_bytes_per_second": self.payload_bytes / max(self.download_seconds, 1e-9),
+            "upload_bytes_per_second": self.payload_bytes / max(self.upload_seconds, 1e-9),
+            "minimum_http_round_trip_seconds": min(self.empty_round_trip_seconds),
+            "evidence": "client-reported HTTP service timings; not independently attested"}
 
 
 def measure_transfer(client, *, size=65536):

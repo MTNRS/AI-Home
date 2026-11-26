@@ -49,3 +49,27 @@ def test_probe_budget_concurrent_admission_and_expiry():
     assert not limiter.admit("other", 1)
     now[0] = 60
     assert limiter.admit("node", 1048576) and len(limiter.events) == 1
+
+
+def test_transfer_measurement_validated_stored_for_authenticated_node(client):
+    from sqlalchemy import select
+    from ai_home.models import ComputeNode
+    register(client, "transfer-store@example.com")
+    token = login(client, "transfer-store@example.com")
+    first = create_node(client, token, "first")
+    second = create_node(client, token, "second")
+    sample = {"format": "ai-home-http-transfer-probe-v1", "payload_bytes": 65536,
+              "empty_round_trip_seconds": [.01, .02, .03], "download_seconds": .1, "upload_seconds": .2}
+    headers = user_headers(first["node_token"])
+    response = client.post("/api/v1/node/transfer-measurement", json=sample, headers=headers)
+    assert response.status_code == 200
+    stored = response.json()
+    assert stored["expires_epoch"] - stored["received_epoch"] == 120
+    assert stored["download_bytes_per_second"] == 655360
+    with client.app.state.session_factory() as session:
+        nodes = {n.node_id: n for n in session.scalars(select(ComputeNode))}
+        assert nodes[first["node_id"]].hardware["transfer_measurement"] == stored
+        assert "transfer_measurement" not in nodes[second["node_id"]].hardware
+    for patch in ({"received_epoch": 1}, {"payload_bytes": True}, {"upload_seconds": -1},
+                  {"empty_round_trip_seconds": [.1]}):
+        assert client.post("/api/v1/node/transfer-measurement", json={**sample, **patch}, headers=headers).status_code == 422

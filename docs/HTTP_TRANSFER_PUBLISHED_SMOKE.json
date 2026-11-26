@@ -1,0 +1,46 @@
+{
+  "format": "ai-home-transfer-smoke-v1",
+  "transport": "real loopback HTTP",
+  "samples": [
+    {
+      "format": "ai-home-http-transfer-probe-v1",
+      "payload_bytes": 1048576,
+      "empty_round_trip_seconds": [
+        0.004324699999415316,
+        0.0021235000021988526,
+        0.0019274999940535054
+      ],
+      "download_seconds": 0.0041292999958386645,
+      "upload_seconds": 0.003930699996999465,
+      "download_bytes_per_second": 253935534.12363136,
+      "upload_bytes_per_second": 266765716.23386163,
+      "claim": "HTTP transfer service including authentication and server overhead; not physical bandwidth or network-only RTT",
+      "stored_measurement": {
+        "format": "ai-home-http-transfer-probe-v1",
+        "payload_bytes": 1048576,
+        "empty_round_trip_seconds": [
+          0.004324699999415316,
+          0.0021235000021988526,
+          0.0019274999940535054
+        ],
+        "download_seconds": 0.0041292999958386645,
+        "upload_seconds": 0.003930699996999465,
+        "received_epoch": 1795702325,
+        "expires_epoch": 1795702445,
+        "download_bytes_per_second": 253935534.12363136,
+        "upload_bytes_per_second": 266765716.23386163,
+        "minimum_http_round_trip_seconds": 0.0019274999940535054,
+        "evidence": "client-reported HTTP service timings; not independently attested"
+      }
+    }
+  ],
+  "before": {
+    "jobs": 0,
+    "credit_transactions": 0
+  },
+  "after": {
+    "jobs": 0,
+    "credit_transactions": 0
+  },
+  "claim": "One machine, synthetic account; no physical-network bandwidth or multi-host evidence"
+}
