@@ -264,3 +264,32 @@ por sí sola ausencia de contaminación en otros entrenamientos o datos previos.
 
 Prueba del evaluador con modelo real: 1 passed in 3.36s, selección de holdout,
 control, determinismo de respuesta/protocolo y rechazo de prompt excesivo.
+
+## Experimento controlado: tres colores sintéticos
+
+```powershell
+python -m ai_home.foundation.vision_color_experiment --output-dir artifacts/color-new --device cuda
+```
+
+Protocolo fijado antes de ejecutar: 24 PNG propios sólidos RGB de 8×8, tres
+categorías (red/green/blue), 18 ejemplos train con intensidades 140/160/180/200/220/240
+y seis validation con 150/210. Canales no dominantes a cero. BPE solo train,
+28.768 parámetros, inicialización aleatoria seed 42, 200 pasos AdamW FP32,
+batch 4, LR .003, warmup 10, sin selección de checkpoint por validación. Instrucción
+`Color?`, greedy, máximo 8 tokens, comparación exacta. No se ajustó el protocolo
+tras observar el resultado. La validación se calcula durante el entrenamiento;
+este conjunto no es un test externo secreto ni representa imágenes naturales.
+
+Ejecución CUDA local `artifacts/visual-color-experiment-v1`: **0/6 antes, 6/6 después**.
+Las seis respuestas correctas terminaron sin agotar el presupuesto. El control
+blanco siempre respondió green, acertando 2/6; cuatro respuestas cambiaron al usar
+la imagen correcta. Pérdida train inicial 5.626584, final .020696; validation final
+.020262. Tiempo sumado de pasos de entrenamiento sincronizados: 3.4933 s, excluye
+validación/guardado/evaluación y no es tiempo total de ejecución.
+
+Informe completo con hashes y respuestas: VISUAL_COLOR_EXPERIMENT.json. Se
+conservan imágenes, manifiesto, checkpoint inicial y candidatos pasos 100/200.
+El resultado demuestra aprendizaje neuronal de esta tarea diminuta y evidencia de
+condicionamiento visual. No acredita objetos, escenas, fotografías, razonamiento,
+robustez a colores mixtos ni generalización fuera de este generador. No se promovió
+el candidato ni se sustituyó ningún modelo activo.

@@ -1197,3 +1197,12 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - Candidato real de cuatro pasos: 0/1 aciertos, 0/1 control, misma salida K×16.
   Resultado negativo en VISUAL_EVALUATION_INITIAL.json, sin capacidad demostrada.
 - Prueba con modelo real pasó en 3.36s. Un caso no es evaluación generalista.
+
+## 2026-11-26 — Aprendizaje de colores sintéticos medido
+
+- Experimento propio prefijado: 18 imágenes train / 6 intensidades reservadas,
+  tres colores, 28.768 parámetros aleatorios, 200 pasos CUDA FP32.
+- Generación exacta 0/6 -> 6/6; control blanco 2/6, cuatro respuestas cambiaron.
+  Evidencia limitada a sólidos RGB sintéticos; sin comprensión de fotografías.
+- Artefactos locales conservados y VISUAL_COLOR_EXPERIMENT.json versionado;
+  no se promovió candidato. Código reproducible vision_color_experiment.
