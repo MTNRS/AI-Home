@@ -61,3 +61,29 @@ Validation:
   [Saved report](MEASURED_SCHEDULING_SMOKE.json). This is loopback on one host.
 - Full local suite: 296 passed, six optional PostgreSQL cases skipped; the separate
   PostgreSQL invocation above executed those six successfully.
+
+## Coordinator CLI
+
+The `plan` command accepts `--scheduling requirements.json`; the input is limited
+to 64 KiB and validated before loading the parent checkpoint or publishing a plan.
+UTF-8 with or without a BOM is accepted. Output displays the effective constraints
+beside the plan hash. Omitting the option preserves unconstrained plans.
+
+```powershell
+python -m ai_home.foundation.coordinator plan parent.pt shards.json plan.json --server https://your-server.example --owner YOUR_USER_ID --allow-public-node-processing --scheduling configs/foundation/scheduling/loopback-example.json
+```
+
+The example file contains the permissive thresholds used for the local smoke,
+not recommended thresholds for arbitrary networks or hardware. Choose explicit
+limits from comparable observations and keep bootstrap jobs available. Planning
+is local: this command does not authenticate or submit jobs. `advance` uses the
+existing `AI_HOME_COORDINATOR_TOKEN` environment variable and sends the immutable
+plan requirements on each idempotent submission. Changing the requirements means
+creating a different plan; it does not amend or cancel the original funded jobs.
+
+Validation additionally invoked the real CLI against the previously trained
+round-1 checkpoint and matching round-2 shards. It produced a new bounded plan
+without contacting a service. API tests separately verified that CLI-created
+requirements reach both jobs and are retained across retries. Those tests also
+check BOM input, malformed/empty requirements, and oversized-file rejection
+without changing the original published plan.

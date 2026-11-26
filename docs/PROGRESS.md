@@ -1010,3 +1010,16 @@ Smoke CPU/CUDA con dos rondas, segunda restringida, y reinicios completó 4 trab
 report MEASURED_SCHEDULING_SMOKE.json. Suite 296 correctas, 6 omitidas; ejecución
 PostgreSQL local separada: 6 correctas, incluida consulta JSON y migración. No DB
 producción modificada. Documentación MEASURED_SCHEDULING.md.
+
+### Restricciones reproducibles desde CLI
+
+coordinator plan acepta --scheduling con JSON de hasta 64 KiB, admite BOM UTF-8,
+valida antes de cargar checkpoint/publicar y muestra restricciones efectivas junto
+al hash. Ejemplo configs/foundation/scheduling/loopback-example.json, expresamente
+no recomendado para hardware/red arbitrarios. Test con padre entrenado real:
+CLI crea plan, API recibe requisitos en ambos trabajos, reintentos no duplican;
+archivos inválidos/vacíos/grandes no alteran plan existente. Ejecución CLI separada
+sobre checkpoint/shards de scheduling-v1 también correcta (solo planificación,
+sin envío HTTP). Suite 297 correctas, 6 PostgreSQL omitidas, 39,51 s. CI del
+scheduler 10ff5e4 pasó Foundation y PostgreSQL 3.11/3.12; ejecución duplicada
+Foundation aún en curso al documentarlo. El objetivo global sigue incompleto.

@@ -108,3 +108,46 @@ def test_restart_reuses_jobs_and_credit_reservations(client, tmp_path, monkeypat
     client.headers.update(user_headers(login(client, "different-owner@example.com")))
     with pytest.raises(ValueError, match="owner mismatch"):
         advance(client, plan, parent, output)
+
+def test_cli_scheduling_plan_reaches_api_and_rejects_invalid_files(client, tmp_path, monkeypatch):
+    import json
+    import sys
+    from ai_home.foundation.coordinator import main
+    from ai_home.foundation.data import canonical_hash
+    client.base_url = httpx.URL('http://127.0.0.1')
+    owner = register(client, 'cli-planner@example.com')
+    client.headers.update(user_headers(login(client, 'cli-planner@example.com')))
+    client.app.state.settings.foundation_distributed_training_enabled = True
+    model, tokenizer, _, payloads = setup_shards()
+    parent = tmp_path / 'parent.pt'
+    optimizer = torch.optim.AdamW(model.parameters(), lr=.001)
+    aggregate_gradients(model, tokenizer, [execute_gradient(p) for p in payloads], optimizer)
+    atomic_save({'format':FORMAT, 'config':asdict(model.config), 'tokenizer':tokenizer.to_dict(),
+        'tokenizer_sha256':tokenizer.fingerprint, 'model_state':model.state_dict(),
+        'optimizer':optimizer.state_dict(), 'step':1, 'data_visibility':'public',
+        'training_mode':'verified-gradient-rounds-v1'}, parent)
+    for payload in payloads:
+        payload['parameters'] = encode_tensors(dict(model.named_parameters()))
+    shards, requirements, plan = (tmp_path / name for name in ('shards.json','requirements.json','plan.json'))
+    shards.write_text(json.dumps(payloads), encoding='utf-8')
+    constraints = {'min_gradient_tokens_per_second':1.0, 'max_heartbeat_service_seconds':1.0}
+    requirements.write_text(json.dumps(constraints), encoding='utf-8-sig')
+    monkeypatch.setattr(sys, 'argv', ['coordinator','plan',str(parent),str(shards),str(plan),
+        '--server',str(client.base_url),'--owner',owner['user_id'],'--allow-public-node-processing',
+        '--scheduling',str(requirements)])
+    main()
+    data = json.loads(plan.read_text())
+    assert data['scheduling'] == constraints
+    digest = data.pop('sha256')
+    assert canonical_hash(data) == digest
+    result = advance(client, plan, parent, tmp_path/'output.pt')
+    assert result['state'] == 'waiting'
+    jobs = client.get('/api/v1/jobs').json()
+    assert len(jobs) == 2
+    assert all(job['scheduling']['min_gradient_tokens_per_second'] == 1.0 for job in jobs)
+    assert advance(client, plan, parent, tmp_path/'output.pt') == result
+    for invalid in ('{}', '{"min_gradient_tokens_per_second": -1}', ' '*65537):
+        requirements.write_text(invalid)
+        with pytest.raises(ValueError):
+            main()
+    assert json.loads(plan.read_text())['sha256'] == digest

@@ -290,3 +290,12 @@ Control-flow tests use a virtual clock to verify retry, deadline, stop and refus
 to retry HTTP policy errors. The real API/ledger/gradient test additionally uses
 supervision to reconcile an already committed checkpoint without changing bytes.
 These tests are distinct from the real HTTP fresh-process smoke described above.
+
+### Measured scheduling from the coordinator CLI
+
+Optional per-job performance/service constraints can now be supplied with
+`coordinator plan ... --scheduling requirements.json`. See
+[constraints, bootstrap requirements and limits](MEASURED_SCHEDULING.md).
+The file is bounded to 64 KiB, constraints are part of the immutable plan hash,
+and retry sends the same requirements. Planning remains local and does not
+reserve credits; `advance` performs authenticated idempotent submission.

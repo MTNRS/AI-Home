@@ -134,6 +134,7 @@ def main():
     create.add_argument("--owner", required=True)
     create.add_argument("--reward-credits", type=int, default=0)
     create.add_argument("--allow-public-node-processing", action="store_true")
+    create.add_argument("--scheduling", type=Path, help="JSON file containing optional measured scheduling requirements")
     resume = commands.add_parser("advance")
     resume.add_argument("plan", type=Path)
     resume.add_argument("parent", type=Path)
@@ -143,14 +144,23 @@ def main():
     resume.add_argument("--poll-seconds", type=int, default=5)
     args = parser.parse_args()
     if args.command == "plan":
+        scheduling = None
+        if args.scheduling is not None:
+            from ai_home.schemas import GradientSchedulingRequirements
+            with args.scheduling.open("rb") as source:
+                raw = source.read(65_537)
+            if len(raw) > 65_536:
+                raise ValueError("Scheduling file exceeds 64 KiB budget")
+            scheduling = GradientSchedulingRequirements.model_validate(json.loads(raw)).model_dump(exclude_none=True)
         with args.payloads.open("rb") as source:
             raw = source.read(16_000_001)
         if len(raw) > 16_000_000:
             raise ValueError("Payload file exceeds byte budget")
         result = create_plan(args.parent, json.loads(raw), args.output, server=args.server,
                              owner_user_id=args.owner, reward_credits=args.reward_credits,
-                             allow_public_node_processing=args.allow_public_node_processing)
-        print(json.dumps({"plan_sha256": result["sha256"], "state": "planned"}))
+                             allow_public_node_processing=args.allow_public_node_processing, scheduling=scheduling)
+        print(json.dumps({"plan_sha256": result["sha256"], "state": "planned",
+                          "scheduling": result.get("scheduling")}))
     else:
         token = os.environ.get("AI_HOME_COORDINATOR_TOKEN", "")
         if not token:

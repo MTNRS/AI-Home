@@ -1,0 +1,6 @@
+{
+  "min_gradient_tokens_per_second": 1.0,
+  "min_claim_service_bytes_per_second": 1.0,
+  "min_submit_service_bytes_per_second": 1.0,
+  "max_heartbeat_service_seconds": 1.0
+}
