@@ -52,6 +52,7 @@ class UserResponse(BaseModel):
 
 
 class SessionResponse(BaseModel):
+    user_id: UUID | None = None
     access_token: str
     token_type: Annotated[str, Field(pattern="^bearer$")] = "bearer"
     expires_at_epoch: int

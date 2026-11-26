@@ -392,6 +392,7 @@ def create_app(
                 ) from None
             response.headers["Cache-Control"] = "no-store"
             return SessionResponse(
+                user_id=user.user_id,
                 access_token=issued.access_token,
                 expires_at_epoch=issued.expires_at_epoch,
             )
@@ -415,6 +416,7 @@ def create_app(
             ) from None
         response.headers["Cache-Control"] = "no-store"
         return SessionResponse(
+            user_id=user.user_id,
             access_token=issued.access_token,
             expires_at_epoch=issued.expires_at_epoch,
         )

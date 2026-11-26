@@ -194,3 +194,29 @@ Integrado foundation.gradient.v1 con scheduler/NodeAgent y verificación por rec
 ## Créditos Foundation — 2026-11-26
 
 Reservas/liquidaciones/reembolsos integrados con el ledger en la misma transacción del trabajo. API de saldo y movimientos propios, cancelación, devolución por leases agotados y por eliminación de cuenta. Cuatro trabajos de gradientes reales pagaron 10 créditos a cada uno de dos usuarios en una base de prueba. Cobro de inferencia, interfaz y concurrencia PostgreSQL siguen pendientes. Ver CREDITS.md.
+
+
+## 2026-11-26 — Account-scoped local memory
+
+Desktop memories now use an explicit guest vault or a SHA-256 namespace derived
+from the normalized server URL and authenticated account UUID. Login responses
+include that stable UUID. Older servers lacking it are rejected by the desktop
+login callback rather than falling back to a shared account vault. Existing
+legacy notes remain untouched in `memory/`; no automatic ownership migration is
+performed. New notes live in `memory-profiles/`.
+
+Account transitions clear the conversation, draft, active memory references and
+consent controls, and close private memory/contribution windows. Late chat and
+training callbacks are discarded after conversation changes; background results
+and errors are discarded after session-token changes. Clearing a conversation
+does not cancel computation already running on the provider.
+
+This is application-level separation, not filesystem encryption or protection
+against another person/process using the same OS account. Guest notes belong to
+the shared local guest profile. Memory context remains eligible for inclusion in
+requests to the explicitly selected provider. Legacy migration, encrypted storage,
+retrieval-role hardening and a live visual desktop review remain outstanding.
+
+Validation: profile isolation including cross-profile link rejection, stable login
+identity, stale answer/error suppression and private-window closure have automated
+coverage. Full CUDA-enabled suite: 163 passed, 4 PostgreSQL tests skipped (no server).

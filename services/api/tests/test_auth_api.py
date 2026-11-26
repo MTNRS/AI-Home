@@ -176,3 +176,13 @@ def test_registration_rejects_short_password(client: TestClient):
     )
     assert response.status_code == 422
 
+
+
+def test_login_identity_is_stable_and_matches_authenticated_profile(client):
+    user = register(client)
+    for _ in range(2):
+        response = client.post("/api/v1/auth/login", json={
+            "email": "alice@example.com", "password": "a-strong-password-123",
+        })
+        assert response.status_code == 200
+        assert response.json()["user_id"] == user["user_id"]

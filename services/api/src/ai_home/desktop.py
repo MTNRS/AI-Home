@@ -25,7 +25,7 @@ from ai_home.memory import (
     delete_memory,
     load_memories,
     messages_with_memory_context,
-    memory_vault_path,
+    profile_memory_vault,
     retrieve_memories,
     save_memory,
 )
@@ -455,6 +455,8 @@ def main() -> None:
             self.session_token: str | None = None
             self.session_server_url: str | None = None
             self.guest_session_active = False
+            self.memory_vault = profile_memory_vault()
+            self.private_windows = []
             self.messages: list[dict[str, str]] = []
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
@@ -858,7 +860,7 @@ def main() -> None:
             messagebox.showinfo(note.title, note.content, parent=self)
 
         def _reload_memories(self) -> None:
-            self.memory_notes = load_memories()
+            self.memory_notes = load_memories(self.memory_vault)
             self.active_memory_ids.intersection_update(
                 note.id for note in self.memory_notes
             )
@@ -866,12 +868,13 @@ def main() -> None:
 
         def _manage_memories(self) -> None:
             window = tk.Toplevel(self)
+            self.private_windows.append(window)
             window.title("Memoria personal local")
             window.geometry("700x440")
             window.transient(self)
             ttk.Label(
                 window,
-                text=f"Recuerdos guardados solo en este equipo: {memory_vault_path()}",
+                text=f"Recuerdos guardados solo en este equipo: {self.memory_vault}",
                 wraplength=660,
             ).pack(anchor="w", padx=12, pady=(12, 8))
             body = ttk.Frame(window, padding=(12, 0, 12, 8))
@@ -931,7 +934,7 @@ def main() -> None:
                     parent=window,
                 ):
                     return
-                delete_memory(note.id)
+                delete_memory(note.id, vault_path=self.memory_vault)
                 refresh()
 
             memories_list.bind("<<ListboxSelect>>", show_selected)
@@ -954,6 +957,7 @@ def main() -> None:
 
         def _add_memory_dialog(self, parent, on_saved) -> None:
             window = tk.Toplevel(parent)
+            self.private_windows.append(window)
             window.title("Añadir recuerdo")
             window.geometry("540x500")
             window.transient(parent)
@@ -989,6 +993,7 @@ def main() -> None:
                         title.get(),
                         body.get("1.0", "end"),
                         links=selected_links,
+                        vault_path=self.memory_vault,
                     )
                 except (OSError, RuntimeError, ValueError) as error:
                     messagebox.showerror("Memoria local", str(error), parent=window)
@@ -1178,7 +1183,7 @@ def main() -> None:
             )
             scrollbar.pack(side="right", fill="y"            )
             self.chat_messages_canvas.configure(yscrollcommand=scrollbar.set)
-            self.memory_notes = load_memories()
+            self.memory_notes = load_memories(self.memory_vault)
             self.active_memory_ids: set[str] = set()
             self.chat_message_items: list[tuple[int, int, str]] = []
             self.chat_messages_canvas.bind(
@@ -1526,16 +1531,20 @@ def main() -> None:
             operation: Callable[[], T],
             on_success: Callable[[T], None],
             on_failure: Callable[[], None] | None = None,
+            *,
+            is_current: Callable[[], bool] | None = None,
         ) -> None:
             self.status_var.set("Procesando…")
+            session_token = self.session_token
+            valid = lambda: self.session_token == session_token and (is_current is None or is_current())
 
             def execute() -> None:
                 try:
                     result = operation()
                 except Exception as error:
-                    self.events.put(("error", (error, on_failure)))
+                    self.events.put(("error", (error, on_failure, valid)))
                 else:
-                    self.events.put(("success", (on_success, result)))
+                    self.events.put(("success", (on_success, result, valid)))
 
             threading.Thread(target=execute, daemon=True).start()
 
@@ -1546,13 +1555,17 @@ def main() -> None:
                 except queue.Empty:
                     break
                 if kind == "error":
-                    error, on_failure = payload
+                    error, on_failure, valid = payload
+                    if not valid():
+                        continue
                     if on_failure is not None:
                         on_failure()
                     self.status_var.set("Error")
                     messagebox.showerror("AI@Home", str(error), parent=self)
                 elif kind == "success":
-                    callback, result = payload
+                    callback, result, valid = payload
+                    if not valid():
+                        continue
                     try:
                         callback(result)
                     except Exception as error:
@@ -1586,6 +1599,9 @@ def main() -> None:
                 return
 
             def on_success(session: SessionResponse) -> None:
+                if session.user_id is None:
+                    raise ValueError("Actualiza el servidor: falta la identidad de la cuenta.")
+                self._switch_memory_profile(server_url, str(session.user_id))
                 updated_settings = {
                     **self.settings,
                     "server_url": server_url,
@@ -1651,6 +1667,7 @@ def main() -> None:
             if self.session_token is None:
                 if self.guest_session_active:
                     self.guest_session_active = False
+                    self._switch_memory_profile()
                     self.account_status_var.set(
                         "Sin sesión activa. Puedes continuar como invitado."
                     )
@@ -1675,6 +1692,7 @@ def main() -> None:
                     response.raise_for_status()
 
             def on_success(_result) -> None:
+                self._switch_memory_profile()
                 self.session_token = None
                 self.session_server_url = None
                 self.account_status_var.set(
@@ -1784,7 +1802,11 @@ def main() -> None:
             self._append_chat("Tú", prompt)
             messages = list(self.messages)
 
+            request_conversation_id = self.conversation_id
+
             def on_success(answer: str) -> None:
+                if self.conversation_id != request_conversation_id:
+                    return
                 self.chat_request_active = False
                 self.sphere_emotion = _sphere_emotion_for_text(answer)
                 self._layout_home()
@@ -1798,14 +1820,31 @@ def main() -> None:
             self._background(
                 operation,
                 on_success,
-                lambda: setattr(self, "chat_request_active", False),
+                lambda: setattr(self, "chat_request_active", False) if self.conversation_id == request_conversation_id else None,
+                is_current=lambda: self.conversation_id == request_conversation_id,
             )
 
         def _append_chat(self, speaker: str, content: str) -> None:
             self._render_chat_canvas()
             self.chat_messages_canvas.yview_moveto(1.0)
 
+        def _switch_memory_profile(self, server_url=None, user_id=None) -> None:
+            vault = profile_memory_vault(server_url, user_id)
+            notes = load_memories(vault)
+            for window in self.private_windows:
+                if window.winfo_exists():
+                    window.destroy()
+            self.private_windows.clear()
+            self.memory_vault = vault
+            self.memory_notes = notes
+            self._clear_chat()
+            self.prompt.delete("1.0", "end")
+            self.prompt_is_placeholder = False
+            self.api_key_var.set("")
+
         def _clear_chat(self) -> None:
+            self.chat_request_active = False
+            self.training_submission_active = False
             self.messages.clear()
             self.conversation_id = str(uuid4())
             self.conversation_source = None
@@ -1901,6 +1940,8 @@ def main() -> None:
             self.training_submission_active = True
 
             def on_success(contribution: TrainingContributionResponse) -> None:
+                if self.conversation_id != conversation_id:
+                    return
                 self.training_submission_active = False
                 self.training_candidate_submitted = True
                 self.training_consent_var.set(False)
@@ -1927,7 +1968,8 @@ def main() -> None:
                     reviewed_for_submission=True,
                 ),
                 on_success,
-                lambda: setattr(self, "training_submission_active", False),
+                lambda: setattr(self, "training_submission_active", False) if self.conversation_id == conversation_id else None,
+                is_current=lambda: self.conversation_id == conversation_id,
             )
 
         def _manage_training_candidates(self) -> None:
@@ -1939,6 +1981,7 @@ def main() -> None:
                 )
                 return
             window = tk.Toplevel(self)
+            self.private_windows.append(window)
             window.title("Mis aportaciones para entrenamiento")
             window.geometry("760x360")
             listing = tk.Listbox(window, height=12)
