@@ -129,3 +129,10 @@ ocurre despues del entrenamiento de las ramas, no evita su coste computacional.
 Las pruebas sustituyen por separado nuevos datos, replay y holdout entre ramas,
 entrenan candidatos reales y verifican el rechazo. Los hashes identifican los
 registros preparados consumidos, no autentican su autoria o autorizacion.
+
+La identidad del checkpoint de cada evaluacion generativa debe coincidir con la
+identidad usada en la comparacion de perdida de esa rama. Una sustitucion entre
+fases invalida el experimento: conserva el informe generativo con su identidad
+real, escribe los dos hashes en `invalid-experiment.json` y no emite decision.
+Se comprueba tanto control como experimento. No es un bloqueo de archivos contra
+modificaciones posteriores; la publicacion debe verificar el hash aprobado.

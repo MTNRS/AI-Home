@@ -128,6 +128,13 @@ def run_experiment(parent, output_dir, suite, validation, replay, *, dataset=Non
                 device=device, max_new_tokens=max_new_tokens, max_bytes=config.memory_budget_bytes,
                 cancel=cancel, on_probe=lambda item: progress(name + "_evaluation", item))
             save(f"{name}-evaluation.json", evaluations[name])
+            if evaluations[name]["checkpoint_sha256"] != reports[name]["candidate_sha256"]:
+                save("invalid-experiment.json", {
+                    "format": "ai-home-evolution-invalid-v1", "promoted": False,
+                    "reason": "Loss and generation evaluated different checkpoints", "stage": name,
+                    "loss_checkpoint_sha256": reports[name]["candidate_sha256"],
+                    "generation_checkpoint_sha256": evaluations[name]["checkpoint_sha256"]})
+                raise ValueError("Loss and generation checkpoint identities differ")
         check_cancel()
         decision, reason = propose_decision(evaluations["control"], evaluations["experiment"],
             reports["control"]["candidate"]["loss"], reports["experiment"]["candidate"]["loss"], target)

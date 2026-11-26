@@ -250,3 +250,36 @@ def test_evolution_refuses_data_changes_between_arms(tmp_path, changed):
     assert "dataset_sha256" in invalid["different_fields"]
     if changed in ("old", "holdout"):
         assert ("replay_sha256" if changed == "old" else "validation_sha256") in invalid["different_fields"]
+
+
+@pytest.mark.parametrize("arm", ["control", "experiment"])
+def test_evolution_rejects_checkpoint_replacement_before_generation(tmp_path, arm):
+    torch.set_num_threads(1)
+    paths = {}
+    for name in ("old", "new", "holdout"):
+        paths[name] = tmp_path / f"{name}.json"
+        paths[name].write_text(json.dumps({"format_version": 1, "records": records(name)}), encoding="utf-8")
+    config = FoundationConfig(vocab_size=280, width=16, layers=1, heads=2,
+                              kv_heads=1, hidden=32, context=128)
+    settings = TrainingConfig(steps=1, warmup=0)
+    parent = tmp_path / "parent.pt"
+    train(records("old"), parent, config, settings, "cpu", validation_records=records("holdout"))
+    suite = {"version": "identity-v1", "source": "authored test", "license": "Apache-2.0", "cases": [
+        {"id": "sum", "category": "mathematics", "prompt": "2+2=", "answers": ["4"]}]}
+    output = tmp_path / "experiment"
+    replaced = []
+    def replace_checkpoint(item):
+        if item["stage"] == arm + "_evaluation" and not replaced:
+            (output / arm / "candidate.pt").write_bytes(parent.read_bytes())
+            replaced.append(True)
+    with pytest.raises(ValueError, match="checkpoint identities differ"):
+        run_experiment(parent, output, suite, paths["holdout"], paths["old"],
+                       dataset=paths["new"], training=settings, device="cpu",
+                       max_new_tokens=2, on_progress=replace_checkpoint)
+    assert replaced == [True]
+    assert not (output / "result.json").exists()
+    invalid = json.loads((output / "invalid-experiment.json").read_text(encoding="utf-8"))
+    assert invalid["stage"] == arm and invalid["promoted"] is False
+    assert invalid["loss_checkpoint_sha256"] != invalid["generation_checkpoint_sha256"]
+    evaluation = json.loads((output / f"{arm}-evaluation.json").read_text(encoding="utf-8"))
+    assert evaluation["checkpoint_sha256"] == invalid["generation_checkpoint_sha256"]

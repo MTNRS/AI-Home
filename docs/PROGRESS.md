@@ -1639,3 +1639,10 @@ posterior potencialmente distinta. El ciclo continuo comprueba padre de entrenam
 identidad al cargar y archivos al concluir; evita lecturas completas para hashing.
 Diecisiete pruebas continuo/evolucion aprobadas en 8,89 s, incluida sustitucion
 del archivo tras cargar pesos reales sin alterar la identidad informada.
+
+### Identidad comun entre perdida y generacion
+
+La evolucion rechaza mezclar perdida de un checkpoint con probes de otro.
+Doce pruebas aprobadas en 8,30 s; dos casos sustituyen el candidato por el padre
+antes de generar (control y experimento), ejecutan inferencia real y comprueban
+invalidacion sin decision. Los informes retenidos identifican los pesos medidos.
