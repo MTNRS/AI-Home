@@ -311,3 +311,18 @@ Color?, invocó Generar y comprobó respuesta red; cerró las ventanas. La prueb
 la operación real con ejecución síncrona del harness; el código de producto usa
 _background. También pasó scripts/verify_desktop_sections.py con las diez rutas.
 No es una revisión visual de layout, DPI o accesibilidad; estas siguen pendientes.
+
+## Streaming de la ventana visual
+
+La ventana muestra fragmentos incrementalmente mediante una cola de 16 elementos,
+consumida en el hilo Tk cada 40 ms. Si la cola se llena, el worker espera con
+comprobación de cancelación; no acumula eventos sin límite. La respuesta completa
+reemplaza el texto al finalizar, evitando duplicar fragmentos pendientes. El poll
+verifica ventana y token de sesión; al cerrar/cambiar perfil solicita cancelación.
+La cancelación previa evita incluso cargar archivos. Sigue sin persistir historial.
+
+Pruebas: test_visual_desktop.py, 2 passed in 4.22s (stream neuronal real frente a
+respuesta final y salida de productor con cola llena al cancelar). Se repitieron
+el formulario Tk con generación red y la navegación de diez secciones, ambos OK.
+La inspección visual/DPI y una prueba de cambio de perfil durante generación siguen
+pendientes; las comprobaciones funcionales anteriores no equivalen a esa revisión.

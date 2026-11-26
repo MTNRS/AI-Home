@@ -1214,3 +1214,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - Prueba Tk real invocó controles y generó red con checkpoint propio y PNG reservado.
   Las diez secciones existentes siguen pasando su prueba de navegación.
 - Layout visual/DPI y streaming incremental pendientes; alcance en VISION_PREFIX.md.
+
+## 2026-11-26 — Streaming visual con cola acotada
+
+- Ventana recibe fragmentos en hilo Tk, cola de 16 con espera cancelable y guardas
+  de ventana/sesión; respuesta final sustituye fragmentos sin duplicarlos.
+- 2 pruebas pasaron en 4.22s: stream real y cancelación con cola llena.
+  Formulario Tk real y navegación de diez secciones repetidos correctamente.
+- Pendiente inspección visual/DPI y prueba de cambio de perfil durante generación.

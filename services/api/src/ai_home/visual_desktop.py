@@ -1,12 +1,15 @@
 """Explicit local visual experiment window; no conversation persistence."""
 
 import threading
+import queue
 import tkinter as tk
 from tkinter import ttk, filedialog
 from tkinter.scrolledtext import ScrolledText
 
 
-def run_visual(checkpoint, image_path, prompt, device, cancel):
+def run_visual(checkpoint, image_path, prompt, device, cancel, on_chunk=None):
+    if cancel.is_set():
+        return "Cancelado."
     from .foundation.vision_checkpoint import load_vision_weights
     from .foundation.vision_images import load_image
     from .foundation.vision_inference import stream_vision_text
@@ -16,9 +19,23 @@ def run_visual(checkpoint, image_path, prompt, device, cancel):
     pixels, _ = load_image(image_path, model.vision_config.image_size)
     if cancel.is_set():
         return "Cancelado."
-    answer = "".join(stream_vision_text(model, tokenizer, pixels.to(selected),
-        [{"role": "user", "content": prompt}], temperature=0, max_new_tokens=64, cancel=cancel))
+    chunks = []
+    for chunk in stream_vision_text(model, tokenizer, pixels.to(selected),
+            [{"role": "user", "content": prompt}], temperature=0, max_new_tokens=64, cancel=cancel):
+        chunks.append(chunk)
+        if on_chunk is not None:
+            on_chunk(chunk)
+    answer = "".join(chunks)
     return ("Cancelado.\n" if cancel.is_set() else "") + (answer or "El modelo no produjo texto.")
+
+
+def enqueue_chunk(chunks, text, cancel):
+    while not cancel.is_set():
+        try:
+            chunks.put(text, timeout=.05)
+            return
+        except queue.Full:
+            pass
 
 
 def open_visual_dialog(app):
@@ -79,7 +96,38 @@ def open_visual_dialog(app):
         cancel.clear()
         generate.configure(state="disabled")
         notice.set("Ejecutando localmente…")
-        app._background(lambda: run_visual(*values, cancel), finished, failed,
+        result.configure(state="normal")
+        result.delete("1.0", "end")
+        result.configure(state="disabled")
+        chunks = queue.Queue(maxsize=16)
+        done = threading.Event()
+        session = app.session_token
+        def success(text):
+            done.set()
+            finished(text)
+        def failure():
+            done.set()
+            failed()
+        def poll():
+            if done.is_set():
+                return
+            if not window.winfo_exists() or app.session_token != session:
+                cancel.set()
+                return
+            fragments = []
+            for _ in range(16):
+                try:
+                    fragments.append(chunks.get_nowait())
+                except queue.Empty:
+                    break
+            if fragments:
+                result.configure(state="normal")
+                result.insert("end", "".join(fragments))
+                result.see("end")
+                result.configure(state="disabled")
+            window.after(40, poll)
+        window.after(40, poll)
+        app._background(lambda: run_visual(*values, cancel, on_chunk=lambda text: enqueue_chunk(chunks, text, cancel)), success, failure,
                         is_current=lambda: bool(window.winfo_exists()))
     generate = ttk.Button(controls, text="Generar", command=start)
     generate.pack(side="left", padx=8)
