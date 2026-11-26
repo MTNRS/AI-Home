@@ -1541,3 +1541,12 @@ Probes admiten grupo opcional; el evaluador rechaza familias entrenadas antes de
 inferir e informa cobertura de etiquetas y linaje. Suites sin etiqueta conservan
 su huella. Doce pruebas de evaluación/evolución/comparación aprobadas. La
 protección depende de etiquetas correctas; no es detección semántica automática.
+
+### Validación conjunta de datos, caché y linaje
+
+Suite completa en `5f082ec`: 387 pruebas aprobadas y siete PostgreSQL omitidas
+en 47,93 s. Confirmadas ejecuciones remotas satisfactorias de Tests
+(45843869414) y Foundation (45843869417) en `a0008bc`, incluida la prueba
+de entrenamiento real desde Tk con secuencias en disco. El inventario distingue
+esta revisión remota anterior de los cambios de familias validados localmente.
+El objetivo general continúa abierto; no se afirma capacidad generalista.
