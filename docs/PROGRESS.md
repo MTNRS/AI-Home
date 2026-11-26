@@ -386,3 +386,14 @@ restoration of server defaults. Both response modes forward an immutable request
 snapshot; profile changes reset settings. Local/external routing does not silently
 ignore custom Foundation settings. Validation: 229 passed, 4 skipped; hidden real
 Windows Tk apply/reset check passed. Visual layout inspection remains pending.
+
+
+### Live desktop layout review and repair (2026-11-26)
+
+Used computer-use screenshots of the actual Windows app to identify clipped chat
+controls and inaccessible lower provider settings. Added scrolling to settings
+pages, wrapped the memory explanation separately, made chat canvas sizing flexible,
+and reserved status-bar space. Rechecked corrected chat and scrolled provider
+controls visually; closed the isolated review instance. No account/credential
+changes. Full suite: 229 passed, 4 skipped. Scope and remaining visual checks are
+recorded in DESKTOP_VISUAL_REVIEW.md.

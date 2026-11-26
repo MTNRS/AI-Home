@@ -612,17 +612,17 @@ def main() -> None:
             self.page_stack.configure(style="AIHome.TNotebook")
             self.page_stack.pack(fill="both", expand=True)
             chat_tab = ttk.Frame(self.page_stack)
-            provider_tab = ttk.Frame(self.page_stack, padding=20)
-            account_tab = ttk.Frame(self.page_stack, padding=20)
-            node_tab = ttk.Frame(self.page_stack, padding=20)
+            provider_tab = ttk.Frame(self.page_stack)
+            account_tab = ttk.Frame(self.page_stack)
+            node_tab = ttk.Frame(self.page_stack)
             self.page_stack.add(chat_tab, text="Chat")
             self.page_stack.add(provider_tab, text="Conectar IA")
             self.page_stack.add(account_tab, text="Cuenta y aportes")
             self.page_stack.add(node_tab, text="Colaborar")
             self._build_chat_tab(ttk, chat_tab)
-            self._build_provider_tab(ttk, provider_tab)
-            self._build_account_tab(ttk, account_tab)
-            self._build_node_tab(ttk, node_tab)
+            self._build_provider_tab(ttk, self._scrollable_page(provider_tab))
+            self._build_account_tab(ttk, self._scrollable_page(account_tab))
+            self._build_node_tab(ttk, self._scrollable_page(node_tab))
             nav = ttk.Frame(header)
             nav.pack(side="right", anchor="n")
             ttk.Button(
@@ -661,7 +661,33 @@ def main() -> None:
                 anchor="w",
                 padding=(16, 3),
                 foreground="#62676b",
-            ).pack(fill="x", padx=8, pady=(0, 3))
+            ).pack(side="bottom", fill="x", padx=8, pady=(0, 3), before=self.page_stack)
+
+        def _scrollable_page(self, parent):
+            canvas = tk.Canvas(parent, highlightthickness=0, background="#eeeeee", height=400)
+            scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+            scrollbar.pack(side="right", fill="y")
+            canvas.pack(side="left", fill="both", expand=True)
+            canvas.configure(yscrollcommand=scrollbar.set)
+            content = ttk.Frame(canvas, padding=20)
+            item = canvas.create_window(0, 0, window=content, anchor="nw")
+            content.bind("<Configure>", lambda _: canvas.configure(scrollregion=canvas.bbox("all")))
+
+            def resize(event):
+                canvas.itemconfigure(item, width=event.width)
+                def wrap(widget):
+                    for child in widget.winfo_children():
+                        if isinstance(child, ttk.Label) and int(child.cget("wraplength") or 0):
+                            child.configure(wraplength=max(160, event.width - 80))
+                        wrap(child)
+                wrap(content)
+            canvas.bind("<Configure>", resize)
+
+            def wheel(event):
+                if self.page_stack.select() == str(parent) and not isinstance(event.widget, (tk.Text, tk.Listbox, ttk.Combobox)):
+                    canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            self.bind("<MouseWheel>", wheel, add="+")
+            return content
 
         def _show_page(self, page) -> None:
             self.page_stack.select(page)
@@ -1280,14 +1306,16 @@ def main() -> None:
             self.face_canvas.bind("<Configure>", self._layout_home)
             memory_controls = ttk.Frame(parent)
             memory_controls.pack(fill="x", padx=28, pady=(0, 3))
-            ttk.Label(
-                memory_controls,
+            memory_notice = ttk.Label(
+                parent,
                 text=(
                     "La memoria local se usa automáticamente; solo los recuerdos "
                     "relevantes se envían al proveedor. No entrena el modelo."
                 ),
-                foreground="#666666",
-            ).pack(side="left", padx=(8, 0))
+                foreground="#666666", wraplength=650,
+            )
+            memory_notice.pack(fill="x", padx=28, before=memory_controls)
+            parent.bind("<Configure>", lambda event: memory_notice.configure(wraplength=max(200, event.width - 60)))
             ttk.Button(memory_controls, text="Fuentes recuperadas",
                        command=self._show_knowledge_references).pack(side="right")
             self.chat_preview_var = tk.StringVar(value="")
@@ -1299,7 +1327,7 @@ def main() -> None:
             conversation = ttk.Frame(parent)
             conversation.pack(fill="both", expand=True, padx=24, pady=(0, 8))
             self.chat_messages_canvas = tk.Canvas(
-                conversation,
+                conversation, height=1,
                 background="#eeeeee",
                 highlightthickness=0,
             )
