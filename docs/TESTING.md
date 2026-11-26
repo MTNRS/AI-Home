@@ -32,3 +32,7 @@ Suite completa tras integrar exportaciones revisadas: `python -m pytest -q` — 
 ## Evaluación de generación y evolución
 
 `python -m pytest -q`: 135 aprobadas, 5 omitidas, 13,70 segundos. `git diff --check`: exit 0. Las pruebas entrenan dos candidatos reales, verifican generación determinista, puntuación exacta, prompts truncados, contaminación conocida y requisitos de aceptación. Pruebas unitarias de decisión usan cifras sintéticas únicamente para validar reglas; el experimento persistente usa pérdidas y generaciones reales. Comandos y artefactos en EVOLUTION.md.
+
+## Validación CUDA posterior
+
+Entorno `.venv-cuda` con PyTorch 2.14.1+cu130: `python -m pytest -q` obtiene 139 aprobadas, 4 omitidas, 17,36 segundos. Las omisiones CUDA de entradas anteriores corresponden a la distribución CPU; ahora se ejecutaron todas las pruebas CUDA, incluidas FP32/FP16/BF16, gradientes, caché y reanudación. Ver CUDA_VALIDATION.md para comandos exactos y evidencia persistente.

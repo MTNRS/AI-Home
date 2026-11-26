@@ -100,3 +100,7 @@ padre, candidato, checkpoints intermedios y reporte. Evidencia conservada en
 `docs/CONTINUAL_SMOKE_CPU.json`: pérdida 5,621232 a 5,580207 sobre 1.536 tokens,
 ocho pasos iniciales y ocho incrementales. No demuestra calidad conversacional,
 control general de catastrophic forgetting ni mejora de razonamiento.
+
+## Entorno GPU verificado
+
+Usar `.venv-cuda/Scripts/python.exe` para entrenar con CUDA en este equipo; el Python habitual sigue usando PyTorch CPU. La configuración probada y los comandos completos están en CUDA_VALIDATION.md. FP32/FP16/BF16 están verificados en la RTX 4070 SUPER con modelos diminutos; no presupone tamaños mayores ni participación de cualquier GPU.

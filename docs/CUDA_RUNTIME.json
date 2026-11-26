@@ -1,0 +1,13 @@
+{
+  "python": "3.11.9",
+  "torch": "2.14.1+cu130",
+  "cuda_runtime": "13.0",
+  "cuda_available": true,
+  "device": "NVIDIA GeForce RTX 4070 SUPER",
+  "vram_bytes": 12878086144,
+  "compute_capability": [
+    8,
+    9
+  ],
+  "bf16_supported": true
+}

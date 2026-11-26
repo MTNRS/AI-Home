@@ -36,10 +36,12 @@ def test_sft_masks_prompts_and_padding_and_keeps_assistant_eos():
     assert (labels[0, 6:] == -100).all()
 
 
-def test_causality_cache_gradients_and_rope():
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="CUDA hardware unavailable"))])
+def test_causality_cache_gradients_and_rope(device):
     torch.manual_seed(7)
-    model = FoundationModel(config()).eval()
-    x = torch.randint(0, 256, (2, 10))
+    model = FoundationModel(config()).to(device).eval()
+    x = torch.randint(0, 256, (2, 10), device=device)
     y = x.clone()
     y[:, 5:] = 42
     full, _ = model(x)
@@ -51,7 +53,7 @@ def test_causality_cache_gradients_and_rope():
     assert cache[0][0].shape == (2, 2, 10, 8)
     full.square().mean().backward()
     assert all(p.grad is not None and torch.isfinite(p.grad).all() for p in model.parameters())
-    z = torch.randn(2, 4, 6, 8)
+    z = torch.randn(2, 4, 6, 8, device=device)
     torch.testing.assert_close(rotary(z, 3).square().sum(-1), z.square().sum(-1))
     torch.testing.assert_close(rotary(z, 0)[:, :, 0], z[:, :, 0])
 
@@ -90,8 +92,21 @@ def test_training_resume_and_real_generation(tmp_path):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA hardware unavailable")
-def test_cuda_training(tmp_path):
-    result = train(records(), tmp_path / "cuda.pt", config(),
-                   TrainingConfig(steps=2, warmup=1, precision="fp16"), "cuda")
+@pytest.mark.parametrize("precision", ["fp32", "fp16", "bf16"])
+def test_cuda_training(tmp_path, precision):
+    if precision == "bf16" and not torch.cuda.is_bf16_supported():
+        pytest.skip("GPU lacks bf16 support")
+    settings = TrainingConfig(steps=4, warmup=1, precision=precision, accumulation=2)
+    architecture = replace(config(), gradient_checkpointing=True)
+    result = train(records(), tmp_path / "cuda.pt", architecture, settings, "cuda")
     assert result["embedding_delta_l2"] > 0
     assert result["metrics"][-1]["gpu_peak_bytes"] > 0
+    train(records(), tmp_path / "partial.pt", architecture, settings, "cuda", stop_after=2)
+    resumed = train(records(), tmp_path / "resumed.pt", architecture, settings, "cuda",
+                    resume=tmp_path / "partial.pt")
+    for key in result["model_state"]:
+        torch.testing.assert_close(result["model_state"][key], resumed["model_state"][key], atol=1e-6, rtol=1e-5)
+    model, tokenizer, _ = load_checkpoint(tmp_path / "resumed.pt", device="cuda")
+    assert next(model.parameters()).is_cuda
+    generated = list(stream_tokens(model, tokenizer.encode("Hola"), max_new_tokens=8, temperature=0))
+    assert all(0 <= t < tokenizer.vocab_size for t in generated)

@@ -47,3 +47,7 @@ Interfaz de control completa, multimodalidad, embeddings propios, conectores ext
 ## Actualización verificada 2026-11-26
 
 La matriz anterior describe la auditoría inicial. La ejecución actual demuestra en CPU los criterios mecánicos 2, 3, 5, 6 y 7; la suite obtiene 127 aprobadas y 5 omitidas. El criterio 21 sigue parcial por omisiones CUDA/PostgreSQL y componentes futuros. Véase TESTING.md y FOUNDATION_SMOKE_CPU.json. Los criterios restantes no se dan por completados.
+
+## Criterio CUDA verificado
+
+El criterio mecánico 4 (entrenamiento GPU) tiene ahora evidencia directa: suite CUDA y smoke real en RTX 4070 SUPER. Véase CUDA_VALIDATION.md. La auditoría global sigue incompleta: nodos, créditos de entrenamiento, interfaz completa y otros requisitos no quedan cubiertos por estas pruebas.
