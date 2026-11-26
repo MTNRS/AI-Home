@@ -124,3 +124,23 @@ Sigue siendo un único equipo/loopback, sin evidencia de ancho de banda multihos
 
 CI incorpora --transfer-scheduling al smoke instalado de dos workers CPU;
 resultado remoto de esta ampliación pendiente.
+
+## Renovación opcional en NodeAgent
+
+`NodeAgent(..., transfer_probe_interval=60)` mide y publica una sonda de 64 KiB
+antes de reclamar trabajo, después del heartbeat. Por defecto es `None` y no
+produce tráfico adicional. Se aceptan enteros entre 60 y 120 segundos; el plazo
+se cuenta con reloj monotónico desde el final del intento anterior, incluso si
+falla. No hay hilo de sondeo: solo se comprueba al llamar a `run_once`.
+
+`last_transfer_measurement` conserva el último resultado del intento automático;
+`last_transfer_probe_error` contiene únicamente el nombre del tipo de error.
+Los errores HTTP o de validación de la sonda no impiden reclamar otros trabajos.
+Las muestras siguen siendo declaraciones del cliente y caducan a los 120 segundos.
+Un trabajo largo, una llamada tardía o errores pueden dejar un intervalo sin
+muestra válida; no se garantiza elegibilidad continua. Las sondas manuales y
+otros clientes con la misma credencial comparten el presupuesto del servidor.
+
+Validación local: 30 pruebas de `test_network_probe.py` y
+`test_nodes_and_jobs.py` aprobadas, incluida renovación, espera tras HTTP 429,
+recuperación, validación del intervalo y ausencia de sondeo por defecto.

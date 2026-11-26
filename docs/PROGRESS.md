@@ -1343,3 +1343,12 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - Delta embeddings .1838996857, 31.368 s; seis créditos por worker por trabajo
   verificado, ninguno por sondas. TRANSFER_SCHEDULING_SMOKE.json conservado.
 - Gate CI distribuido CPU ampliado; resultado remoto pendiente. Solo loopback.
+
+### Renovación opcional de mediciones HTTP del nodo
+
+NodeAgent puede renovar la muestra al buscar trabajo con un intervalo explícito
+entre 60 y 120 segundos. Mantiene el comportamiento anterior por defecto,
+registra fallos sin cuerpos de respuesta y aplica la espera también tras errores.
+No garantiza frescura durante trabajos largos ni convierte estas mediciones en
+ancho de banda físico certificado. Pruebas locales: 30 aprobadas (sondas, nodos
+y trabajos). La opción todavía no está expuesta en la interfaz de escritorio.

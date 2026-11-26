@@ -1,6 +1,59 @@
 import pytest
+import hashlib
+import httpx
 from test_nodes_and_jobs import client, register, login, create_node, user_headers
 from ai_home.network_probe import measure_transfer
+
+
+def test_worker_periodic_transfer_probe_and_failure_backoff(monkeypatch):
+    from ai_home.node_worker import NodeAgent
+    now, requests, failing = [0.], [], [False]
+    monkeypatch.setattr("ai_home.node_worker.time.monotonic", lambda: now[0])
+
+    def respond(request):
+        requests.append(request.url.path)
+        if request.url.path.endswith("heartbeat"):
+            return httpx.Response(200, json={})
+        if request.url.path.endswith("claim"):
+            return httpx.Response(204)
+        if failing[0]:
+            return httpx.Response(429, text="private server detail")
+        if request.url.path.endswith("transfer-measurement"):
+            return httpx.Response(200, json={"received_epoch": 1})
+        if request.method == "POST":
+            return httpx.Response(200, json={"bytes": len(request.content),
+                "sha256": hashlib.sha256(request.content).hexdigest()})
+        size = int(request.url.params["size"])
+        return httpx.Response(200, content=bytes(range(256)) * (size // 256))
+
+    agent = NodeAgent(server_url="http://localhost", node_token="secret",
+                      transport=httpx.MockTransport(respond), transfer_probe_interval=60)
+    try:
+        assert not agent.run_once()
+        assert len(requests) == 8 and agent.last_transfer_measurement is not None
+        now[0] = 59
+        assert not agent.run_once() and len(requests) == 10
+        now[0], failing[0] = 60, True
+        assert not agent.run_once() and len(requests) == 13
+        assert agent.last_transfer_measurement is None
+        assert agent.last_transfer_probe_error == "HTTPStatusError"
+        now[0] = 119
+        assert not agent.run_once() and len(requests) == 15
+        now[0], failing[0] = 120, False
+        assert not agent.run_once() and len(requests) == 23
+        assert agent.last_transfer_probe_error is None
+    finally:
+        agent.close()
+    requests.clear()
+    default = NodeAgent(server_url="http://localhost", node_token="secret",
+                        transport=httpx.MockTransport(respond))
+    try:
+        assert not default.run_once() and len(requests) == 2
+    finally:
+        default.close()
+    for interval in (True, 59, 121, 60.5):
+        with pytest.raises(ValueError, match="Transfer probe interval"):
+            NodeAgent(server_url="http://localhost", node_token="secret", transfer_probe_interval=interval)
 
 
 def test_authenticated_transfer_and_limits(client):

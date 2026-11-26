@@ -175,12 +175,21 @@ class NodeAgent:
         allow_foundation_training: bool = False,
         foundation_device: str = "cpu",
         lease_renew_interval: int = 30,
+        transfer_probe_interval: int | None = None,
     ) -> None:
         if foundation_device not in {"cpu", "cuda"}:
             raise ValueError("Foundation worker device must be cpu or cuda")
         if type(lease_renew_interval) is not int or not 1 <= lease_renew_interval <= 60:
             raise ValueError("Lease renewal interval must be between 1 and 60 seconds")
         self.lease_renew_interval = lease_renew_interval
+        if transfer_probe_interval is not None and (
+            type(transfer_probe_interval) is not int or not 60 <= transfer_probe_interval <= 120
+        ):
+            raise ValueError("Transfer probe interval must be between 60 and 120 seconds")
+        self.transfer_probe_interval = transfer_probe_interval
+        self._transfer_probe_finished = None
+        self.last_transfer_measurement = None
+        self.last_transfer_probe_error = None
         self.foundation_device = foundation_device
         self.last_run_metrics = None
         self.last_measurement_uploaded = False
@@ -220,6 +229,22 @@ class NodeAgent:
         heartbeat = self._client.post("/api/v1/node/heartbeat", json=resources)
         heartbeat.raise_for_status()
         heartbeat_seconds = time.perf_counter() - started
+
+        if self.transfer_probe_interval is not None and (
+            self._transfer_probe_finished is None
+            or time.monotonic() - self._transfer_probe_finished >= self.transfer_probe_interval
+        ):
+            self.last_transfer_measurement = None
+            self.last_transfer_probe_error = None
+            try:
+                self.last_transfer_measurement = self.measure_transfer(publish=True)
+            except (httpx.HTTPError, ValueError) as exc:
+                # Do not expose response bodies, URLs or credentials in telemetry.
+                self.last_transfer_probe_error = type(exc).__name__
+            finally:
+                # Wait from completion, including failures, to avoid overlapping
+                # the server's sliding request budget with a slow prior probe.
+                self._transfer_probe_finished = time.monotonic()
 
         started = time.perf_counter()
         response = self._client.post("/api/v1/node/jobs/claim")
