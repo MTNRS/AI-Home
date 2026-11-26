@@ -185,14 +185,29 @@ class ModelRegistry:
             db.execute("INSERT INTO activation(candidate_id, operator, reason, created) VALUES (?, ?, ?, ?)",
                        (version, operator, reason, time.time()))
 
-    def active_checkpoint(self):
+    def resolve(self, version=None):
         with self.database() as db:
-            row = db.execute("""SELECT c.checkpoint_hash FROM activation a
-                JOIN candidates c ON c.id=a.candidate_id
-                WHERE c.approved_by IS NOT NULL ORDER BY a.sequence DESC LIMIT 1""").fetchone()
+            if version is None:
+                row = db.execute("""SELECT c.id, c.checkpoint_hash FROM activation a
+                    JOIN candidates c ON c.id=a.candidate_id
+                    WHERE c.approved_by IS NOT NULL ORDER BY a.sequence DESC LIMIT 1""").fetchone()
+            else:
+                row = db.execute("SELECT id, checkpoint_hash FROM candidates WHERE id=? AND approved_by IS NOT NULL",
+                                 (version,)).fetchone()
             if row is None:
-                raise ValueError("No approved model is active")
-            return self.checkpoint(row["checkpoint_hash"])
+                raise ValueError("No approved model matches the selection")
+            return row["id"], self.checkpoint(row["checkpoint_hash"])
+
+    def active_checkpoint(self):
+        return self.resolve()[1]
+
+    def catalog(self):
+        with self.database() as db:
+            active = db.execute("SELECT candidate_id FROM activation ORDER BY sequence DESC LIMIT 1").fetchone()
+            active_id = active["candidate_id"] if active is not None else None
+            return [{"id": row["id"], "checkpoint_sha256": row["checkpoint_hash"],
+                     "active": row["id"] == active_id}
+                    for row in db.execute("SELECT id, checkpoint_hash FROM candidates WHERE approved_by IS NOT NULL ORDER BY created, id")]
 
     def history(self):
         with self.database() as db:

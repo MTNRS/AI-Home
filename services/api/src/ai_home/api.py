@@ -472,6 +472,17 @@ def create_app(
             ) from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @app.get("/api/v1/models")
+    def list_approved_models(request: Request, _user: AuthenticatedUser = Depends(get_current_user)):
+        settings = request.app.state.settings
+        if settings.chat_backend != "foundation" or settings.foundation_registry is None:
+            return {"models": []}
+        try:
+            from ai_home.foundation.registry import ModelRegistry
+            return {"models": ModelRegistry(settings.foundation_registry).catalog()}
+        except Exception:
+            raise HTTPException(status_code=503, detail="Model catalog unavailable.") from None
+
     @app.post(
         "/api/v1/chat/completions",
         response_model=ChatCompletionResponse,
@@ -482,6 +493,8 @@ def create_app(
         current_user: AuthenticatedUser = Depends(get_current_user),
     ) -> ChatCompletionResponse:
         settings: Settings = request.app.state.settings
+        if payload.model_version is not None and (settings.chat_backend != "foundation" or settings.foundation_registry is None):
+            raise HTTPException(status_code=503, detail="Approved model selection requires a Foundation registry.")
         if payload.use_knowledge and (settings.chat_backend != "foundation" or settings.knowledge_index is None):
             raise HTTPException(status_code=503, detail="Foundation knowledge retrieval is not configured.")
         if settings.chat_backend == "foundation":
@@ -494,12 +507,14 @@ def create_app(
             try:
                 from ai_home.foundation.inference import complete
 
+                selected_version = None
                 checkpoint = settings.foundation_checkpoint
                 if settings.foundation_registry is not None:
                     if checkpoint is not None:
                         raise ValueError("Configure a registry or a direct checkpoint, not both")
                     from ai_home.foundation.registry import ModelRegistry
-                    checkpoint = ModelRegistry(settings.foundation_registry).active_checkpoint()
+                    selected_version, checkpoint = ModelRegistry(settings.foundation_registry).resolve(
+                        str(payload.model_version) if payload.model_version is not None else None)
                 references = []
                 completion = complete
                 extra = {}
@@ -525,7 +540,7 @@ def create_app(
                                     detail="Foundation inference failed; verify the checkpoint and runtime.") from None
             finally:
                 foundation_inference_lock.release()
-            return ChatCompletionResponse(references=references, choices=[{
+            return ChatCompletionResponse(model_version=selected_version, references=references, choices=[{
                 "index": 0, "message": {"role": "assistant", "content": answer},
                 "finish_reason": "stop",
             }])

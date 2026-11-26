@@ -287,3 +287,15 @@ suite/runtime settings fail closed. Existing approvals are preserved without
 inventing historical evidence.
 
 Validation: full CUDA-enabled suite 192 passed, 4 PostgreSQL tests skipped.
+
+
+### Approved model API selection (2026-11-26)
+
+Added authenticated approved-version catalog and optional per-request version
+selection. Responses identify the model actually used; choosing a version does
+not alter global activation. Candidate versions are excluded from the catalog and
+cannot be selected. Registry resolution selects ID and checkpoint together.
+Tests exercise two real checkpoints, explicit non-active selection, unchanged
+activation, authenticated catalog and candidate rejection.
+
+Validation: full suite 192 passed, 4 PostgreSQL skipped. After resolving schema namespace warnings, registry/chat subset: 13 passed without warnings.

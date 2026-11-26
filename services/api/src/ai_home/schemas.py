@@ -67,7 +67,8 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     use_knowledge: StrictBool = False
-    model_config = ConfigDict(extra="forbid")
+    model_version: UUID | None = None
+    model_config = ConfigDict(extra="forbid", protected_namespaces=("model_validate", "model_dump"))
 
     messages: list[ChatMessage] = Field(min_length=1, max_length=50)
 
@@ -268,6 +269,8 @@ class KnowledgeReference(BaseModel):
 
 
 class ChatCompletionResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=("model_validate", "model_dump"))
+    model_version: UUID | None = None
     references: list[KnowledgeReference] = Field(default_factory=list)
     choices: list[ChatCompletionChoiceResponse]
 

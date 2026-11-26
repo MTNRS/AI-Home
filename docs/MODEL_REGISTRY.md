@@ -85,3 +85,24 @@ fixed declarative probes only; it does not measure catastrophic forgetting acros
 all knowledge or replace held-out loss/regression experiments. Changes to the
 suite/runtime require a deliberate evaluation policy transition; comparisons are
 not silently accepted across incomparable runs.
+
+
+## Authenticated model selection
+
+`GET /api/v1/models` returns only approved registry versions with their UUID,
+checkpoint hash and active flag. It requires an authenticated account and exposes
+no filesystem paths, reviewer identities, evaluation prompts or generated text.
+Without a Foundation registry it returns an empty catalog. Catalog entries are
+approval records; checkpoint integrity is verified when selected for inference.
+
+`POST /api/v1/chat/completions` accepts optional `model_version` (UUID). Selecting
+an approved version affects only that request, not global activation. Without an
+explicit version the active version is resolved once for the request. The response
+includes the actual `model_version`; direct checkpoint and external-provider modes
+return null. Unknown/unapproved/corrupt selections fail without falling back to
+another model. Explicit version selection requires registry-backed Foundation
+serving. Clients can pin this returned UUID to keep a conversation on one version.
+
+Validation includes real generation from an explicitly selected non-active
+checkpoint, unchanged global activation, catalog authentication, no candidate
+leakage, and rejection of unapproved selection. Desktop selection remains pending.

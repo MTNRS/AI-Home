@@ -57,6 +57,21 @@ def test_real_candidates_approval_activation_rollback_and_api(tmp_path, client):
         "messages": [{"role": "user", "content": "Hi"}]},
         headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200, response.text
+    assert response.json()["model_version"] == versions[0]
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/v1/models").status_code == 401
+    catalog = client.get("/api/v1/models", headers=headers).json()["models"]
+    assert {row["id"] for row in catalog} == set(versions)
+    assert [row["id"] for row in catalog if row["active"]] == [versions[0]]
+    assert all(set(row) == {"id", "checkpoint_sha256", "active"} for row in catalog)
+    selected = client.post("/api/v1/chat/completions", json={
+        "messages": [{"role": "user", "content": "Hi"}], "model_version": versions[1]}, headers=headers)
+    assert selected.status_code == 200, selected.text
+    assert selected.json()["model_version"] == versions[1]
+    assert registry.resolve()[0] == versions[0]
+    rejected = client.post("/api/v1/chat/completions", json={
+        "messages": [{"role": "user", "content": "Hi"}], "model_version": incompatible}, headers=headers)
+    assert rejected.status_code == 503
     assert response.json()["choices"][0]["message"]["content"]
     active = registry.active_checkpoint()
     active.write_bytes(b"corrupted")
