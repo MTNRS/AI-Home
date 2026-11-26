@@ -240,3 +240,27 @@ del candidato. No acredita calidad. Ejecución local real en procesos separados:
 `artifacts/visual-cli-partial-v1` paso 2 y `artifacts/visual-cli-resumed-v1` paso 4.
 Prueba CLI: 1 passed in 3.10s, entrenamiento real, BPE solo train y salida exclusiva.
 El ejemplo es para comprobación técnica diminuta, no un corpus de capacidad.
+
+## Evaluación visual por generación libre
+
+```powershell
+python -m ai_home.foundation.vision_evaluation --checkpoint artifacts/visual-cli-resumed-v1/visual-step-4.pt --dataset artifacts/vision-smoke-cpu-v1/dataset.json --prompt "Describe the image." --max-new-tokens 16 --output artifacts/visual-evaluation-new.json
+```
+
+Evalúa solo registros marcados validation, con greedy decoding y comparación
+exacta después de NFC, normalización CRLF y strip. Repite cada caso con píxeles
+blancos como control. Guarda respuestas, aciertos, cambios de respuesta, tokens,
+agotamiento del presupuesto, latencia sincronizada CUDA y hashes de protocolo,
+dataset, checkpoint y tokenizador. Rechaza prompts que ya exceden el contexto.
+No modifica pesos ni promueve candidatos. Exige un archivo de salida nuevo.
+
+Resultado real del candidato CLI de cuatro pasos: **0/1 aciertos**, control blanco
+0/1, respuestas cambiadas 0. Ambas salidas K repetida 16 veces agotaron el
+presupuesto. Informe: VISUAL_EVALUATION_INITIAL.json. El único caso amarillo es
+una comprobación negativa diminuta, no un benchmark de capacidad general. Una
+coincidencia exacta puede penalizar descripciones válidas alternativas; diferencias
+con el control tampoco prueban comprensión. La partición declarada no demuestra
+por sí sola ausencia de contaminación en otros entrenamientos o datos previos.
+
+Prueba del evaluador con modelo real: 1 passed in 3.36s, selección de holdout,
+control, determinismo de respuesta/protocolo y rechazo de prompt excesivo.

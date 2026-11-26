@@ -1189,3 +1189,11 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - Dos procesos locales ejecutaron pasos 1–2 y reanudaron 3–4 con artefactos reales.
 - Prueba CLI pasó en 3.10s, incluyendo exclusión de validation en BPE y protección
   de salida existente. Comandos en VISION_PREFIX.md; calidad aún no demostrada.
+
+## 2026-11-26 — Evaluación visual libre con control
+
+- Evaluador greedy de captions validation, control blanco, presupuesto, latencia
+  y hashes de protocolo/checkpoint/dataset; sin promoción automática.
+- Candidato real de cuatro pasos: 0/1 aciertos, 0/1 control, misma salida K×16.
+  Resultado negativo en VISUAL_EVALUATION_INITIAL.json, sin capacidad demostrada.
+- Prueba con modelo real pasó en 3.36s. Un caso no es evaluación generalista.

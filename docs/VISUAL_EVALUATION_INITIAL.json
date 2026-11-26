@@ -1,0 +1,41 @@
+{
+  "format": "ai-home-visual-evaluation-v1",
+  "prompt": "Describe the image.",
+  "max_new_tokens": 16,
+  "temperature": 0,
+  "control": "all-white-rgb",
+  "normalization": "NFC-CRLF-strip-exact",
+  "dataset_sha256": "117d220124943d6cb151e99b7c5231f1253175b0f713bb8477249807512cb9fd",
+  "protocol_sha256": "c0565ce288b4d3ba10fbf82abd30b46ebf6ff97e29802c090a849379b2a5ac4e",
+  "checkpoint_sha256": "0bfea13b905d4af33ed01c889a7bf52f701504226b689ff4de6acb13c644ab12",
+  "tokenizer_sha256": "c026e91f2d2ef39ae32689159fb5d101f770f353502c42ea53c7494daf2fbf1d",
+  "device": "cpu",
+  "torch_version": "2.14.1+cu130",
+  "cases": [
+    {
+      "image_sha256": "346d829bb507dbcb826b8dcf49292db0e2de4c03e310797a9ead39459b37c1ed",
+      "expected": "yellow",
+      "image": {
+        "answer": "KKKKKKKKKKKKKKKK",
+        "exact_match": false,
+        "generated_tokens": 16,
+        "budget_exhausted": true,
+        "seconds": 0.02287019998766482
+      },
+      "white_control": {
+        "answer": "KKKKKKKKKKKKKKKK",
+        "exact_match": false,
+        "generated_tokens": 16,
+        "budget_exhausted": true,
+        "seconds": 0.01769849999982398
+      },
+      "answer_changed": false
+    }
+  ],
+  "exact_matches": 0,
+  "count": 1,
+  "white_control_exact_matches": 0,
+  "changed_answers": 0,
+  "training_dataset_matches": true,
+  "claim": "Heldout manifest caption probes only; white-control differences do not prove visual understanding"
+}
