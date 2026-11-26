@@ -13,6 +13,15 @@ def spec(path="README.md"):
                 path=path, license="Apache-2.0", language="es")
 
 
+def test_github_versions_share_file_group_but_other_paths_do_not(tmp_path):
+    pending = tmp_path / 'versions.jsonl'
+    acquire([spec(), {**spec(), 'commit': 'b' * 40, 'repository': 'Example/Project'}, spec('other.md')],
+            pending, transport=httpx.MockTransport(lambda r: httpx.Response(200, text=str(r.url))))
+    rows = [json.loads(line) for line in pending.read_text().splitlines()]
+    assert rows[0]['split_group_sha256'] == rows[1]['split_group_sha256']
+    assert rows[0]['split_group_sha256'] != rows[2]['split_group_sha256']
+
+
 def test_public_connector_requires_review_before_use(tmp_path):
     seen = []
     def respond(request):
@@ -36,7 +45,9 @@ def test_public_connector_requires_review_before_use(tmp_path):
         row.update(privacy_reviewed=True, license_reviewed=True, retrieval_allowed=True)
     review.write_text(json.dumps(data), encoding="utf-8")
     approve_records(pending, review, approved)
-    assert len(load_records(approved, purpose="retrieval")[0]) == 2
+    retained = load_records(approved, purpose="retrieval")[0]
+    assert len(retained) == 2
+    assert {r['split_group_sha256'] for r in retained} == {r['split_group_sha256'] for r in rows}
     with pytest.raises(ValueError, match="Training authorization"):
         load_records(approved)
 

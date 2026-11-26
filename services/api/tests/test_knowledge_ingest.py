@@ -44,6 +44,7 @@ def test_wikipedia_review_to_index_and_training_separation(tmp_path):
     data, digest = load_records(output, purpose="retrieval")
     assert version == digest
     assert all(record["reviewer"] == "fixture-reviewer" for record in data)
+    assert {r['split_group_sha256'] for r in data} == {r['split_group_sha256'] for r in records}
     with pytest.raises(ValueError, match="Training authorization"):
         load_records(output)
     index = tmp_path / "index.json"
@@ -53,6 +54,20 @@ def test_wikipedia_review_to_index_and_training_separation(tmp_path):
     assert hit["text"] == "Marte tiene dos lunas."
     with pytest.raises(FileExistsError):
         approve_records(pending, review, output)
+
+
+def test_wikipedia_group_survives_revision_and_dump_changes(tmp_path):
+    _, _, original, _ = fixture(tmp_path)
+    dump = tmp_path / 'fixture.xml.bz2'
+    text = bz2.decompress(dump.read_bytes()).replace(b'<id>10</id>', b'<id>11</id>').replace(
+        b'Marte tiene dos lunas.', b'Marte conserva dos lunas conocidas.')
+    dump.write_bytes(bz2.compress(text))
+    corpus = tmp_path / 'updated.txt'
+    import_wikipedia_dump(dump, corpus, source_url='https://dumps.wikimedia.org/eswiki/new.xml.bz2')
+    updated = [json.loads(line) for line in Path(str(corpus) + '.records.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert original[0]['sha256'] != updated[0]['sha256']
+    assert original[0]['split_group_sha256'] == updated[0]['split_group_sha256']
+    assert updated[0]['split_group_sha256'] != updated[1]['split_group_sha256']
 
 
 @pytest.mark.parametrize("field,value", [("privacy_reviewed", False),

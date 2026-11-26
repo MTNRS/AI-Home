@@ -1511,3 +1511,11 @@ histórico sin etiquetas. Pruebas verifican estabilidad, grupos indivisibles,
 metadatos contradictorios y rechazo de continuación contaminada: 24 pruebas de
 grupos/tokenizador/modelo aprobadas. No detecta parentesco semántico automático;
 las familias deben declararse correctamente y checkpoints antiguos no las conocen.
+
+### Familias de fuente en conectores
+
+GitHub y Wikipedia emiten ahora grupos estables por archivo/página, independientes
+de commit/revisión. La revisión del corpus conserva el campo con vinculación de
+metadatos y permisos sin cambios. 28 pruebas aprobadas con transporte simulado y
+dumps propios. No detecta renombrados, traducciones ni parentesco semántico; no
+se modifican corpus previamente publicados.

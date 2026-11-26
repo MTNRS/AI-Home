@@ -351,3 +351,23 @@ antiguos sin estos campos solo tienen la protección de hashes documentales.
 Estas etiquetas no prueban parentesco ni detectan duplicados semánticos: familias
 omitidas, mal etiquetadas o renombradas pueden escapar al control. La revisión
 del corpus y la evaluación independiente siguen siendo necesarias.
+
+### Grupos emitidos por conectores
+
+Las nuevas adquisiciones GitHub incluyen una familia basada en repositorio
+(normalizado a minúsculas) y ruta (sensible a mayúsculas), sin el commit. Las
+nuevas importaciones Wikipedia usan idioma y page_id, sin revisión ni URL del
+dump. Así, versiones diferentes del mismo documento conservan el grupo aunque
+cambie su contenido. La aprobación conserva el campo y su hash de metadatos lo
+vincula a la revisión explícita. Los permisos siguen desactivados inicialmente.
+
+Esto no agrupa automáticamente archivos renombrados, repositorios trasladados,
+traducciones ni artículos relacionados. Los corpus/revisiones ya publicados no
+se reescriben. Una adquisición nueva tiene metadatos nuevos y requiere su propia
+revisión. Los índices conservan registros completos antes de fragmentarlos para
+recuperación; los fragmentos de RAG no se convierten por ello en datos entrenados.
+
+28 pruebas de conectores, revisión y grupos aprobadas: versiones GitHub,
+revisiones Wikipedia, estabilidad y conservación después de aprobación. Se usó
+HTTP simulado para el conector y dumps locales propios; no se descargó ni aprobó
+contenido externo nuevo en esta validación.

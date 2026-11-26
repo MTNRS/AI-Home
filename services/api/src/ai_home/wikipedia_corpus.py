@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
+from ai_home.foundation.data import canonical_hash
 
 
 def _require_wikitext_parser():
@@ -162,6 +163,7 @@ def import_wikipedia_dump(
                             "sha256": hashlib.sha256(normalized.encode("utf-8")).hexdigest(),
                             "source_dump_url": source_url, "page_id": page_id,
                             "revision_id": revision_id, "format": "wikitext-to-plain-text",
+                            "split_group_sha256": canonical_hash({'family': 'wikipedia-page-v1', 'language': language, 'page_id': page_id}),
                             "training_allowed": False, "retrieval_allowed": False,
                             "privacy_reviewed": False, "visibility": "pending-review",
                         }, ensure_ascii=False) + "\n")

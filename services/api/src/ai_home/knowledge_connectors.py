@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import httpx
 from ai_home.immutable_artifacts import publish_bytes
+from ai_home.foundation.data import canonical_hash
 
 MAX_DOCUMENT_BYTES = 500_000
 MAX_BATCH_BYTES = 8_000_000
@@ -55,6 +56,7 @@ def github_text(spec, client):
             "format": "utf-8-text", "text": text, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             "source_sha256": hashlib.sha256(raw).hexdigest(),
             "connector": "github-text-v1", "source_commit": commit, "source_path": path,
+            "split_group_sha256": canonical_hash({'family': 'github-file-v1', 'repository': repo.lower(), 'path': path}),
             "training_allowed": False, "retrieval_allowed": False,
             "privacy_reviewed": False, "visibility": "public"}
 
