@@ -1832,3 +1832,15 @@ crea dos fragmentos a tres creditos y verifica propietario/consentimientos.
 37 pruebas de escritorio/privacidad aprobadas (1.13 s). Primer fallo del script
 por referencia incorrecta a messagebox corregido antes de repetir el smoke.
 Agregada verificacion instalada en CI, aun no declarada aprobada remotamente.
+
+
+### Aislamiento del planificador al cambiar perfil
+
+Ampliado verify_desktop_evaluation_plan.py con Tk real y finalizaciones
+controladas tras _switch_memory_profile. Verifica destruccion de la ventana,
+consentimientos nuevos desactivados y descarte de exito/error tardios incluso
+con el token de sesion sin cambiar (guardia de ventana independiente). El
+caso exitoso crea un plan real despues del cierre; el error no crea archivo.
+Ejecucion local aprobada con checkpoint entrenado y holdout publico existente.
+No se afirma cancelacion de escritura: conserva el comportamiento documentado.
+La misma comprobacion ampliada queda incluida en CI instalada.

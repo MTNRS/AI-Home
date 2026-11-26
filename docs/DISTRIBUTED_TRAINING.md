@@ -603,3 +603,9 @@ se descartan de la interfaz. Cerrar no cancela una escritura local iniciada.
 Prueba Tk real: scripts/verify_desktop_evaluation_plan.py crea un plan con un
 checkpoint entrenado y rechaza cero o un consentimiento. Integrada en la CI
 del paquete instalado bajo Xvfb; no equivale a revision visual de DPI/layout.
+
+El smoke Tk tambien fuerza una finalizacion posterior al cambio real de perfil:
+comprueba descarte de exito/error tardios y reinicio de ambos consentimientos.
+Mantiene el token sin modificar para verificar la guardia de ventana por si
+misma. El caso exitoso conserva el archivo local producido tras el cierre;
+no se presenta ese resultado en el nuevo perfil.
