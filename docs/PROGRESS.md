@@ -1052,3 +1052,14 @@ para tareas neuronales (60,38 s). Sin modificar protecciones: reintento de las t
 pasó las dos primeras; la tercera aún sin RAM, y pasó en proceso separado. No se
 presenta como una única ejecución completa correcta. CI anterior d3a2b70 pasó.
 Revisión visual/DPI sigue pendiente; build/ temporal previo permanece sin versionar.
+
+### Revisión visual de trabajos y CI actualizada
+
+Ventana Tk real con 62 trabajos de desarrollo, sin cuentas/red: tamaño 860×640
+legible; navegación observada a página 2 con 12 trabajos y botones correctos.
+Segunda ventana 640×480 conserva controles y lista; scroll permite leer detalle
+completo. Ambas cerradas, ausencia y salida de procesos verificadas. No defectos
+visuales bloqueantes observados en esos tamaños; no cubre otros DPI/accesibilidad.
+CI 6a25e3f correcta: Foundation 291/15 omitidas y paquete/API/distribuido wheel;
+PostgreSQL 3.11/3.12 298/8 omitidas por versión. Actualizado inventario con esa
+evidencia y con los fallos locales previos por RAM/reintentos, sin ocultarlos.

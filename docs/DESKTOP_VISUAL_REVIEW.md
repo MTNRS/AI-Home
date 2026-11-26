@@ -48,3 +48,25 @@ functional API/DB smoke remains the evidence for successful submission.
 Resize attempts did not change the observed window size, so minimum-size behavior
 and DPI scaling remain unverified. Long-content scrolling and accessibility also
 remain outside this review. The fixture window was closed and its absence checked.
+
+## Distributed job viewer (2026-11-26)
+
+Inspected the real Tk viewer from revision `6a25e3f` with a development-only
+62-job fixture. No real account, network request or contribution was involved.
+At the default 860×640 client size, all four navigation buttons, job rows and the
+selected job's full constraints/explanations were legible. Clicking Más antiguos
+visibly changed page 1 (50 jobs) to page 2 (12 jobs), enabled Más recientes and
+disabled Más antiguos at the end.
+
+A second fixture window started at the supported minimum 640×480 client size.
+Navigation and the job list remained visible. The detail pane required scrolling;
+scrolling revealed the complete freshness/device/profile explanation and the
+warning that queued does not identify a cause. There was no inaccessible clipped
+control or text in these observed states. Both windows were closed and their
+absence checked; their fixture processes also exited.
+
+This covers those two window sizes at the current Windows display configuration,
+not every DPI, screen reader, keyboard-only path or error dialog. The records were
+synthetic UI fixtures, not evidence of completed distributed jobs. The separate
+HTTP/CPU/CUDA experiments remain the evidence for real work. No screenshot of a
+real user's account or private work was captured.

@@ -108,7 +108,7 @@ availability and that bootstrap work may be needed for new nodes.
 Tests cover authentication/account isolation, omitted payload/result fields,
 HTTP-helper parsing/limits and constraint rendering. A hidden real-Tk functional
 smoke verified list population, selection, displayed requirements and read-only
-text. This is not visual, DPI or accessibility validation. The view does not yet
+text. This functional test is separate from the later [visual review](DESKTOP_VISUAL_REVIEW.md); DPI/accessibility coverage remains incomplete. The view does not yet
 create/cancel jobs or diagnose all reasons for waiting.
 
 
@@ -138,4 +138,4 @@ Verified 105 jobs across tied timestamps, mixed zero/nonzero microsecond storage
 a newer insert between pages, no duplicates/omissions, invalid cursor pairs and
 limits. A PostgreSQL integration test separately exercised native tied timestamps.
 Hidden real-Tk widgets verified forward/back navigation, latest-page return and
-preservation of the old page on failed navigation. Visual/DPI review remains open.
+preservation of the old page on failed navigation. A subsequent [visual review](DESKTOP_VISUAL_REVIEW.md) checked default/minimum sizes; other DPI settings remain unverified.

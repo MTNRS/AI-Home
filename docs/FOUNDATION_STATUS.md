@@ -9,10 +9,11 @@ otros documentos describen el estado en que se escribieron, no el estado actual.
 ## Evidencia vigente de ejecución y entrega
 
 - Rama: `codex/foundation-validation`; PR borrador [#1](https://github.com/MTNRS/AI-Home/pull/1).
-- Revisión validada remotamente: `1f12fd8` (paquete experimental Nano incluido).
-- [Matriz Linux/PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45819653191): Python 3.11 y 3.12, cada uno 288 pruebas correctas y 8 omitidas por CUDA ausente.
-- [Foundation CPU](https://github.com/MTNRS/AI-Home/actions/runs/45819653096): 283 correctas, 13 omitidas; entrenamiento real, empaquetado/verificación y artefacto subido.
-- Suite Windows/CUDA: 291 correctas, 5 PostgreSQL omitidas. Reproducción adicional en venv CPU nuevo con instalación wheel no editable: entrenamiento/reanudación/inferencia y paquetes local/Linux verificados; [alcance y comandos](CLEAN_REPRODUCTION.md).
+- Revisión validada remotamente: `6a25e3f` (paginación privada de trabajos y consulta PostgreSQL incluidas).
+- [Matriz Linux/PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45825496591): Python 3.11 y 3.12, cada uno 298 pruebas correctas y 8 omitidas por CUDA ausente.
+- [Foundation CPU](https://github.com/MTNRS/AI-Home/actions/runs/45825496681): 291 correctas, 15 omitidas; paquete Nano y API/distribuido desde wheel también correctos.
+- Última suite local completa: 296 correctas, 7 PostgreSQL omitidas y 3 fallos por RAM insuficiente. Las tres pruebas pasaron en reintentos aislados sin rebajar protecciones; no fue una ejecución completa local en verde. PostgreSQL local separado: 7 correctas.
+- Reproducción con wheel instalado y pruebas CPU/CUDA: [alcance y comandos](CLEAN_REPRODUCTION.md). Visor de trabajos revisado visualmente en 860×640 y 640×480: [evidencia y límites](DESKTOP_VISUAL_REVIEW.md).
 - `main` permanece en `2ddea7dd3c2a048212ca3e64b68190a26080ed76`. La copia importada tenía historia independiente; se enlazó con el historial remoto mediante un merge sin cambiar el árbol local. No se hizo force-push.
 - La PR es entrega revisable de trabajo experimental, no una versión estable ni finalización del objetivo.
 
