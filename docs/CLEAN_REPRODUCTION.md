@@ -116,3 +116,24 @@ remote result remains to be checked. This is real process collaboration on one
 host, not independent physical machines or evidence about residential bandwidth,
 latency, coordinator service failover, or useful language quality. Production
 PostgreSQL/authentication and the GUI remain separate deployment checks.
+
+
+## Installed distributed evaluation planner
+
+Revision `a945f23` was built and installed as a non-editable wheel into the
+existing isolated Windows CPU reproduction environment. Wheel SHA256:
+`8b949db98e2ba91dc5001f238308616e2909e30e835b149c7b9853e365510c3c`.
+With PyTorch `2.15.0+cpu`, `python -I scripts/verify_desktop_evaluation_plan.py
+--require-installed --checkpoint artifacts/evaluation-dataset-cli-v1/model.pt
+--dataset artifacts/evaluation-dataset-cli-v1/holdout.json
+--output artifacts/evaluation-dataset-cli-v1/installed-desktop-plan.json` exited 0.
+The source checkpoint had been trained using the separate CUDA environment;
+the installed CPU planner loaded it and generated a plan for its own runtime.
+
+The real Tk check created the plan with explicit consents, switched profiles
+during an active task, and discarded late success/error callbacks. The deliberate
+late success wrote its local plan as documented. Imports resolved to site-packages
+and pip check found no broken requirements. The pre-existing optional NumPy
+warning remained; it did not prevent the checks. This reuses an existing virtual
+environment and host, not a new-machine reproduction or visual layout review.
+Remote validation of this revision was still running when checked.

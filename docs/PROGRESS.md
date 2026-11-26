@@ -1844,3 +1844,13 @@ caso exitoso crea un plan real despues del cierre; el error no crea archivo.
 Ejecucion local aprobada con checkpoint entrenado y holdout publico existente.
 No se afirma cancelacion de escritura: conserva el comportamiento documentado.
 La misma comprobacion ampliada queda incluida en CI instalada.
+
+
+### Planificador reproducido desde wheel CPU
+
+Instalado a945f23 sin editable en el entorno aislado de reproduccion. Smoke Tk
+con Python -I y --require-installed aprobado: creacion real y aislamiento
+tras cambio de perfil, cargando el checkpoint del experimento CPU/CUDA anterior.
+Importacion confirmada desde site-packages, torch 2.15.0+cpu, pip check correcto.
+Hash del wheel y comando guardados en CLEAN_REPRODUCTION.md. CI remota aun
+en ejecucion; no se atribuye exito remoto a esta evidencia local instalada.
