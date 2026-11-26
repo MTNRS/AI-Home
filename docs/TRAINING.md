@@ -384,3 +384,22 @@ un candidato ampliado. Checkpoints antiguos sin grupos conservan su limitación.
 
 Pendiente: transportar y verificar este campo en el protocolo tipado de nodos
 (distribuido), cuyo esquema actual todavía no admite la nueva etiqueta.
+
+### Familias de contribuciones revisadas
+
+El importador asigna `split_group_sha256` a cada contribucion raiz y a sus
+correcciones, incluidas cadenas. La API conserva `root_contribution_id` en la
+procedencia de nuevas correcciones, resuelta exclusivamente entre recursos del
+propietario. El cliente no puede elegir esa raiz. El identificador se incluye
+en el manifiesto congelado y su hash; los datos siguen restringidos a entrenamiento
+revisado, sin permiso de distribucion a voluntarios.
+
+Los exports antiguos sin raiz pueden importarse si contienen todos los antecesores
+hasta la contribucion original. Si faltan o hay un ciclo, la importacion falla:
+no se inventa una familia independiente. No se reescriben datasets congelados.
+La nueva particion por familias puede dejar vacio train o validacion en corpus
+pequenos, que requieren mas familias. Tambien cambia la huella preparada respecto
+a importaciones anteriores; no se promete reanudacion exacta de checkpoints
+creados antes de este cambio. El linaje antiguo sin grupos no permite comprobar
+familias retrospectivamente. Copias aportadas como conversaciones independientes
+no se reconocen semanticamente como una misma familia.

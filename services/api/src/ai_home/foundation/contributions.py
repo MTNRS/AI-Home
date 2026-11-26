@@ -20,6 +20,21 @@ def load_reviewed_export(path, max_bytes=8_000_000):
     if canonical_hash(manifest) != export.manifest_sha256 or export.item_count != len(export.records):
         raise ValueError("Frozen dataset manifest mismatch")
     records, seen = [], set()
+    by_id = {item.contribution_id: item for item in export.records}
+
+    def root_contribution(item):
+        visited = set()
+        while item.correction is not None:
+            if item.contribution_id in visited:
+                raise ValueError("Correction ancestry contains a cycle")
+            visited.add(item.contribution_id)
+            if item.correction.root_contribution_id is not None:
+                return str(item.correction.root_contribution_id)
+            item = by_id.get(item.correction.source_contribution_id)
+            if item is None:
+                raise ValueError("Correction ancestry unavailable; include ancestors or create a newly reviewed export with root provenance")
+        return str(item.contribution_id)
+
     for item in export.records:
         if item.contribution_id in seen:
             raise ValueError("Duplicate contribution")
@@ -44,6 +59,8 @@ def load_reviewed_export(path, max_bytes=8_000_000):
             "visibility": "reviewed-training-only", "messages": messages,
             "text": "\n".join(m["content"] for m in messages),
             "dataset_version": export.dataset_version, "manifest_sha256": export.manifest_sha256,
-            **({"correction": item.correction.model_dump()} if item.correction is not None else {}),
+            "split_group_sha256": canonical_hash({
+                "family": "reviewed-conversation-v1", "contribution_id": root_contribution(item)}),
+            **({"correction": item.correction.model_dump(mode="json")} if item.correction is not None else {}),
         })
     return prepare_records(records, allow_reviewed=True)

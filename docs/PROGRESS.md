@@ -1550,3 +1550,17 @@ en 47,93 s. Confirmadas ejecuciones remotas satisfactorias de Tests
 de entrenamiento real desde Tk con secuencias en disco. El inventario distingue
 esta revisión remota anterior de los cambios de familias validados localmente.
 El objetivo general continúa abierto; no se afirma capacidad generalista.
+
+### Familias de correcciones consentidas
+
+La API conserva la contribucion raiz en nuevas correcciones y resuelve cadenas
+antiguas entre recursos del propietario. El importador agrupa original y
+correcciones para impedir particiones cruzadas; exports antiguos requieren
+antecesores presentes si no incluyen raiz. La serializacion sin el nuevo campo
+conserva la forma antigua. No se alteran datasets congelados ni permisos.
+Prueba extremo a extremo ampliada con correccion encadenada, familia indivisible,
+importacion antigua completa/incompleta y entrenamiento SFT real. Suite final:
+387 aprobadas, siete PostgreSQL omitidas, 42,06 s. Una ejecucion previa detecto
+un cambio accidental de codificacion en un mensaje; se restauro antes de esta
+validacion final. Las particiones/huellas preparadas anteriores cambian; limites
+de compatibilidad documentados en TRAINING.md.

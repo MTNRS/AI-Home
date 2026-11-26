@@ -807,8 +807,23 @@ def create_app(
                 "model": source.model, "messages": messages})
         except ValueError:
             raise HTTPException(status_code=422, detail="Correction requires renewed consent and reuse/privacy attestations.") from None
+        # Resolve legacy chains while their sources still exist; retain the root
+        # on every new correction so later exports need not expose ancestors.
+        ancestor, visited = source, set()
+        while ancestor.correction and not ancestor.correction.get("root_contribution_id"):
+            if ancestor.contribution_id in visited:
+                raise HTTPException(status_code=409, detail="Correction ancestry contains a cycle.")
+            visited.add(ancestor.contribution_id)
+            ancestor = session.scalar(select(TrainingContribution).where(
+                TrainingContribution.contribution_id == ancestor.correction["source_contribution_id"],
+                TrainingContribution.owner_user_id == current_user.user_id))
+            if ancestor is None:
+                raise HTTPException(status_code=409, detail="Correction ancestry is unavailable.")
+        root_contribution = (ancestor.correction.get("root_contribution_id")
+                             if ancestor.correction else str(ancestor.contribution_id))
         return store_training_contribution(candidate, current_user, session, correction={
             "kind": "human_correction_v1", "source_contribution_id": source.contribution_id,
+            "root_contribution_id": str(root_contribution),
             "message_index": index, "original_content_sha256": hashlib.sha256(original.encode("utf-8")).hexdigest()})
 
     @app.get(

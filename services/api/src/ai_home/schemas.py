@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
+    model_serializer,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -175,11 +176,20 @@ class TrainingCorrectionRequest(BaseModel):
 
 
 class CorrectionProvenance(BaseModel):
+    root_contribution_id: UUID | None = None
     model_config = ConfigDict(extra="forbid")
     source_contribution_id: str = Field(min_length=36, max_length=36)
     message_index: StrictInt = Field(ge=0, le=49)
     original_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     kind: Literal["human_correction_v1"]
+
+    @model_serializer(mode="wrap")
+    def serialize_provenance(self, handler):
+        result = handler(self)
+        if self.root_contribution_id is None:
+            result.pop("root_contribution_id", None)
+        return result
+
 
 
 class TrainingContributionResponse(BaseModel):

@@ -114,25 +114,29 @@ def register_and_login(client: TestClient) -> str:
 
 
 def create_candidate(client: TestClient, token: str, suffix: str) -> str:
-    response = client.post(
-        "/api/v1/training/conversations",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "conversation_id": f"d24b0b20-5ebc-48af-a3c8-{suffix:0>12}",
-            "provider": "openai",
-            "source_endpoint": "https://api.openai.com/v1",
-            "model": "gpt-test",
-            "messages": [
-                {"role": "user", "content": f"Question {suffix}"},
-                {"role": "assistant", "content": f"Answer {suffix}"},
-            ],
-            "consent": True,
-            "consent_version": "training_consent_v1",
-            "consent_scope": "conversation_for_aihome_training_candidates",
-            "provider_terms_allow_reuse": True,
-            "content_reviewed_for_sensitive_data": True,
-        },
-    )
+    # Fixed contribution identities make hash-based family partitions reproducible.
+    from unittest.mock import patch
+    from uuid import UUID
+    with patch("ai_home.api.uuid.uuid4", return_value=UUID(int=int(suffix))):
+        response = client.post(
+            "/api/v1/training/conversations",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "conversation_id": f"d24b0b20-5ebc-48af-a3c8-{suffix:0>12}",
+                "provider": "openai",
+                "source_endpoint": "https://api.openai.com/v1",
+                "model": "gpt-test",
+                "messages": [
+                    {"role": "user", "content": f"Question {suffix}"},
+                    {"role": "assistant", "content": f"Answer {suffix}"},
+                ],
+                "consent": True,
+                "consent_version": "training_consent_v1",
+                "consent_scope": "conversation_for_aihome_training_candidates",
+                "provider_terms_allow_reuse": True,
+                "content_reviewed_for_sensitive_data": True,
+            },
+        )
     assert response.status_code == 201
     return response.json()["contribution_id"]
 
@@ -320,7 +324,7 @@ def test_training_reviewer_token_requires_minimum_length():
 
 def test_training_reviewer_token_must_be_ascii():
     with pytest.raises(ValueError, match="32 ASCII characters"):
-        Settings(environment="test", training_review_token="é" * 32)
+        Settings(environment="test", training_review_token="Ã©" * 32)
 
 
 def test_account_deletion_does_not_rewrite_frozen_dataset_snapshot(
