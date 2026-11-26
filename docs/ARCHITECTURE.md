@@ -242,3 +242,14 @@ foundation.distributed define tensores FP32 acotados y gradientes causales por s
 ## Contabilidad de trabajos
 
 CreditLedger.post_in_session reutiliza validación/idempotencia/asientos balanceados dentro de la transacción SQL del scheduler. JobFunding persiste reserva y destino de la liquidación. La financiación no se incorpora al payload del worker ni la decide el resultado remoto. La finalización verificada transfiere escrow al dueño del nodo autenticado. Se conserva auditoría al eliminar objetos operativos.
+
+
+### Public knowledge retrieval increment (2026-11-26)
+
+Added a versioned reviewed-public TF-IDF index with provenance, bounded context
+packing, and opt-in retrieval in authenticated Foundation chat. Retrieved text
+and personal memories use user-level context, not system instructions. This is
+retrieval, not weight training or a demonstrated improvement in model quality.
+See [Knowledge retrieval](KNOWLEDGE.md) for commands,
+permissions, tests and limitations. Network connectors and desktop references
+remain outstanding.

@@ -482,6 +482,8 @@ def create_app(
         current_user: AuthenticatedUser = Depends(get_current_user),
     ) -> ChatCompletionResponse:
         settings: Settings = request.app.state.settings
+        if payload.use_knowledge and (settings.chat_backend != "foundation" or settings.knowledge_index is None):
+            raise HTTPException(status_code=503, detail="Foundation knowledge retrieval is not configured.")
         if settings.chat_backend == "foundation":
             if settings.foundation_checkpoint is None:
                 raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
@@ -492,20 +494,32 @@ def create_app(
             try:
                 from ai_home.foundation.inference import complete
 
-                answer = complete(
+                references = []
+                completion = complete
+                extra = {}
+                if payload.use_knowledge:
+                    from ai_home.knowledge import complete_with_knowledge
+                    completion = complete_with_knowledge
+                    extra["index_path"] = settings.knowledge_index
+                result = completion(
                     [message.model_dump() for message in payload.messages],
                     settings.foundation_checkpoint,
                     device=settings.foundation_device,
                     max_bytes=settings.foundation_memory_budget_bytes,
                     max_new_tokens=settings.foundation_max_new_tokens,
+                    **extra,
                 )
+                if payload.use_knowledge:
+                    answer, references = result
+                else:
+                    answer = result
             except Exception:
                 # Do not return filesystem paths, checkpoint contents or conversation data.
                 raise HTTPException(status_code=503,
                                     detail="Foundation inference failed; verify the checkpoint and runtime.") from None
             finally:
                 foundation_inference_lock.release()
-            return ChatCompletionResponse(choices=[{
+            return ChatCompletionResponse(references=references, choices=[{
                 "index": 0, "message": {"role": "assistant", "content": answer},
                 "finish_reason": "stop",
             }])

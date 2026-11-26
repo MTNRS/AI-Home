@@ -48,3 +48,16 @@ Suite completa en entorno CUDA: 150 aprobadas, 4 omitidas (PostgreSQL), 14,76 se
 ## Créditos de trabajos Foundation
 
 Suite completa final en entorno CUDA: 158 aprobadas, 4 omitidas (PostgreSQL), 37,55 segundos. Migración 0006 probada con upgrade, comprobación de esquema y downgrade sobre SQLite temporal. Pruebas de pagos y asignaciones incluyen saldo insuficiente, conservación, duplicados, fallo inyectado tras asiento, cancelación, leases agotados, eliminación de cuenta, autofinanciación sin emisión y gradientes reales. Smoke financiado por HTTP loopback: 20 créditos sintéticos iniciales, cuatro trabajos verificados y 10 créditos por contribuyente; informe en DISTRIBUTED_FUNDED_SMOKE.json. `git diff --check`: exit 0. Concurrencia PostgreSQL pendiente.
+
+
+### Public knowledge retrieval increment (2026-11-26)
+
+Added a versioned reviewed-public TF-IDF index with provenance, bounded context
+packing, and opt-in retrieval in authenticated Foundation chat. Retrieved text
+and personal memories use user-level context, not system instructions. This is
+retrieval, not weight training or a demonstrated improvement in model quality.
+See [Knowledge retrieval](KNOWLEDGE.md) for commands,
+permissions, tests and limitations. Network connectors and desktop references
+remain outstanding.
+
+Validation: CUDA-enabled full suite **173 passed, 4 skipped** (PostgreSQL unavailable).

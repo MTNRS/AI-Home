@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./ai_home.db"
     session_lifetime_seconds: int = 86_400
     chat_backend: Literal["foundation", "openai-compatible"] = "foundation"
+    knowledge_index: Path | None = None
     foundation_checkpoint: Path | None = None
     foundation_device: Literal["auto", "cpu", "cuda"] = "auto"
     foundation_max_new_tokens: int = Field(default=128, ge=1, le=4096)

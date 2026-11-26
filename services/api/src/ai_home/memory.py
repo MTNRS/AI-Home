@@ -316,5 +316,9 @@ def messages_with_memory_context(
     context = memory_context(memories)
     if not context:
         return list(messages)
-    return [{"role": "system", "content": context}, *messages]
+    result = [dict(message) for message in messages]
+    position = next((i for i in range(len(result) - 1, -1, -1)
+                     if result[i]["role"] == "user"), len(result))
+    result.insert(position, {"role": "user", "content": context})
+    return result
 

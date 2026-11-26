@@ -122,7 +122,7 @@ def test_memory_context_is_added_only_to_request_copy(tmp_path):
     with_memory = messages_with_memory_context(conversation, [note])
     without_memory = messages_with_memory_context(conversation, [])
 
-    assert with_memory[0]["role"] == "system"
+    assert with_memory[0]["role"] == "user"
     assert note.content in with_memory[0]["content"]
     assert with_memory[1:] == conversation
     assert without_memory == conversation

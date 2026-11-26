@@ -220,3 +220,14 @@ retrieval-role hardening and a live visual desktop review remain outstanding.
 Validation: profile isolation including cross-profile link rejection, stable login
 identity, stale answer/error suppression and private-window closure have automated
 coverage. Full CUDA-enabled suite: 163 passed, 4 PostgreSQL tests skipped (no server).
+
+
+### Public knowledge retrieval increment (2026-11-26)
+
+Added a versioned reviewed-public TF-IDF index with provenance, bounded context
+packing, and opt-in retrieval in authenticated Foundation chat. Retrieved text
+and personal memories use user-level context, not system instructions. This is
+retrieval, not weight training or a demonstrated improvement in model quality.
+See [Knowledge retrieval](KNOWLEDGE.md) for commands,
+permissions, tests and limitations. Network connectors and desktop references
+remain outstanding.

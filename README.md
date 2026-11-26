@@ -304,3 +304,14 @@ Existe una demostración reproducible de gradientes reales aportados por dos ide
 ## Créditos por contribuciones verificadas
 
 Los trabajos Foundation pueden financiar recompensas mediante reservas del solicitante. La verificación del resultado y el abono al contribuyente comparten transacción; cancelaciones y fallos terminales devuelven fondos. Consultas de saldo/movimientos propios y migración 0006 disponibles. Véase [CREDITS.md](docs/CREDITS.md). El cobro de inferencia sigue pendiente.
+
+
+### Public knowledge retrieval increment (2026-11-26)
+
+Added a versioned reviewed-public TF-IDF index with provenance, bounded context
+packing, and opt-in retrieval in authenticated Foundation chat. Retrieved text
+and personal memories use user-level context, not system instructions. This is
+retrieval, not weight training or a demonstrated improvement in model quality.
+See [Knowledge retrieval](docs/KNOWLEDGE.md) for commands,
+permissions, tests and limitations. Network connectors and desktop references
+remain outstanding.

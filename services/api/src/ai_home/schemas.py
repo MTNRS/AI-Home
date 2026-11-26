@@ -66,6 +66,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
+    use_knowledge: StrictBool = False
     model_config = ConfigDict(extra="forbid")
 
     messages: list[ChatMessage] = Field(min_length=1, max_length=50)
@@ -252,7 +253,22 @@ class ChatCompletionChoiceResponse(BaseModel):
     finish_reason: Literal["stop"]
 
 
+class KnowledgeReference(BaseModel):
+    id: str
+    source: str
+    url: str
+    license: str
+    date: str
+    language: str
+    document_sha256: str
+    offset: int
+    text: str
+    score: float
+    index_version: str
+
+
 class ChatCompletionResponse(BaseModel):
+    references: list[KnowledgeReference] = Field(default_factory=list)
     choices: list[ChatCompletionChoiceResponse]
 
 

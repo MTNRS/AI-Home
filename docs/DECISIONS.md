@@ -89,3 +89,14 @@ La primera modalidad neuronal usa CPU, modelos de hasta 50.000 parámetros y sha
 ## 2026-11-26: recompensas financiadas sin autoemisión
 
 Cada recompensa consume una reserva del solicitante. No se emiten créditos por métricas de un nodo ni por trabajos creados por el propio receptor. Asignación inicial es una operación administrativa explícita y auditable, separada de earned. Estado de trabajo y movimientos del ledger comparten una transacción; no se introduce otro libro mayor.
+
+
+### Public knowledge retrieval increment (2026-11-26)
+
+Added a versioned reviewed-public TF-IDF index with provenance, bounded context
+packing, and opt-in retrieval in authenticated Foundation chat. Retrieved text
+and personal memories use user-level context, not system instructions. This is
+retrieval, not weight training or a demonstrated improvement in model quality.
+See [Knowledge retrieval](KNOWLEDGE.md) for commands,
+permissions, tests and limitations. Network connectors and desktop references
+remain outstanding.
