@@ -1676,3 +1676,14 @@ liquidacion unica, aislamiento y telemetria de una ejecucion NodeAgent real.
 Suite completa: 403 aprobadas y siete PostgreSQL omitidas, 67,73 s. Pendientes
 smoke con sockets, coordinador con linaje/holdout y selector de escritorio; no
 se afirma evaluacion de capacidad ni ejecucion multihost.
+
+### Coordinador reanudable de evaluacion con linaje
+
+Planes inmutables de evaluacion publica con consentimientos separados, identidad
+de pesos, deteccion de documentos/familias entrenados y duplicados. Avance por API
+ligado a servidor/cuenta, trabajos idempotentes y recomputacion independiente antes
+de agregar por tokens. Seis pruebas coordinador/ejecutor aprobadas en 7,29 s;
+tras ampliar comparacion monolitica y rechazo de otra cuenta, dos pruebas del
+coordinador aprobadas en 5,53 s. Flujo real HTTP en proceso con dos fragmentos y
+seis creditos, repetido sin duplicaciones. Pendiente smoke por sockets y CLI/UI;
+no se afirma evaluacion secreta ni capacidad linguistica general.

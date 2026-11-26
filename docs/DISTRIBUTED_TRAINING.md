@@ -439,5 +439,32 @@ Resultados alterados se rechazan antes de liquidar creditos. Se reutilizan reser
 leases, idempotencia y liquidacion transaccional. El test de API usa transporte
 HTTP en proceso con FastAPI y NodeAgent reales, dos trabajos remunerados y
 recomputacion CPU; no es aun un smoke con sockets ni dos equipos fisicos.
-Tampoco demuestra capacidad linguistica ni ausencia de contaminacion: el payload
-no aporta linaje de entrenamiento y requiere un coordinador que valide el holdout.
+El endpoint de bajo nivel no aporta linaje de entrenamiento. Para preparar una
+evaluacion contra un checkpoint debe usarse el coordinador descrito debajo;
+la perdida no demuestra por si sola capacidad linguistica.
+
+### Coordinador de evaluacion publica
+
+`foundation.evaluation_coordinator.create_plan(checkpoint, shards, output,
+server=..., owner_user_id=..., reward_credits=0,
+allow_public_node_processing=True, weights_public_and_redistributable=True)`
+crea un plan inmutable con uno a ocho fragmentos publicos. Cada fragmento mantiene
+los limites del ejecutor. Exige checkpoint publico con linaje, rechaza textos de
+entrenamiento y familias entrenadas cuando estan etiquetadas, y evita documentos
+duplicados entre fragmentos. Grupos etiquetados requieren linaje de grupos en el
+checkpoint. Los consentimientos de datos y redistribucion de pesos son separados.
+
+`advance(client_httpx_autenticado, plan_path, checkpoint, output_report)` comprueba
+servidor, propietario, identidad del checkpoint y payloads; somete trabajos con
+claves idempotentes y retorna `state=waiting` hasta completarlos. Repetir la llamada
+tras reiniciar el observador conserva trabajos y reservas. Fallos/cancelaciones
+no crean reemplazos automaticamente. El resultado se recomputa en CPU tambien
+en el coordinador y se agrega por tokens, conserva hashes y jobs y siempre
+indica `promoted=false`. La publicacion es exclusiva; repetir un informe identico
+es valido, sustituir uno diferente produce error. No se guardan credenciales.
+
+La prueba HTTP en proceso compara dos fragmentos con evaluacion monolitica real,
+verifica reanudacion, seis creditos totales sin duplicacion y rechazo de otra
+cuenta. No demuestra multiples equipos fisicos. Los registros/linaje declarados
+no prueban parentesco semantico ni autoria. Un holdout publico puede conocerse;
+no se presenta como benchmark secreto o evaluacion independiente de capacidades.
