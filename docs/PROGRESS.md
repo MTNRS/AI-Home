@@ -1457,3 +1457,11 @@ Cuatro pruebas verifican igualdad causal/SFT y entrenamiento/reanudación exacto
 CPU/CUDA. Suite local completa: 375 aprobadas, 7 PostgreSQL omitidas, 50,18 s.
 Corpus/tokenizador siguen en RAM; no se afirma streaming completo ni límite duro
 de memoria. Procedencia y precauciones de datos privados documentadas en TRAINING.
+
+### Memoria de secuencias medida
+
+Benchmark reproducible en procesos separados: 2,24 MB de texto propio, 8.752
+filas idénticas por SHA256. Incremento de pico durante preparación 70,6 MiB en
+memoria frente a 25,7 MiB con caché; tras leer todas las filas, 73,6 frente a
+37,8 MiB. Informe conservado. Alcance: microbenchmark local, no memoria total
+de entrenamiento ni garantía de rendimiento general.

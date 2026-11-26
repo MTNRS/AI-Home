@@ -1,0 +1,37 @@
+{
+  "format": "ai-home-sequence-memory-benchmark-v1",
+  "runs": [
+    {
+      "mode": "memory",
+      "rows": 8752,
+      "context": 256,
+      "sequence_sha256": "0fda82cdadad45e0044bb2b0641a394f3c2c38d0ed7c0ca719612efa5a0a59bf",
+      "preparation_seconds": 0.26217210000322666,
+      "rss_before": 539029504,
+      "rss_after_preparation": 613052416,
+      "lifetime_peak_before": 539029504,
+      "lifetime_peak_after_preparation": 613052416,
+      "peak_growth_over_prior_peak": 74022912,
+      "rss_after_full_read": 616239104,
+      "lifetime_peak_after_full_read": 616239104,
+      "note": "RSS and lifetime peak include Python/PyTorch; OS paging and allocator dependent; hashing occurs afterward"
+    },
+    {
+      "mode": "disk",
+      "rows": 8752,
+      "context": 256,
+      "sequence_sha256": "0fda82cdadad45e0044bb2b0641a394f3c2c38d0ed7c0ca719612efa5a0a59bf",
+      "preparation_seconds": 0.1704165999981342,
+      "rss_before": 538443776,
+      "rss_after_preparation": 539045888,
+      "lifetime_peak_before": 538443776,
+      "lifetime_peak_after_preparation": 565354496,
+      "peak_growth_over_prior_peak": 26910720,
+      "rss_after_full_read": 578068480,
+      "lifetime_peak_after_full_read": 578068480,
+      "note": "RSS and lifetime peak include Python/PyTorch; OS paging and allocator dependent; hashing occurs afterward"
+    }
+  ],
+  "text_bytes": 2240000,
+  "scope": "Two synthetic documents, one run per mode on this host; preparation only, not end-to-end training memory"
+}

@@ -251,3 +251,29 @@ Cuatro pruebas locales aprobadas: igualdad de secuencias causal/SFT y muestreo,
 rechazo de directorios existentes, entrenamiento/reanudación idénticos bit a bit
 frente a memoria tanto en CPU como en CUDA. Se conserva configuración del modelo,
 optimizador y RNG del checkpoint; la ubicación de caché no cambia el experimento.
+
+## Medición local de memoria de preparación
+
+`python -m ai_home.foundation.sequence_benchmark --output-dir RUTA_NUEVA`
+ejecuta cada vía en un proceso separado con dos documentos sintéticos propios
+(2.240.000 bytes de texto), tokenizador sin merges y contexto 256. Ambas producen
+8.752 filas con SHA256 idéntico de inputs y etiquetas. Se observa el pico de
+working set del proceso en Windows y, en otras plataformas compatibles, max RSS.
+Incluye Python/PyTorch; no equivale a memoria exclusiva del corpus.
+
+| Medida local | En memoria | Caché |
+| --- | --- | --- |
+| Crecimiento del pico durante preparación | 70,6 MiB | 25,7 MiB |
+| Crecimiento del pico tras lectura completa/hash | 73,6 MiB | 37,8 MiB |
+| Tiempo de preparación | 0,262 s | 0,170 s |
+
+La lectura completa posterior fuerza acceso a todas las filas, de modo que la
+comparación no se limita a un mapeo todavía sin leer. La caché ocupa 35.848.192
+bytes de datos más manifiesto. Informe: `SEQUENCE_MEMORY_BENCHMARK.json`.
+Se hizo una primera medición y una segunda al añadir la observación tras lectura;
+la tabla corresponde a la segunda, no a una selección por mejor resultado.
+
+Es un microbenchmark de dos documentos en este equipo, con páginas/allocator
+gestionados por el SO. No mide memoria total de entrenamiento, coste del BPE,
+corpus diversos, discos lentos ni rendimiento distribuido. No garantiza esa
+reducción en otros tamaños o máquinas ni sustituye límites de recursos.
