@@ -1725,3 +1725,12 @@ tres creditos y aislamiento al cambiar de cuenta. Repetido tambien gradiente CPU
 correcto. Informes DESKTOP_EVALUATION_CPU/CUDA_SMOKE.json conservados. Anadido paso
 instalado CPU a CI, pendiente de confirmacion remota. No se afirma revision visual
 porque el smoke usa ventanas ocultas.
+
+### Validacion conjunta de evaluacion distribuida
+
+Suite completa en `5fd9c61`: 407 aprobadas, siete PostgreSQL omitidas, 93,72 s.
+Confirmado CI en `8a713ac`: Tests 45852134571 (Python 3.11/3.12) y Foundation
+45852134790, incluido nuevo smoke de evaluacion por sockets CPU/CPU desde paquete
+instalado. El inventario distingue esa evidencia de los cambios mas recientes
+del nodo de escritorio. Objetivo global abierto, sin afirmacion de multihost ni
+capacidad linguistica general.
