@@ -1115,3 +1115,13 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
   Tras eliminar dependencia NumPy de la nueva prueba: 11 passed in 2.82s.
 - No incluye aún reanudación del optimizador ni acredita permisos por sí mismo.
   Detalles: [VISION_PREFIX.md](VISION_PREFIX.md).
+
+## 2026-11-26 — Inferencia autoregresiva con imagen
+
+- Streaming visual real mediante el muestreador Foundation compartido, con
+  cancelación, semilla y controles de generación existentes.
+- Contexto rodante reserva los parches y vuelve a incluir la misma imagen al
+  reconstruir el cache. Entrada local de una imagen RGB normalizada.
+- 18 pruebas pasaron en 18.23s (generación visual y regresión del modelo textual).
+  Sin afirmaciones de calidad visual; datasets, entrenamiento reanudable e interfaz
+  continúan pendientes. Véase [VISION_PREFIX.md](VISION_PREFIX.md).

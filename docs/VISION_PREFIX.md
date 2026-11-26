@@ -44,9 +44,23 @@ Prueba adicional: `test_foundation_vision_checkpoint.py` entrena un paso real,
 guarda/carga y reproduce exactamente los logits; rechaza nueve alteraciones de
 pesos/metadatos, presupuestos insuficientes y guardado sin procedencia.
 
+La inferencia local `foundation.vision_inference.stream_vision_tokens` y
+`stream_vision_text` reutiliza el muestreador textual (temperatura, top-k, top-p,
+penalización de repetición, semilla, EOS, cancelación y decodificación UTF-8).
+Recibe una imagen RGB normalizada, ya situada en el dispositivo del modelo.
+Conserva una copia de esa imagen durante la sesión. Cuando se llena el KV cache,
+reconstruye el contexto con todos los parches y el texto más reciente que quepa;
+no descarta silenciosamente el condicionamiento visual. El contexto textual útil
+es el contexto total menos el número de parches.
+
+Validación de generación: 18 pruebas pasaron en 18.23s entre
+`test_foundation_vision_inference.py` y `test_foundation_model.py`, verificando
+generación real, reconstrucción del contexto, uso del cache, reproducibilidad de
+muestreo, cancelación y regresión textual. No mide calidad visual.
+
 Pendiente: carga y preprocesamiento de imágenes, datasets autorizados,
 entrenamiento reproducible con
-reanudación, inferencia de alto nivel, evaluación independiente e interfaz. El
+reanudación, evaluación independiente e interfaz. El
 formato actual de checkpoint textual no acepta este wrapper. No se publica ni
 activa automáticamente, y no se conecta a contribuciones o nodos voluntarios.
 No se ha demostrado capacidad de describir, reconocer o razonar sobre imágenes.

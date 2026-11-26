@@ -25,7 +25,7 @@ def stream_tokens(model, prompt, max_new_tokens=128, temperature=0.8, top_k=40,
         if cancel is not None and cancel.is_set():
             return
         if cache is None or cache[0][0].shape[-2] >= model.config.context:
-            current = ids[-model.config.context:]
+            current = ids[-getattr(model, "input_context", model.config.context):]
             cache = None
         else:
             current = ids[-1:]
