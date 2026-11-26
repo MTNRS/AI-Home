@@ -56,8 +56,7 @@ def select_device(device="auto"):
     return device
 
 
-def _sequences(records, tokenizer, context, objective="causal"):
-    samples, targets = [], []
+def _sequence_rows(records, tokenizer, context, objective="causal"):
     for record in records:
         if objective == "sft":
             ids, labels = [257], [-100]
@@ -77,8 +76,18 @@ def _sequences(records, tokenizer, context, objective="causal"):
             x = x[:len(y)]
             if not any(t != -100 for t in y):
                 continue
-            samples.append(x + [256] * (context - len(x)))
-            targets.append(y + [-100] * (context - len(y)))
+            yield x + [256] * (context - len(x)), y + [-100] * (context - len(y))
+
+
+def _sequences(records, tokenizer, context, objective="causal", cache_path=None):
+    rows = _sequence_rows(records, tokenizer, context, objective)
+    if cache_path is not None:
+        from .sequence_cache import write_sequences
+        return write_sequences(rows, cache_path, context)
+    samples, targets = [], []
+    for inputs, labels in rows:
+        samples.append(inputs)
+        targets.append(labels)
     if not samples:
         raise ValueError("Split has no full sequences; reduce context or supply longer documents")
     return torch.tensor(samples, dtype=torch.long), torch.tensor(targets, dtype=torch.long)
@@ -106,7 +115,8 @@ def evaluate(model, sequences, device, batch_size=2):
 
 def train(records, output, config=None, training=None, device="auto", resume=None,
           stop_after=None, on_step=None, reviewed_export=None, initial_checkpoint=None,
-          validation_records=None, replay_records=None, replay_fraction=0.25, cancel=None):
+          validation_records=None, replay_records=None, replay_fraction=0.25, cancel=None,
+          sequence_cache_dir=None):
     if cancel is not None and cancel.is_set():
         raise TrainingCancelled("Training cancelled before initialization")
     training = training or TrainingConfig()
@@ -197,9 +207,15 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
     if estimated > budget:
         raise ValueError("Training memory estimate exceeds budget")
     model.to(device).train()
-    train_data = _sequences(train_records, tokenizer, config.context, training.objective)
-    validation_data = _sequences(validation_records, tokenizer, config.context, training.objective)
-    replay_data = _sequences(replay_records, tokenizer, config.context, training.objective) if replay_records else None
+    if sequence_cache_dir is not None:
+        sequence_cache_dir = Path(sequence_cache_dir)
+        sequence_cache_dir.mkdir(parents=True, exist_ok=False)
+    def sequences(records, name):
+        return _sequences(records, tokenizer, config.context, training.objective,
+                          sequence_cache_dir / name if sequence_cache_dir is not None else None)
+    train_data = sequences(train_records, 'train')
+    validation_data = sequences(validation_records, 'validation')
+    replay_data = sequences(replay_records, 'replay') if replay_records else None
     replay_count = max(1, min(training.batch_size - 1, round(training.batch_size * replay_fraction))) if replay_data else 0
     optimizer = torch.optim.AdamW(model.parameters(), lr=training.learning_rate)
     scaler = torch.amp.GradScaler("cuda", enabled=training.precision == "fp16")

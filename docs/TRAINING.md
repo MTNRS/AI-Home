@@ -223,3 +223,31 @@ two modes. An optional independent public validation dataset can be selected;
 lineage contamination checks still apply. Parent training preserves architecture
 and tokenizer, including an explicitly expanded vocabulary candidate. Run
 configuration records the source type, parent/resume path and validation digest.
+
+## Caché local de secuencias en disco
+
+`python -m ai_home.foundation ... --sequence-cache-dir RUTA_NUEVA` evita crear
+todas las secuencias rellenadas como listas Python y tensores residentes antes
+de entrenar. Escribe filas int64 (entrada/etiqueta) de forma incremental y las
+mapea con `torch.from_file`; el muestreo sigue cargando los lotes elegidos al
+dispositivo. Aplica a train, validación y replay, con el mismo orden, padding,
+desplazamiento causal y máscaras SFT. El valor predeterminado conserva la vía
+en memoria. Cada ejecución, incluida una reanudación, exige un directorio nuevo.
+
+Cada partición conserva un manifiesto con dimensiones, tamaño, endian y SHA256.
+No se importan cachés existentes ni se reutilizan archivos no verificados.
+Estas cachés son datos derivados locales: pueden contener conversaciones cuyo
+entrenamiento fue autorizado y no deben publicarse como corpus públicos. No hay
+cifrado adicional. Ocupan `filas * contexto * 16` bytes más manifiestos; errores
+pueden dejar cachés parciales y no se borran automáticamente.
+
+Límites: el corpus, el tokenizador y la tokenización de cada documento siguen en
+RAM. El sistema operativo gestiona las páginas mapeadas; esto no garantiza un
+límite duro de RSS ni elimina la necesidad de disco/RAM suficientes. No constituye
+todavía ingesta de corpus grandes en streaming. La caché usa endian nativo y es
+local, no un formato portátil de distribución.
+
+Cuatro pruebas locales aprobadas: igualdad de secuencias causal/SFT y muestreo,
+rechazo de directorios existentes, entrenamiento/reanudación idénticos bit a bit
+frente a memoria tanto en CPU como en CUDA. Se conserva configuración del modelo,
+optimizador y RNG del checkpoint; la ubicación de caché no cambia el experimento.

@@ -1447,3 +1447,13 @@ con comprobación de particiones, semillas/configuración, runtime, hashes y
 puntuación por respuesta. Reproduce rechazo con 4/0/3 regresiones. Ocho pruebas
 aprobadas. Verifica consistencia de los informes; no sustituye revisión
 independiente ni certifica autenticidad de los pesos.
+
+### Secuencias de entrenamiento mapeadas desde disco
+
+Añadida opción explícita `--sequence-cache-dir` al entrenador: genera filas
+incrementalmente y mapea inputs/labels para train, validación y replay. Mantiene
+por defecto la vía en memoria y exige cachés nuevas; no importa archivos previos.
+Cuatro pruebas verifican igualdad causal/SFT y entrenamiento/reanudación exactos
+CPU/CUDA. Suite local completa: 375 aprobadas, 7 PostgreSQL omitidas, 50,18 s.
+Corpus/tokenizador siguen en RAM; no se afirma streaming completo ni límite duro
+de memoria. Procedencia y precauciones de datos privados documentadas en TRAINING.

@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--validation-dataset", type=Path,
                         help="Independent authorized holdout; otherwise split the training dataset")
     parser.add_argument("--stop-after", type=int)
+    parser.add_argument("--sequence-cache-dir", type=Path,
+                        help="New local directory for disk-backed token sequences")
     args = parser.parse_args()
     if args.allow_model_shrink and not args.auto_fit:
         parser.error("--allow-model-shrink requires --auto-fit")
@@ -69,7 +71,8 @@ def main():
         result = train(records, args.output, model, training, args.device, args.resume,
                        args.stop_after, on_step=lambda value: print(json.dumps(value), flush=True),
                        reviewed_export=args.reviewed_export, cancel=cancel,
-                       initial_checkpoint=args.initial_checkpoint, validation_records=validation)
+                       initial_checkpoint=args.initial_checkpoint, validation_records=validation,
+                       sequence_cache_dir=args.sequence_cache_dir)
     except TrainingCancelled:
         print(json.dumps({"status": "cancelled_before_update", "checkpoint_created": False}), flush=True)
         raise SystemExit(130)
