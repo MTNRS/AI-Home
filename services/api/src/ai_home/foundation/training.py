@@ -11,6 +11,7 @@ from .checkpoint import FORMAT, atomic_save, load_checkpoint
 from .data import canonical_hash, prepare_records, split_records
 from .model import FoundationConfig, FoundationModel
 from .tokenizer import ByteBPE
+from .resources import estimate_training_bytes, available_training_bytes
 
 
 @dataclass(frozen=True)
@@ -171,15 +172,8 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
             config = FoundationConfig(vocab_size=tokenizer.vocab_size)
         elif config.vocab_size != tokenizer.vocab_size:
             config = FoundationConfig(**{**asdict(config), "vocab_size": tokenizer.vocab_size})
-        with torch.device("meta"):
-            estimate_model = FoundationModel(config)
-        estimated = estimate_model.parameter_count * 20 + (
-            training.batch_size * config.context * config.width * config.layers * 32
-            + training.batch_size * config.heads * config.context ** 2 * config.layers * 4
-        )
-        budget = training.memory_budget_bytes
-        if device == "cuda":
-            budget = min(budget, int(torch.cuda.mem_get_info()[0] * 0.8))
+        estimated = estimate_training_bytes(config, training.batch_size)
+        budget = min(training.memory_budget_bytes, available_training_bytes(device))
         if estimated > budget:
             raise ValueError(f"Estimated training bytes {estimated} exceed budget {budget}; reduce configuration")
         model = FoundationModel(config)
@@ -190,12 +184,8 @@ def train(records, output, config=None, training=None, device="auto", resume=Non
             raise ValueError("Evaluation contamination: training includes a previous holdout")
         train_hashes.update(lineage.get("training_document_hashes", []))
         validation_hashes.update(lineage.get("validation_document_hashes", []))
-    estimated = model.parameter_count * 20 + (
-        training.batch_size * config.context * config.width * config.layers * 32
-        + training.batch_size * config.heads * config.context ** 2 * config.layers * 4)
-    budget = training.memory_budget_bytes
-    if device == "cuda":
-        budget = min(budget, int(torch.cuda.mem_get_info()[0] * 0.8))
+    estimated = estimate_training_bytes(config, training.batch_size)
+    budget = min(training.memory_budget_bytes, available_training_bytes(device))
     if estimated > budget:
         raise ValueError("Training memory estimate exceeds budget")
     model.to(device).train()

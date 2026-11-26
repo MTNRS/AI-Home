@@ -1,0 +1,95 @@
+{
+  "plan": {
+    "format": "ai-home-resource-plan-v1",
+    "device": "cuda",
+    "available_budget_bytes": 9285350195,
+    "effective_budget_bytes": 2000000000,
+    "estimated_training_bytes": 67813504,
+    "effective_batch_size": 2,
+    "requested_model": {
+      "vocab_size": 280,
+      "width": 32,
+      "layers": 2,
+      "heads": 4,
+      "kv_heads": 2,
+      "hidden": 64,
+      "context": 16,
+      "rope_theta": 10000.0,
+      "tied_embeddings": true,
+      "gradient_checkpointing": false
+    },
+    "selected_model": {
+      "vocab_size": 280,
+      "width": 32,
+      "layers": 2,
+      "heads": 4,
+      "kv_heads": 2,
+      "hidden": 64,
+      "context": 16,
+      "rope_theta": 10000.0,
+      "tied_embeddings": true,
+      "gradient_checkpointing": false
+    },
+    "requested_training": {
+      "steps": 2,
+      "batch_size": 2,
+      "accumulation": 1,
+      "learning_rate": 0.0003,
+      "warmup": 0,
+      "clip": 1.0,
+      "seed": 42,
+      "checkpoint_every": 25,
+      "precision": "bf16",
+      "memory_budget_bytes": 2000000000,
+      "objective": "causal"
+    },
+    "selected_training": {
+      "steps": 2,
+      "batch_size": 2,
+      "accumulation": 1,
+      "learning_rate": 0.0003,
+      "warmup": 0,
+      "clip": 1.0,
+      "seed": 42,
+      "checkpoint_every": 25,
+      "precision": "bf16",
+      "memory_budget_bytes": 2000000000,
+      "objective": "causal"
+    },
+    "architecture_changed": false,
+    "claim": "Heuristic estimate with 64 MiB runtime allowance; not measured peak memory or a quality benchmark"
+  },
+  "hardware": "NVIDIA GeForce RTX 4070 SUPER",
+  "torch_version": "2.14.1+cu130",
+  "embedding_delta_l2": 0.017053207382559776,
+  "metrics": [
+    {
+      "step": 1,
+      "train_loss": 5.672698497772217,
+      "learning_rate": 0.000165,
+      "elapsed_seconds": 0.32515679999778513,
+      "tokens_per_second": 98.41405746463852,
+      "gpu_peak_bytes": 17619456
+    },
+    {
+      "step": 2,
+      "train_loss": 5.659316062927246,
+      "learning_rate": 2.9999999999999997e-05,
+      "elapsed_seconds": 0.33645590000378434,
+      "tokens_per_second": 190.21809395906016,
+      "gpu_peak_bytes": 17712128,
+      "validation_loss": 5.659934956094493
+    }
+  ],
+  "validation": {
+    "loss": 5.659934956094493,
+    "tokens": 368,
+    "perplexity": 287.12996589428957
+  },
+  "claim": "Tiny mechanical training demonstration, not a model-quality or maximum-capacity benchmark",
+  "calibration": {
+    "previous_estimate_bytes": 704640,
+    "previous_measured_peak_bytes": 17712128,
+    "runtime_allowance_added_bytes": 67108864
+  }
+}

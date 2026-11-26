@@ -104,3 +104,45 @@ control general de catastrophic forgetting ni mejora de razonamiento.
 ## Entorno GPU verificado
 
 Usar `.venv-cuda/Scripts/python.exe` para entrenar con CUDA en este equipo; el Python habitual sigue usando PyTorch CPU. La configuración probada y los comandos completos están en CUDA_VALIDATION.md. FP32/FP16/BF16 están verificados en la RTX 4070 SUPER con modelos diminutos; no presupone tamaños mayores ni participación de cualquier GPU.
+
+
+## Explicit resource fitting
+
+The Foundation CLI accepts `--auto-fit` for fresh training. It compares a shared
+heuristic memory estimate against the smaller of the configured budget and 80%
+of current free GPU memory (CUDA) or available RAM (CPU). It reduces microbatch
+size using divisors of the original effective batch, increasing accumulation to
+preserve that effective batch size. This preserves sample count, not a guarantee
+of bit-identical optimization.
+
+If even one sample cannot fit, the default is an explicit error. Add
+`--allow-model-shrink` to authorize reducing layers, then width/hidden size while
+preserving vocabulary, attention divisibility and context. The requested model is
+the upper bound; there are no unmeasured Nano/Micro/Small capacity claims. This
+order is a deterministic fitting policy, not an architecture-quality search.
+Automatic fitting is prohibited with `--resume`; use the recorded configuration
+for reproducible resume. Fine-tuning/replay do not yet use this CLI fitting path.
+
+```powershell
+python -m ai_home.foundation --dataset authorized.json --model-config model.json --training-config training.json --device cuda --auto-fit --output artifacts/fitted.pt
+```
+
+The command exclusively creates `<checkpoint>.resource-plan.json` with requested
+and selected configurations, available/effective budgets and the estimate. A
+failed run may leave this plan for diagnosis; choose a new output path for a new
+attempt. The normal trainer now shares the same estimator and checks available
+CPU RAM as well as GPU memory. Final tokenizer vocabulary may be smaller than the
+requested ceiling; the actual checkpoint configuration is authoritative.
+
+Calibration exposed a missing runtime allowance: a tiny CUDA experiment estimated
+704,640 bytes but measured 17,712,128 bytes allocated. The estimator now includes
+64 MiB runtime/optimizer workspace allowance; the repeated run estimated
+67,813,504 bytes and measured 17,712,128. `RESOURCE_PLAN_CUDA.json` records both the
+initial discrepancy and the corrected plan, real metrics and parameter change.
+The actual CLI with auto-fit also trained and wrote its checkpoint/plan on CUDA.
+
+This is a heuristic, not a hard memory sandbox or measured maximum-fit guarantee.
+Other kernel workspaces, allocator fragmentation, concurrent processes and host
+dataset tensors can exceed the estimate. No automatic OOM retry, live batch
+resizing, multi-GPU sizing, or large-model benchmark has been demonstrated. The
+runtime allowance is calibrated on one tiny case, not proven sufficient at scale.

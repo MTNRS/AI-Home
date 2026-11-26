@@ -5,7 +5,8 @@ from pathlib import Path
 
 from .data import load_records
 from .model import FoundationConfig
-from .training import TrainingConfig, train
+from .training import TrainingConfig, train, select_device
+from .resources import plan_training
 
 
 def main():
@@ -17,14 +18,29 @@ def main():
     parser.add_argument("--model-config", type=Path)
     parser.add_argument("--training-config", type=Path)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument("--auto-fit", action="store_true")
+    parser.add_argument("--allow-model-shrink", action="store_true")
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--stop-after", type=int)
     args = parser.parse_args()
+    if args.allow_model_shrink and not args.auto_fit:
+        parser.error("--allow-model-shrink requires --auto-fit")
+    if args.auto_fit and args.resume:
+        parser.error("Automatic configuration changes are not permitted during resume")
     records = load_records(args.dataset)[0] if args.dataset else None
     model = FoundationConfig(**json.loads(args.model_config.read_text())) if args.model_config else None
     training = TrainingConfig(**json.loads(args.training_config.read_text())) if args.training_config else TrainingConfig()
     if args.reviewed_export and training.objective != "sft":
         parser.error("--reviewed-export requires a training configuration with objective=sft")
+    if args.auto_fit:
+        args.device = select_device(args.device)
+        model, training, plan = plan_training(model or FoundationConfig(), training, args.device,
+                                              allow_model_shrink=args.allow_model_shrink)
+        plan_path = Path(str(args.output) + ".resource-plan.json")
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        with plan_path.open("x", encoding="utf-8") as output:
+            json.dump(plan, output, indent=2)
+        print(json.dumps({"resource_plan": str(plan_path), **plan}), flush=True)
     result = train(records, args.output, model, training, args.device, args.resume,
                    args.stop_after, on_step=lambda value: print(json.dumps(value), flush=True),
                    reviewed_export=args.reviewed_export)

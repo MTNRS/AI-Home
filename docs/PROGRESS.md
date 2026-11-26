@@ -310,3 +310,15 @@ Conversation source metadata includes the version UUID, while chat/profile reset
 clear the selection. Validation: 194 passed, 4 PostgreSQL skipped; real hidden
 Windows Tk selector/reset checks passed. No global activation is performed by the
 client and no visual layout certification is claimed.
+
+
+### Resource-aware training configuration (2026-11-26)
+
+Added explicit auto-fit CLI and reusable planner preserving effective batch via
+microbatch/accumulation adjustment. Optional model shrinking requires its own flag
+and is disallowed during resume. Plans are retained beside checkpoints. CPU and
+CUDA training share the memory estimate. Real CUDA calibration identified and
+corrected missing runtime overhead; repeated training and actual auto-fit CLI
+execution succeeded. Evidence: RESOURCE_PLAN_CUDA.json; limitations in TRAINING.md.
+
+Validation after calibration: 197 passed, 4 PostgreSQL tests skipped.
