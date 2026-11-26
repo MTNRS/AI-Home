@@ -1584,3 +1584,14 @@ continuo/cache aprobadas en 6,23 s (incluyen las pruebas CPU/CUDA existentes de
 cache; el ciclo continuo se prueba en CPU). Una primera comparacion de prueba
 usaba textos crudos frente a normalizados; se corrigio para comparar el mismo
 corpus preparado. No se promociona el candidato ni se afirma mejora de capacidad.
+
+### Cancelacion durante comparaciones de aprendizaje continuo
+
+El evaluador acepta cancelacion cooperativa entre lotes y al terminar el ultimo,
+restaurando el modo previo. El ciclo continuo transmite la senal hasta evaluacion.
+Pruebas con forwards reales cancelan en el primer lote y en el unico lote,
+verifican pesos intactos/modo restaurado y ausencia de puntuacion parcial.
+La prueba extremo a extremo conserva candidato sin informe de exito, tanto con
+cache como en memoria. 21 pruebas modelo/continuo aprobadas en 25,79 s; despues
+de ampliar el caso extremo a extremo, seis pruebas de continuo aprobadas en
+5,37 s. No cambia la politica de checkpoints de validacion periodica.

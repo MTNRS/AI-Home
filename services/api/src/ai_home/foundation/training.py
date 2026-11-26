@@ -105,19 +105,24 @@ def _sequences(records, tokenizer, context, objective="causal", cache_path=None,
 
 
 @torch.no_grad()
-def evaluate(model, sequences, device, batch_size=2):
+def evaluate(model, sequences, device, batch_size=2, *, cancel=None):
     was_training = model.training
     model.eval()
     total, tokens = 0.0, 0
     try:
-        for inputs, labels in zip(sequences[0].split(batch_size), sequences[1].split(batch_size)):
-            labels = labels.to(device)
+        for start in range(0, len(sequences[0]), batch_size):
+            if cancel is not None and cancel.is_set():
+                raise TrainingCancelled("Evaluation cancelled between batches")
+            inputs = sequences[0][start:start + batch_size]
+            labels = sequences[1][start:start + batch_size].to(device)
             logits, _ = model(inputs.to(device))
             loss = F.cross_entropy(logits.float().flatten(0, 1), labels.flatten(), reduction="sum")
             total += loss.item()
             tokens += (labels != -100).sum().item()
     finally:
         model.train(was_training)
+    if cancel is not None and cancel.is_set():
+        raise TrainingCancelled("Evaluation cancelled after final batch")
     value = total / tokens
     if not math.isfinite(value):
         raise FloatingPointError("Non-finite validation loss")

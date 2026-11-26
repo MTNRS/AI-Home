@@ -20,7 +20,7 @@ def records(prefix):
 
 
 @pytest.mark.parametrize("disk_sequences", [False, True])
-def test_continual_real_training_replay_lineage_and_regression(tmp_path, disk_sequences):
+def test_continual_real_training_replay_lineage_and_regression(tmp_path, disk_sequences, monkeypatch):
     torch.set_num_threads(1)
     old, new, validation = records("Antiguo"), records("Nuevo"), records("Reservado")
     config = FoundationConfig(vocab_size=280, width=32, layers=2, heads=4, kv_heads=2, hidden=64, context=16)
@@ -77,3 +77,66 @@ def test_continual_real_training_replay_lineage_and_regression(tmp_path, disk_se
               validation_records=records("Different"))
     with pytest.raises(ValueError, match="contamination"):
         train(new, tmp_path / "leak2.pt", training=settings, initial_checkpoint=parent, validation_records=old)
+
+
+    # Cancel during the first comparison forward, after candidate training finished.
+    from threading import Event
+    from ai_home.foundation import continual
+    from ai_home.foundation.training import TrainingCancelled
+    cancellation = Event()
+    actual_load = continual.load_checkpoint
+    calls = []
+    def load_with_cancel_hook(*args, **kwargs):
+        model, tokenizer, state = actual_load(*args, **kwargs)
+        def interrupt(*unused):
+            calls.append(True)
+            cancellation.set()
+        model.register_forward_hook(interrupt)
+        return model, tokenizer, state
+    with monkeypatch.context() as patch:
+        patch.setattr(continual, "load_checkpoint", load_with_cancel_hook)
+        with pytest.raises(TrainingCancelled, match="Evaluation cancelled"):
+            run_candidate(parent, tmp_path / "cancelled", tmp_path / "validation.json",
+                          tmp_path / "old.json", dataset_path=tmp_path / "new.json",
+                          training=settings, device="cpu", disk_sequences=disk_sequences,
+                          cancel=cancellation)
+    assert len(calls) == 1
+    assert (tmp_path / "cancelled/candidate.pt").exists()
+    assert not (tmp_path / "cancelled/report.json").exists()
+
+
+@pytest.mark.parametrize("was_training", [False, True])
+@pytest.mark.parametrize("rows", [2, 6])
+def test_evaluation_cancel_restores_mode_without_partial_score(was_training, rows):
+    from threading import Event
+    from ai_home.foundation.model import FoundationModel
+    from ai_home.foundation.training import evaluate, TrainingCancelled
+    torch.set_num_threads(1)
+    model = FoundationModel(FoundationConfig(vocab_size=262, width=16, layers=1,
+                            heads=2, kv_heads=1, hidden=32, context=8))
+    model.train(was_training)
+    before = {key: tensor.clone() for key, tensor in model.state_dict().items()}
+    sequences = (torch.ones(rows, 8, dtype=torch.long), torch.ones(rows, 8, dtype=torch.long))
+    cancellation, calls = Event(), []
+    def cancel_after_batch(*args):
+        calls.append(True)
+        cancellation.set()
+    hook = model.register_forward_hook(cancel_after_batch)
+    try:
+        with pytest.raises(TrainingCancelled, match="Evaluation cancelled"):
+            evaluate(model, sequences, "cpu", cancel=cancellation)
+    finally:
+        hook.remove()
+    assert len(calls) == 1
+    assert model.training is was_training
+    for key, tensor in model.state_dict().items():
+        torch.testing.assert_close(tensor, before[key], atol=0, rtol=0)
+    # Already-cancelled work must not perform even one forward pass.
+    hook = model.register_forward_hook(cancel_after_batch)
+    try:
+        with pytest.raises(TrainingCancelled):
+            evaluate(model, sequences, "cpu", cancel=cancellation)
+    finally:
+        hook.remove()
+    assert len(calls) == 1
+    assert model.training is was_training

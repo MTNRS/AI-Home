@@ -428,3 +428,12 @@ contener texto privado tokenizado, ocupan disco y no se publican automaticamente
 No se garantiza un limite estricto de RAM ni se reutilizan caches existentes.
 Pruebas CPU comparan exactamente metricas con/sin disco y pesos del candidato
 contra una ejecucion reanudada en memoria, conservando linaje y restricciones.
+
+La comparacion del ciclo continuo atiende cancelacion entre lotes de evaluacion
+(y antes de devolver el resultado del ultimo lote). Una cancelacion conserva
+el checkpoint candidato ya escrito, pero no produce `report.json` de comparacion.
+Restaura el modo train/eval previo del modelo. El lote o kernel en curso termina;
+no es una interrupcion instantanea. La iteracion usa vistas por lote sin crear
+una tupla de vistas para todas las secuencias. La validacion periodica interna
+del entrenador conserva su comportamiento de finalizar la validacion y guardar
+el checkpoint al cancelar un entrenamiento.

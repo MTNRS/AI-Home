@@ -14,7 +14,7 @@ from .training import TrainingCancelled, TrainingConfig, _sequences, evaluate, s
 def compare_checkpoint(path, records, objective, device, max_bytes, *, cache_path=None, cancel=None):
     model, tokenizer, _ = load_checkpoint(path, device=device, max_bytes=max_bytes)
     sequences = _sequences(records, tokenizer, model.config.context, objective, cache_path=cache_path, cancel=cancel)
-    return evaluate(model, sequences, device)
+    return evaluate(model, sequences, device, cancel=cancel)
 
 
 def run_candidate(parent, output_dir, validation_path, replay_path, *, dataset_path=None,
