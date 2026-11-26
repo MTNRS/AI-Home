@@ -49,7 +49,8 @@ def test_evaluation_rejects_known_training_families_before_generation(tmp_path, 
         ProbeSuite.model_validate(suite)
 
 
-def test_evolution_trains_two_real_candidates_and_reports_evidence(tmp_path):
+@pytest.mark.parametrize("disk_sequences", [False, True])
+def test_evolution_trains_two_real_candidates_and_reports_evidence(tmp_path, disk_sequences):
     torch.set_num_threads(1)
     paths = {}
     for name in ("old", "new", "holdout"):
@@ -66,7 +67,16 @@ def test_evolution_trains_two_real_candidates_and_reports_evidence(tmp_path):
     suite_path.write_text(json.dumps(suite), encoding="utf-8")
     training_path.write_text(json.dumps(asdict(settings)), encoding="utf-8")
     report = run_evolution(parent, suite_path, paths["holdout"], paths["old"], paths["new"],
-                           training_path, tmp_path / "experiment", device="cpu", max_new_tokens=4)
+                           training_path, tmp_path / "experiment", device="cpu", max_new_tokens=4,
+                           disk_sequences=disk_sequences)
+    assert report["proposal"]["disk_sequences"] is disk_sequences
+    for arm in ("control", "experiment"):
+        assert report[arm]["disk_sequences"] is disk_sequences
+        cache = tmp_path / "experiment" / arm / "sequence-cache"
+        assert cache.exists() is disk_sequences
+        if disk_sequences:
+            for split in ("training/train", "training/validation", "training/replay", "baseline", "candidate"):
+                assert (cache / split / "manifest.json").is_file()
     import threading
     from ai_home.foundation.training import TrainingCancelled
     from ai_home.foundation.checkpoint import load_checkpoint

@@ -61,7 +61,7 @@ def propose_decision(control, experiment, control_loss, experiment_loss, target)
 
 def run_experiment(parent, output_dir, suite, validation, replay, *, dataset=None,
                    reviewed_export=None, training=None, learning_rate_multiplier=0.5,
-                   device="auto", max_new_tokens=64, cancel=None, on_progress=None):
+                   device="auto", max_new_tokens=64, cancel=None, on_progress=None, disk_sequences=False):
     if not math.isfinite(learning_rate_multiplier) or not 0.1 <= learning_rate_multiplier <= 4:
         raise ValueError("Learning-rate multiplier must be between 0.1 and 4")
     if learning_rate_multiplier == 1:
@@ -98,7 +98,7 @@ def run_experiment(parent, output_dir, suite, validation, replay, *, dataset=Non
             "change": {"learning_rate": [training.learning_rate, experimental.learning_rate]},
             "control_config": asdict(training), "experimental_config": asdict(experimental),
             "acceptance_rule": "Strict target accuracy gain, no individual probe regression, loss no worse than finite control",
-            "publication": "disabled"}
+            "publication": "disabled", "disk_sequences": disk_sequences}
         save("proposal.json", proposal)
         reports, evaluations = {}, {}
         for name, config in (("control", training), ("experiment", experimental)):
@@ -106,7 +106,8 @@ def run_experiment(parent, output_dir, suite, validation, replay, *, dataset=Non
             check_cancel()
             reports[name] = run_candidate(parent, output_dir / name, validation, replay,
                 dataset_path=dataset, reviewed_export=reviewed_export, training=config, device=device,
-                cancel=cancel, on_step=lambda item: progress(name + "_training", dict(item)))
+                cancel=cancel, on_step=lambda item: progress(name + "_training", dict(item)),
+                disk_sequences=disk_sequences)
             if reports[name]["parent_sha256"] != baseline["checkpoint_sha256"]:
                 raise RuntimeError("Parent changed after baseline evaluation")
             progress(name + "_evaluation")
@@ -151,6 +152,7 @@ def main():
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--learning-rate-multiplier", type=float, default=0.5)
     parser.add_argument("--max-new-tokens", type=int, default=64)
+    parser.add_argument("--disk-sequences", action="store_true", help="Store training, replay and loss-comparison sequences locally on disk")
     args = parser.parse_args()
     if args.suite.stat().st_size > 8_000_000:
         parser.error("Suite exceeds input budget")
@@ -166,7 +168,7 @@ def main():
             args.validation, args.replay, dataset=args.dataset, reviewed_export=args.reviewed_export,
             training=TrainingConfig(**json.loads(args.training_config.read_text(encoding="utf-8"))),
             device=args.device, learning_rate_multiplier=args.learning_rate_multiplier, max_new_tokens=args.max_new_tokens, cancel=cancel,
-            on_progress=lambda item: print(json.dumps(item), flush=True))
+            on_progress=lambda item: print(json.dumps(item), flush=True), disk_sequences=args.disk_sequences)
     except (TrainingCancelled, EvaluationCancelled):
         print(json.dumps({"status": "cancelled", "promoted": False}), flush=True)
         raise SystemExit(130)

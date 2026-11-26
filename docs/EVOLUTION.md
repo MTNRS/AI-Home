@@ -99,3 +99,18 @@ instance. Closing the experiment window or changing account requests cancellatio
 normal application close waits for controlled shutdown. Other applications and
 API processes are not coordinated. Output directories are exclusive, and the
 normal lineage, authorization and regression gates remain in force.
+
+### Secuencias locales en disco
+
+El CLI admite `--disk-sequences`; `run_experiment` y `run_evolution` admiten
+`disk_sequences=True`. Se aplica por igual a control y experimento, incluyendo
+entrenamiento, replay y comparaciones de perdida. La propuesta y ambos informes
+registran la opcion. Cada rama conserva sus caches separados dentro de su
+subdirectorio, sin reutilizar archivos preexistentes. La evaluacion generativa
+por probes conserva su recorrido habitual.
+
+No cambia las reglas de aceptacion ni publica pesos. Los caches pueden contener
+datos privados tokenizados y no deben tratarse como artefactos publicos. La opcion
+reduce materializacion de secuencias en RAM, sin garantizar una cota estricta.
+Por ahora se selecciona desde CLI/API Python; el dialogo de evolucion no expone
+un selector. El valor predeterminado conserva la preparacion en memoria.

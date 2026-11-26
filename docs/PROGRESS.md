@@ -1604,3 +1604,12 @@ Confirmadas ejecuciones remotas satisfactorias en `d23c974`: matriz Python
 (45847739148), incluidos paquete instalado, Tk, API y distribuido. El inventario
 separa esa evidencia de los cambios mas recientes de cache/cancelacion continuos,
 validados localmente. No se declara completado el objetivo general.
+
+### Cache de secuencias en evolucion experimental
+
+Transmitida la opcion de disco desde CLI y entrada Python basada en archivos a
+las dos ramas del experimento. Propuesta e informes registran el modo. La prueba
+entrena dos candidatos reales en ambos modos y verifica los cinco caches de cada
+rama, conservando evaluacion, rechazo/promocion deshabilitada y cancelacion.
+Trece pruebas de evolucion/continuo aprobadas en 8,08 s. Selector visual pendiente;
+no se afirma una mejora de capacidad ni una nueva medicion de memoria.
