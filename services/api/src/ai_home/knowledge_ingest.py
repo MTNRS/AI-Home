@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from ai_home.foundation.data import canonical_hash
+from ai_home.immutable_artifacts import publish_bytes
 
 MAX_BYTES = 8_000_000
 
@@ -63,10 +64,7 @@ def approve_records(pending_path, review_path, output_path, *, purpose="retrieva
     raw = json.dumps(dataset, ensure_ascii=False, indent=2).encode("utf-8")
     if len(raw) > MAX_BYTES:
         raise ValueError("Approved dataset exceeds loader budget")
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb") as output:
-        output.write(raw)
+    publish_bytes(output_path, raw)
     return dataset["dataset_version"]
 
 
@@ -77,8 +75,7 @@ def create_review_template(pending_path, output_path):
                            "privacy_reviewed": False, "license_reviewed": False,
                            "training_allowed": False, "retrieval_allowed": False}
                           for record in records]}
-    with Path(output_path).open("x", encoding="utf-8") as output:
-        json.dump(review, output, ensure_ascii=False, indent=2)
+    publish_bytes(output_path, json.dumps(review, ensure_ascii=False, indent=2).encode("utf-8"))
 
 
 def main():

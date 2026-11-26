@@ -10,7 +10,7 @@ from ai_home.knowledge import KnowledgeIndex, build_index, retrieval_messages, c
 
 def test_dataset_index_job_cancellation_and_exclusive_publication(tmp_path, monkeypatch):
     from ai_home.knowledge import build_from_dataset
-    import ai_home.knowledge as knowledge
+    import ai_home.immutable_artifacts as knowledge
     dataset = tmp_path / "dataset.json"
     dataset.write_text(json.dumps({"format_version": 1, "records": records()}), encoding="utf-8")
     output = tmp_path / "index.json"
@@ -26,7 +26,7 @@ def test_dataset_index_job_cancellation_and_exclusive_publication(tmp_path, monk
     monkeypatch.setattr(knowledge.os, "link", fail_publication)
     with pytest.raises(OSError, match="Publication"):
         build_from_dataset(dataset, output)
-    assert not output.exists() and not list(tmp_path.glob("*.index.tmp"))
+    assert not output.exists() and not list(tmp_path.glob("*.artifact.tmp"))
     monkeypatch.setattr(knowledge.os, "link", original_link)
     report = build_from_dataset(dataset, output)
     original = output.read_bytes()

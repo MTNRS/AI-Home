@@ -2,15 +2,14 @@
 from collections import Counter
 import json
 import math
-import os
 from pathlib import Path
 import re
-import tempfile
 import unicodedata
 from urllib.parse import urlsplit
 
 from ai_home.foundation.data import canonical_hash, prepare_records
 from ai_home.privacy import contains_common_secret
+from ai_home.immutable_artifacts import publish_bytes
 
 FORMAT = "ai-home-knowledge-v1"
 MAX_BYTES = 8_000_000
@@ -56,20 +55,8 @@ def build_index(records, path, chunk_chars=800, *, embedder=None, cancel=None):
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
     if len(raw) > MAX_BYTES:
         raise ValueError("Knowledge index budget exceeded")
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     check_cancel()
-    # Publish complete bytes exclusively; interruptions cannot leave a partial index.
-    fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".index.tmp")
-    try:
-        with os.fdopen(fd, "wb") as output:
-            output.write(raw)
-            output.flush()
-            os.fsync(output.fileno())
-        check_cancel()
-        os.link(temporary, path)
-    finally:
-        Path(temporary).unlink(missing_ok=True)
+    publish_bytes(path, raw, before_publish=check_cancel)
     return payload["version"]
 
 

@@ -9,6 +9,7 @@ import unicodedata
 from urllib.parse import quote
 
 import httpx
+from ai_home.immutable_artifacts import publish_bytes
 
 MAX_DOCUMENT_BYTES = 500_000
 MAX_BATCH_BYTES = 8_000_000
@@ -84,9 +85,7 @@ def acquire(specifications, output, *, transport=None):
             if size > MAX_BATCH_BYTES:
                 raise ValueError("Pending batch exceeds review budget")
             rows.append(row)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("xb") as target:
-        target.write(b"".join(rows))
+    publish_bytes(output, b"".join(rows))
     return {"documents": len(rows), "bytes": size, "output": str(output.resolve()),
             "state": "pending-license-and-privacy-review"}
 

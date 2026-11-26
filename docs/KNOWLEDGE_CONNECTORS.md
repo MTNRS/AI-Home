@@ -49,3 +49,15 @@ public AI-Home repository at `2ddea7d`, totaling 24,891 pending JSONL bytes. See
 review template are under ignored `artifacts/github-connector-v1/`; neither was
 admitted to training or retrieval. Tests also cover review promotion, denied use,
 immutable references, invalid paths, redirection, size limits and HTTP failures.
+
+## Complete-file publication
+
+Pending connector batches, review templates, approved datasets and knowledge
+indexes now share exclusive complete-file publication. Bytes are written and
+flushed to a temporary file in the destination directory before an exclusive
+hard link exposes the final name. Existing versions are never replaced, including
+when two writers race. Cancellation before publication and ordinary write/flush
+failures remove the temporary file and leave no final target. Filesystems without
+hard-link support fail explicitly. A forced process termination can leave a
+uniquely named `.artifact.tmp` file; it cannot expose a partial final artifact.
+This is not a claim of directory-metadata durability across machine power loss.

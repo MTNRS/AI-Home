@@ -803,3 +803,14 @@ fuentes mutables, rutas inválidas, redirecciones, HTTP fallido y exceso de byte
 Descarga real de dos documentos AI-Home: 24.891 bytes JSONL; evidencia en
 GITHUB_CONNECTOR_SMOKE.json, sin aprobación automática. Suite Windows/CUDA:
 280 correctas, 5 PostgreSQL omitidas. Documentación en KNOWLEDGE_CONNECTORS.md.
+
+### Publicación completa de artefactos de conocimiento
+
+Unificados candidatos descargados, plantillas de revisión, datasets aprobados e
+índices en una primitiva de escritura/flush y publicación exclusiva. Se evita
+exponer destinos parciales si falla la escritura; dos publicadores concurrentes
+conservan exactamente un archivo completo. Las pruebas inyectan fallo de flush,
+cancelación previa y carrera de publicación. Suite local: 282 correctas y 5
+PostgreSQL omitidas. La matriz PostgreSQL de la revisión anterior 7ee0a90 terminó
+correctamente en Actions (run 45813703815); esta modificación tiene validación
+local y todavía no se atribuye a aquella ejecución remota.
