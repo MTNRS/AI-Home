@@ -143,6 +143,7 @@ class TrainingContribution(Base):
         index=True,
     )
     conversation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    correction: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     source_endpoint: Mapped[str] = mapped_column(String(500), nullable=False)
     model: Mapped[str] = mapped_column(String(160), nullable=False)

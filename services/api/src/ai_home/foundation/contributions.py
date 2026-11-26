@@ -44,5 +44,6 @@ def load_reviewed_export(path, max_bytes=8_000_000):
             "visibility": "reviewed-training-only", "messages": messages,
             "text": "\n".join(m["content"] for m in messages),
             "dataset_version": export.dataset_version, "manifest_sha256": export.manifest_sha256,
+            **({"correction": item.correction.model_dump()} if item.correction is not None else {}),
         })
     return prepare_records(records, allow_reviewed=True)

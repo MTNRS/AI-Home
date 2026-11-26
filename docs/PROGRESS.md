@@ -860,3 +860,16 @@ cancelar implícitamente jobs financiados. Deadline entre pasadas, no interrupci
 forzosa de llamadas o kernels. Pruebas con reloj virtual de control y reconciliación
 real API/ledger/checkpoint; suite completa: 285 correctas, 5 PostgreSQL omitidas.
 No se presenta como servicio del sistema ni supervisor multihost.
+
+### Correcciones voluntarias con procedencia y SFT
+
+Nueva API owner-only de corrección: consentimiento renovado, revisión de derechos
+/privacidad, candidato independiente pendiente y prefijo hasta la respuesta
+corregida. Preserva original, vincula ID/hash de respuesta reemplazada, no incorpora
+turnos derivados posteriores ni evita la revisión. Migración 0009 añade metadatos
+nullable; congelación/exportación los vincula al manifest y SFT conserva ámbito
+restringido. Test extremo a extremo entrena pesos reales; incluye acceso cruzado,
+secretos, permisos, duplicados, revisión y compatibilidad de exportaciones previas.
+Suite: 286 correctas, 5 PostgreSQL omitidas; comprobación final correcciones/revisión/
+migración: 10 correctas. No se migró producción. Ver TRAINING_CORRECTIONS.md.
+Interfaz de edición, contribuciones del propio proveedor y preferencias pendientes.

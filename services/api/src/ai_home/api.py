@@ -91,6 +91,7 @@ from ai_home.schemas import (
     TrainingContributionExportResponse,
     TrainingContributionReviewResponse,
     TrainingContributionRequest,
+    TrainingCorrectionRequest,
     TrainingContributionResponse,
     TrainingDatasetExportResponse,
     TrainingDatasetResponse,
@@ -736,6 +737,9 @@ def create_app(
         current_user: AuthenticatedUser = Depends(get_current_user),
         session: Session = Depends(get_db),
     ) -> TrainingContribution:
+        return store_training_contribution(payload, current_user, session)
+
+    def store_training_contribution(payload, current_user, session, correction=None):
         messages = [message.model_dump() for message in payload.messages]
         if _contains_secret(messages):
             raise HTTPException(
@@ -757,6 +761,7 @@ def create_app(
             consent_scope=payload.consent_scope,
             consent_at_epoch=int(time.time()),
             status="pending_review",
+            correction=correction,
         )
         session.add(contribution)
         try:
@@ -770,6 +775,35 @@ def create_app(
                 detail="This conversation already has a training contribution.",
             ) from None
         return contribution
+
+    @app.post("/api/v1/training/conversations/{contribution_id}/corrections",
+              response_model=TrainingContributionResponse, status_code=201)
+    def correct_training_contribution(contribution_id: str, payload: TrainingCorrectionRequest,
+                                     current_user: AuthenticatedUser = Depends(get_current_user),
+                                     session: Session = Depends(get_db)):
+        source = session.scalar(select(TrainingContribution).where(
+            TrainingContribution.contribution_id == contribution_id,
+            TrainingContribution.owner_user_id == current_user.user_id))
+        if source is None:
+            raise HTTPException(status_code=404, detail="Training contribution not found.")
+        index = payload.message_index
+        if index >= len(source.messages) or source.messages[index]["role"] != "assistant":
+            raise HTTPException(status_code=422, detail="Corrections must target an assistant message.")
+        if payload.replacement == source.messages[index]["content"] or not payload.replacement.strip():
+            raise HTTPException(status_code=422, detail="Provide a distinct nonempty correction.")
+        messages = [dict(message) for message in source.messages[:index + 1]]
+        original = messages[index]["content"]
+        messages[index]["content"] = payload.replacement
+        try:
+            candidate = TrainingContributionRequest.model_validate({
+                **payload.model_dump(exclude={"message_index", "replacement"}),
+                "provider": source.provider, "source_endpoint": source.source_endpoint,
+                "model": source.model, "messages": messages})
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Correction requires renewed consent and reuse/privacy attestations.") from None
+        return store_training_contribution(candidate, current_user, session, correction={
+            "kind": "human_correction_v1", "source_contribution_id": source.contribution_id,
+            "message_index": index, "original_content_sha256": hashlib.sha256(original.encode("utf-8")).hexdigest()})
 
     @app.get(
         "/api/v1/training/conversations",
@@ -975,6 +1009,7 @@ def create_app(
                 "reviewed_at_epoch": item.reviewed_at_epoch,
                 "review_checklist": item.review_checklist,
                 "messages": item.messages,
+                **({"correction": item.correction} if item.correction is not None else {}),
             }
             for item in contributions
         ]
@@ -1034,6 +1069,7 @@ def create_app(
     @app.get(
         "/api/v1/admin/training/datasets/{dataset_id}",
         response_model=TrainingDatasetExportResponse,
+        response_model_exclude_none=True,
     )
     def get_training_dataset(
         dataset_id: str,

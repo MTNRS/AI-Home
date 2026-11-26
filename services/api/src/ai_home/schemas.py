@@ -155,7 +155,28 @@ class TrainingContributionRequest(BaseModel):
         return self
 
 
+class TrainingCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    conversation_id: UUID
+    message_index: StrictInt = Field(ge=0, le=49)
+    replacement: StrictStr = Field(min_length=1, max_length=8192)
+    consent: StrictBool
+    consent_version: Literal["training_consent_v1"]
+    consent_scope: Literal["conversation_for_aihome_training_candidates"]
+    provider_terms_allow_reuse: StrictBool
+    content_reviewed_for_sensitive_data: StrictBool
+
+
+class CorrectionProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_contribution_id: str = Field(min_length=36, max_length=36)
+    message_index: StrictInt = Field(ge=0, le=49)
+    original_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    kind: Literal["human_correction_v1"]
+
+
 class TrainingContributionResponse(BaseModel):
+    correction: CorrectionProvenance | None = None
     contribution_id: str
     conversation_id: UUID
     provider: str
@@ -240,6 +261,7 @@ class TrainingDatasetResponse(BaseModel):
 
 
 class FrozenTrainingRecord(BaseModel):
+    correction: CorrectionProvenance | None = None
     contribution_id: str
     provider: str
     source_endpoint: str
