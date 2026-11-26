@@ -210,6 +210,36 @@ def test_foundation_chat_uses_real_trained_checkpoint(client, tmp_path, monkeypa
     response = client.post("/api/v1/chat/completions", headers=headers, json={"messages": other})
     assert response.json()["choices"][0]["message"]["content"] == complete(
         other, path, device="cpu", max_new_tokens=8)
+    from uuid import uuid4
+    from sqlalchemy import select
+    from ai_home.models import User
+    from ai_home.credits import CreditLedger
+    from ai_home.job_credits import user_account_id
+    settings.foundation_inference_price = 7
+    with client.app.state.session_factory() as session:
+        owner = user_account_id(session.scalar(select(User.user_id)))
+    ledger = CreditLedger(client.app.state.engine)
+    ledger.create_account("test-chat-issuance", "test", allow_negative=True)
+    ledger.create_account(owner, "user")
+    ledger.post(idempotency_key="chat-funding", operation="test", postings={"test-chat-issuance": -20, owner: 20})
+    assert client.get("/api/v1/credits/inference-price", headers=headers).json()["credits_per_completion"] == 7
+    assert client.post("/api/v1/chat/completions", headers=headers, json={"messages": messages}).status_code == 402
+    paid = {"messages": messages, "credit_limit": 7, "credit_request_id": str(uuid4())}
+    response = client.post("/api/v1/chat/completions", headers=headers, json=paid)
+    assert response.status_code == 200 and response.json()["charged_credits"] == 7
+    assert response.json()["choices"][0]["message"]["content"] == complete(messages, path, device="cpu", max_new_tokens=8)
+    assert client.post("/api/v1/chat/completions", headers=headers, json=paid).status_code == 409
+    assert ledger.balance(owner) == 13
+    assert ledger.balance("service:foundation-inference") == 7
+    assert client.get("/api/v1/credits", headers=headers).json()["reserved"] == 0
+    assert client.post("/api/v1/chat/stream", headers=headers, json=paid).status_code == 503
+    path.write_bytes(b"invalid checkpoint")
+    failed = {**paid, "credit_request_id": str(uuid4())}
+    assert client.post("/api/v1/chat/completions", headers=headers, json=failed).status_code == 503
+    assert ledger.balance(owner) == 13
+    assert client.get("/api/v1/credits", headers=headers).json()["reserved"] == 0
+    assert client.post("/api/v1/chat/completions", headers=headers, json=failed).status_code == 409
+    settings.foundation_inference_price = 0
     path.write_bytes(b"invalid checkpoint")
     response = client.post("/api/v1/chat/completions", headers=headers, json={"messages": messages})
     assert response.status_code == 503

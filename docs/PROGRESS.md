@@ -541,3 +541,17 @@ funds rollback, ownership, conflicts, repeated refunds/settlements, injected
 posting failure rollback, two concurrent duplicate reservations and concurrent
 settlement on file-backed SQLite. Migration upgrade/check/downgrade passed.
 Full suite: 251 passed, 4 PostgreSQL skips. No real user funds were touched.
+
+
+### Non-streaming inference credit integration
+
+Connected optional flat Foundation completion pricing to authenticated API
+requests, explicit per-request spending limits/UUIDs, transactional reservation,
+success settlement and runtime-failure refund. Added price discovery, response
+charge metadata and inference reservations in balance summaries. Duplicate keys
+return 409 without repeat generation or debit. Paid streaming is explicitly
+unavailable until its cancellation accounting is integrated. Default price is 0;
+no deployment or real account was changed. Existing real-model API test now
+verifies a genuine generated completion charged once, retry rejection and corrupt
+checkpoint refund. Full suite: 251 passed, 4 PostgreSQL skips; final chat checks:
+11 passed. Desktop consent, streaming and crash reconciliation remain outstanding.

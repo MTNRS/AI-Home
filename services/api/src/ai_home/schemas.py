@@ -77,6 +77,8 @@ class FoundationGeneration(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
+    credit_request_id: UUID | None = None
+    credit_limit: int = Field(default=0, ge=0, le=1_000_000, strict=True)
     generation: FoundationGeneration | None = None
     use_knowledge: StrictBool = False
     model_version: UUID | None = None
@@ -281,6 +283,8 @@ class KnowledgeReference(BaseModel):
 
 
 class ChatCompletionResponse(BaseModel):
+    charged_credits: int = 0
+    credit_request_id: UUID | None = None
     generation: FoundationGeneration | None = None
     model_config = ConfigDict(protected_namespaces=("model_validate", "model_dump"))
     model_version: UUID | None = None

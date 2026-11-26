@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     session_lifetime_seconds: int = 86_400
     chat_backend: Literal["foundation", "openai-compatible"] = "foundation"
     knowledge_index: Path | None = None
+    foundation_inference_price: int = Field(default=0, ge=0, le=1_000_000)
     foundation_registry: Path | None = None
     foundation_checkpoint: Path | None = None
     foundation_device: Literal["auto", "cpu", "cuda"] = "auto"

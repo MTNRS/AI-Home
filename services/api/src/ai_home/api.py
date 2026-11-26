@@ -33,7 +33,8 @@ from ai_home.auth import (
     verify_password,
 )
 from ai_home.config import Settings
-from ai_home.credits import Account, InsufficientCredits, LedgerTransaction, Posting
+from ai_home.credits import Account, InsufficientCredits, LedgerTransaction, Posting, IdempotencyConflict
+from ai_home.inference_credits import InferenceFunding, reserve_inference, resolve_inference
 from ai_home.job_credits import JobFunding, refund_job, user_account_id
 from ai_home.database import build_engine
 from ai_home.inference import chat_completion
@@ -493,12 +494,43 @@ def create_app(
         options["max_new_tokens"] = maximum if maximum is not None else settings.foundation_max_new_tokens
         return options
 
+    @app.get("/api/v1/credits/inference-price")
+    def inference_price(request: Request, _user: AuthenticatedUser = Depends(get_current_user)):
+        price = request.app.state.settings.foundation_inference_price
+        return {"credits_per_completion": price, "paid_streaming_available": False,
+                "billing_unit": "successfully_computed_completion"}
+
+    def reserve_chat_credit(payload, request, user):
+        price = request.app.state.settings.foundation_inference_price
+        if not price:
+            return None
+        if payload.credit_request_id is None or payload.credit_limit < price:
+            raise HTTPException(status_code=402, detail="Explicit credit request ID and sufficient credit limit required.")
+        digest = hashlib.sha256(payload.model_dump_json().encode()).hexdigest()
+        try:
+            with request.app.state.session_factory() as session, session.begin():
+                funding, created = reserve_inference(session, user.user_id, str(payload.credit_request_id), digest, price)
+                if not created:
+                    raise HTTPException(status_code=409, detail="Credit request already processed or in progress; inference was not repeated.")
+                return funding.request_id
+        except InsufficientCredits:
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for inference.") from None
+        except IdempotencyConflict:
+            raise HTTPException(status_code=409, detail="Credit request ID conflicts with an earlier request.") from None
+
+    def finish_chat_credit(request, user, reservation, *, refund=False):
+        if reservation is not None:
+            with request.app.state.session_factory() as session, session.begin():
+                resolve_inference(session, reservation, user.user_id, refund=refund)
+
     @app.post("/api/v1/chat/stream")
     def stream_foundation_chat(payload: ChatCompletionRequest, request: Request,
                                _user: AuthenticatedUser = Depends(get_current_user)):
         settings = request.app.state.settings
         if settings.chat_backend != "foundation":
             raise HTTPException(status_code=503, detail="Streaming requires the Foundation backend.")
+        if settings.foundation_inference_price:
+            raise HTTPException(status_code=503, detail="Paid streaming is not yet available; use non-streaming completion.")
         if settings.foundation_checkpoint is None and settings.foundation_registry is None:
             raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
         if payload.model_version is not None and settings.foundation_registry is None:
@@ -574,7 +606,9 @@ def create_app(
             if not foundation_inference_lock.acquire(blocking=False):
                 raise HTTPException(status_code=503, detail="Foundation inference is busy.",
                                     headers={"Retry-After": "1"})
+            reservation = None
             try:
+                reservation = reserve_chat_credit(payload, request, current_user)
                 from ai_home.foundation.inference import complete
 
                 selected_version = None
@@ -604,13 +638,22 @@ def create_app(
                     answer, references = result
                 else:
                     answer = result
+                finish_chat_credit(request, current_user, reservation)
+            except HTTPException:
+                finish_chat_credit(request, current_user, reservation, refund=True)
+                raise
             except Exception:
+                try:
+                    finish_chat_credit(request, current_user, reservation, refund=True)
+                except Exception:
+                    logging.exception("Inference refund failed; durable reservation requires reconciliation")
                 # Do not return filesystem paths, checkpoint contents or conversation data.
                 raise HTTPException(status_code=503,
                                     detail="Foundation inference failed; verify the checkpoint and runtime.") from None
             finally:
                 foundation_inference_lock.release()
-            return ChatCompletionResponse(generation=options, model_version=selected_version, references=references, choices=[{
+            return ChatCompletionResponse(charged_credits=settings.foundation_inference_price,
+                                          credit_request_id=payload.credit_request_id, generation=options, model_version=selected_version, references=references, choices=[{
                 "index": 0, "message": {"role": "assistant", "content": answer},
                 "finish_reason": "stop",
             }])
@@ -1286,6 +1329,8 @@ def create_app(
         account = session.get(Account, account_id)
         reserved = session.scalar(select(func.sum(JobFunding.amount)).where(
             JobFunding.owner_account == account_id, JobFunding.status == "reserved")) or 0
+        reserved += session.scalar(select(func.sum(InferenceFunding.amount)).where(
+            InferenceFunding.owner_account == account_id, InferenceFunding.status == "reserved")) or 0
         earned = session.scalar(select(func.sum(JobFunding.amount)).where(
             JobFunding.worker_account == account_id, JobFunding.owner_account != account_id,
             JobFunding.status == "settled")) or 0
