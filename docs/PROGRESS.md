@@ -1788,3 +1788,13 @@ ni truncado; limites explicitos de documentos y lectura. Seis pruebas aprobadas
 (16.66 s): CLI real con ambas entradas, checkpoint entrenado, resultados reales
 agregados, creditos, reanudacion, particion estable y rechazo de datos privados.
 Documentado el comando reproducible en DISTRIBUTED_TRAINING.md.
+
+
+### Verificacion integral tras planes desde datasets
+
+Suite local completa de fddfb20: 411 aprobadas y 7 PostgreSQL omitidas,
+en 78.42 segundos, sin fallos. CI comprobada de ae2078d: Tests 45854301608
+(Python 3.11/3.12 con PostgreSQL) y Foundation 45854301525 concluidos con
+exito; verificados sus pasos, incluido paquete instalado, observador distribuido,
+permisos de evaluacion en Tk y entrenamiento distribuido. CI de fddfb20 aun
+en ejecucion al consultar; no se declara aprobada. Actualizado FOUNDATION_STATUS.
