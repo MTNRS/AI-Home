@@ -596,3 +596,14 @@ The initial SQLite naive/aware ORM synchronization failure was corrected by
 using database-only deadline predicates and refreshing the row. Final suite:
 258 passed, 4 PostgreSQL skips; migration upgrade/check/downgrade passed.
 No production database or real user balance was changed.
+
+
+### Account deletion and pending inference credits
+
+Account deletion now refunds reserved inference in the same local deletion
+transaction while preserving settled charges and pseudonymous ledger evidence.
+Paid reservation admission and deletion serialize through the user row, with a
+fresh existence check after authentication. The deletion API test covers pending
+and settled reservations, final balances, session revocation and rejection of a
+late settlement attempt. Full suite: 258 passed, 4 PostgreSQL skips. Concurrent
+account deletion/admission has not been exercised against PostgreSQL here.

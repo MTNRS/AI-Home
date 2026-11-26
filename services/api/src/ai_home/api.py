@@ -34,7 +34,7 @@ from ai_home.auth import (
 )
 from ai_home.config import Settings
 from ai_home.credits import Account, InsufficientCredits, LedgerTransaction, Posting, IdempotencyConflict
-from ai_home.inference_credits import InferenceFunding, reserve_inference, resolve_inference, refund_expired_inference
+from ai_home.inference_credits import InferenceFunding, reserve_inference, resolve_inference, refund_expired_inference, refund_pending_inference
 from ai_home.job_credits import JobFunding, refund_job, user_account_id
 from ai_home.database import build_engine
 from ai_home.inference import chat_completion
@@ -511,6 +511,11 @@ def create_app(
         digest = hashlib.sha256(payload.model_dump_json().encode()).hexdigest()
         try:
             with request.app.state.session_factory() as session, session.begin():
+                # A no-op write serializes reservation admission with account deletion
+                # on SQLite as well as PostgreSQL; authentication alone can race deletion.
+                admitted = session.execute(update(User).where(User.user_id == user.user_id).values(user_id=user.user_id))
+                if not admitted.rowcount:
+                    raise HTTPException(status_code=401, detail="Account no longer available.")
                 funding, created = reserve_inference(session, user.user_id, str(payload.credit_request_id), digest, price,
                                                       lifetime_seconds=request.app.state.settings.foundation_reservation_seconds)
                 if not created:
@@ -1132,6 +1137,10 @@ def create_app(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Password confirmation failed.",
             )
+        admitted = session.execute(update(User).where(User.user_id == current_user.user_id).values(user_id=current_user.user_id))
+        if not admitted.rowcount:
+            raise HTTPException(status_code=401, detail="Account no longer available.")
+        refund_pending_inference(session, current_user.user_id)
         session.execute(
             delete(AuthSession).where(AuthSession.user_id == current_user.user_id)
         )

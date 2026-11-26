@@ -139,6 +139,24 @@ def test_account_deletion_requires_password_and_revokes_all_sessions(
     second_token = login(client)
     headers = {"Authorization": f"Bearer {first_token}"}
 
+    from sqlalchemy import select
+    from ai_home.models import User
+    from ai_home.credits import CreditLedger, InvalidPosting
+    from ai_home.inference_credits import reserve_inference, resolve_inference, InferenceFunding
+    from ai_home.job_credits import user_account_id
+    with client.app.state.session_factory() as session:
+        owner = session.scalar(select(User.user_id))
+    ledger = CreditLedger(client.app.state.engine)
+    ledger.create_account("deletion-test", "test", allow_negative=True)
+    ledger.create_account(user_account_id(owner), "user")
+    ledger.post(idempotency_key="deletion-fund", operation="test", postings={"deletion-test":-20, user_account_id(owner):20})
+    with client.app.state.session_factory() as session, session.begin():
+        pending, _ = reserve_inference(session, owner, "pending", "a"*64, 7)
+        pending_id = pending.request_id
+        completed, _ = reserve_inference(session, owner, "completed", "a"*64, 5)
+        completed_id = completed.request_id
+        resolve_inference(session, completed_id, owner)
+
     rejected = client.request(
         "DELETE",
         "/api/v1/users/me",
@@ -161,6 +179,14 @@ def test_account_deletion_requires_password_and_revokes_all_sessions(
     assert deleted.status_code == 204
     assert first_session_after_delete.status_code == 401
     assert second_session_after_delete.status_code == 401
+    assert ledger.balance(user_account_id(owner)) == 15
+    assert ledger.balance("service:foundation-inference") == 5
+    with client.app.state.session_factory() as session, session.begin():
+        assert session.get(InferenceFunding, pending_id).status == "refunded"
+        assert session.get(InferenceFunding, completed_id).status == "settled"
+        with pytest.raises(InvalidPosting):
+            resolve_inference(session, pending_id, owner)
+
 
 
 def test_database_readiness_endpoint_checks_database(client: TestClient):

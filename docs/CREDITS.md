@@ -202,3 +202,17 @@ A settlement already in progress may win the race; completed charges are never
 refunded by this recovery path. Existing deadline-less reservations from 0007
 are migrated with their creation time as expiry, making pending legacy records
 immediately recoverable. Deploy migrations with inference workers stopped.
+
+
+### Account closure with pending inference
+
+Successful account deletion refunds every still-reserved inference belonging to
+that account in the deletion transaction, even if its expiry has not arrived.
+Settled computation is not refunded. The pseudonymous ledger and terminal
+reservation records remain for conservation/idempotency; no messages are added
+to them. A worker whose reservation was refunded cannot settle later.
+
+Paid inference admission rechecks the account under a database write lock shared
+with deletion. A request authenticated before deletion cannot create a fresh
+reservation after the account disappears. The worker's actual model computation
+may still finish, but its refunded reservation cannot charge again.

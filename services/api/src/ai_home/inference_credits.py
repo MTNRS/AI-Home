@@ -113,3 +113,13 @@ def refund_expired_inference(session, user_id, *, limit=100):
             if row.status != "settled":
                 raise
     return recovered
+
+
+def refund_pending_inference(session, user_id):
+    """Account closure: caller must first serialize admission on the user row."""
+    rows = session.scalars(select(InferenceFunding).where(
+        InferenceFunding.owner_account == user_account_id(user_id),
+        InferenceFunding.status == "reserved").with_for_update()).all()
+    for row in rows:
+        resolve_inference(session, row.request_id, user_id, refund=True)
+    return len(rows)
