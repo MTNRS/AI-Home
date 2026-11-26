@@ -1134,3 +1134,13 @@ La ejecución Foundation duplicada de PR aún corría al registrar esta evidenci
 - 6 pruebas imágenes/inferencia pasaron; 4 pruebas de imágenes pasaron tras añadir
   la CLI. Pillow 13.0.0 en entorno CUDA; conflicto heredado Streamlit documentado.
 - Sin entrenamiento automático con imágenes ni capacidades visuales demostradas.
+
+## 2026-11-26 — Manifiestos visuales autorizados y versionados
+
+- Pares imagen-caption con procedencia, autorización, revisión de privacidad,
+  hashes y particiones explícitas train/validation; solo registros públicos.
+- Carga perezosa acotada verifica los mismos bytes que decodifica; rechazo de
+  rutas fuera del corpus, duplicados exactos y alteraciones posteriores.
+- 16 pruebas imágenes/datasets pasaron en 2.76s. Revisión visual humana necesaria;
+  no hay detector de datos personales en píxeles ni duplicados perceptuales.
+- Documentación del formato en [VISION_PREFIX.md](VISION_PREFIX.md).
