@@ -19,13 +19,14 @@ def test_late_answer_cannot_enter_another_conversation():
     app = SimpleNamespace(
         chat_request_active=False, prompt_is_placeholder=False,
         prompt=Mock(), messages=[], memory_notes=[],
-        use_server_ai_var=Mock(), session_token="private-token",
+        use_server_ai_var=Mock(), use_knowledge_var=Mock(return_value=False), session_token="private-token",
         session_server_url="https://one.example", conversation_source=None,
         api_key_var=Mock(), conversation_id="alice-chat", active_memory_ids=set(),
         _append_chat=Mock(), _background=Mock(), _layout_home=Mock(), status_var=Mock(),
     )
     app.prompt.get.return_value = "Private question"
     app.use_server_ai_var.get.return_value = True
+    app.use_knowledge_var.get.return_value = False
     method("_send_message")(app)
     operation, success, failure = app._background.call_args.args
     assert len(app.messages) == 1
@@ -47,7 +48,7 @@ def test_profile_switch_clears_chat_and_closes_old_memory_dialogs(tmp_path, monk
     window = Mock()
     app = SimpleNamespace(
         private_windows=[window], memory_notes=["old secret"],
-        prompt=Mock(), api_key_var=Mock(), prompt_is_placeholder=True,
+        prompt=Mock(), api_key_var=Mock(), use_knowledge_var=Mock(), prompt_is_placeholder=True,
         _clear_chat=Mock(),
     )
     method("_switch_memory_profile")(app, "https://one.example", str(uuid4()))
@@ -68,3 +69,13 @@ def test_stale_background_error_is_discarded_before_display():
     method("_drain_events")(app)
     app.status_var.set.assert_not_called()
     assert events.empty()
+
+
+def test_retrieval_conversation_cannot_lose_provenance_in_training_submission():
+    app = SimpleNamespace(conversation_used_knowledge=True)
+    callback = method("_submit_training_candidate")
+    dialog = Mock()
+    callback.__globals__["messagebox"] = dialog
+    callback(app)
+    dialog.showerror.assert_called_once()
+    assert "licencias" in dialog.showerror.call_args.args[1]

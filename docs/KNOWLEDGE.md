@@ -60,9 +60,33 @@ newly trained random-initialized small Foundation checkpoint. The corpus is an
 authored synthetic fixture. Generated text is not a demonstrated factual answer.
 
 There is no network ingestion, online refresh scheduler, semantic neural encoder,
-large-scale vector database, or desktop reference panel in this increment.
+or large-scale vector database in this increment.
 Existing Wikipedia ingestion remains separate. Arbitrary source connectors,
-review workflows, semantic retrieval evaluation and desktop presentation remain
+review workflows and semantic retrieval evaluation remain
 part of the full objective. The current public training permission requirement is
 stricter than retrieval-only licensing and needs a distinct permission model in
 a later pipeline revision.
+
+
+## Desktop
+
+Under provider routing, enable the server and explicitly select retrieval of
+reviewed public sources. Local direct-provider mode rejects this option rather
+than silently ignoring it. The setting resets when the account changes.
+The chat's “Fuentes recuperadas” button opens a read-only viewer grouping sources
+by assistant message, with URL, license, date, language, document hash, offset,
+index version and the actual excerpt. No URLs are opened automatically.
+The completion status reports the number of sources, including zero matches.
+References are kept outside the conversation messages and cleared with the chat;
+private viewers close when the account changes. The viewer explicitly states that
+retrieved sources do not verify the answer.
+
+Until training exports can retain and review source licenses, the desktop blocks
+contribution submission for conversations that used retrieval. This is a client
+workflow safeguard, not server-side provenance enforcement for arbitrary clients.
+The existing explicit-consent review process still applies to all submitted data.
+
+Validation: 175 tests passed, 4 PostgreSQL tests skipped. A real Windows Tk
+construction check (windows hidden, settings/memory loaders isolated) opened the
+reference viewer and exercised chat clearing and profile switching successfully.
+This is a widget/function check, not a visual layout review.

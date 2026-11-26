@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 import hashlib
 import json
 import math
@@ -39,6 +40,7 @@ from ai_home.providers import (
 )
 from ai_home.privacy import contains_common_secret
 from ai_home.schemas import (
+    KnowledgeReference,
     NodeCredentialResponse,
     SessionResponse,
     TrainingContributionExportResponse,
@@ -353,14 +355,25 @@ def _raise_for_auth_response(response: httpx.Response) -> None:
     response.raise_for_status()
 
 
-def server_chat_completion(
+@dataclass(frozen=True)
+class ServerChatResult:
+    answer: str
+    references: tuple[KnowledgeReference, ...] = ()
+
+
+def server_chat_completion(server_url, user_token, messages, **options) -> str:
+    return server_chat_result(server_url, user_token, messages, **options).answer
+
+
+def server_chat_result(
     server_url: str,
     user_token: str,
     messages: list[dict[str, str]],
     *,
+    use_knowledge: bool = False,
     timeout_seconds: float = 180,
     transport: httpx.BaseTransport | None = None,
-) -> str:
+) -> ServerChatResult:
     with httpx.Client(
         base_url=normalize_base_url(server_url),
         headers={"Authorization": f"Bearer {user_token}"},
@@ -369,10 +382,29 @@ def server_chat_completion(
     ) as client:
         response = client.post(
             "/api/v1/chat/completions",
-            json={"messages": messages},
+            json={"messages": messages, **({"use_knowledge": True} if use_knowledge else {})},
         )
         response.raise_for_status()
-        return extract_chat_content(response.json())
+        data = response.json()
+        references = tuple(KnowledgeReference.model_validate(item) for item in data.get("references", []))
+        return ServerChatResult(extract_chat_content(data), references)
+
+
+def format_knowledge_references(turns) -> str:
+    lines = ["Fragmentos enviados al modelo; no garantizan que su respuesta sea correcta.",
+             "Conocimiento recuperado, separado de los pesos y de la memoria personal.", ""]
+    if not turns:
+        lines.append("Todavía no se ha utilizado recuperación en esta conversación.")
+    for message_index, references in turns:
+        lines.append(f"Respuesta en el mensaje {message_index + 1}")
+        if not references:
+            lines.append("No se encontraron fragmentos relevantes.")
+        for number, reference in enumerate(references, 1):
+            lines.extend([f"[{number}] {reference.source}", reference.url,
+                          f"Licencia: {reference.license} · Fecha: {reference.date} · Idioma: {reference.language}",
+                          f"Documento: {reference.document_sha256} · Posición: {reference.offset}",
+                          f"Índice: {reference.index_version}", reference.text, ""])
+    return "\n".join(lines)
 
 
 def settings_path() -> Path:
@@ -458,6 +490,8 @@ def main() -> None:
             self.memory_vault = profile_memory_vault()
             self.private_windows = []
             self.messages: list[dict[str, str]] = []
+            self.knowledge_references = []
+            self.conversation_used_knowledge = False
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
             self.chat_request_active = False
@@ -1168,6 +1202,8 @@ def main() -> None:
                 ),
                 foreground="#666666",
             ).pack(side="left", padx=(8, 0))
+            ttk.Button(memory_controls, text="Fuentes recuperadas",
+                       command=self._show_knowledge_references).pack(side="right")
             conversation = ttk.Frame(parent)
             conversation.pack(fill="both", expand=True, padx=24, pady=(0, 8))
             self.chat_messages_canvas = tk.Canvas(
@@ -1401,12 +1437,18 @@ def main() -> None:
                 ),
                 wraplength=760,
             ).pack(anchor="w")
+            self.use_knowledge_var = tk.BooleanVar(value=False)
             self.use_server_ai_var = tk.BooleanVar(value=False)
             ttk.Checkbutton(
                 routing,
                 text="Usar el proveedor configurado por mi servidor AI@Home",
                 variable=self.use_server_ai_var,
             ).pack(anchor="w", pady=(8, 0))
+            ttk.Checkbutton(
+                routing,
+                text="Recuperar fuentes públicas revisadas (requiere Foundation en el servidor)",
+                variable=self.use_knowledge_var,
+            ).pack(anchor="w", pady=(6, 0))
             ttk.Label(
                 routing,
                 text="La clave nunca se envía al servidor AI@Home.",
@@ -1724,6 +1766,9 @@ def main() -> None:
             )
             try:
                 use_server = self.use_server_ai_var.get()
+                use_knowledge = self.use_knowledge_var.get()
+                if use_knowledge and not use_server:
+                    raise ValueError("La recuperación de fuentes requiere activar el servidor AI@Home.")
                 if use_server:
                     if self.session_token is None or self.session_server_url is None:
                         raise ValueError(
@@ -1746,10 +1791,11 @@ def main() -> None:
                             "conversación, o límpiala antes de cambiar."
                         )
                     self.api_key_var.set("")
-                    operation = lambda: server_chat_completion(
+                    operation = lambda: server_chat_result(
                         server_url,
                         user_token,
                         request_messages,
+                        use_knowledge=use_knowledge,
                     )
                 else:
                     provider_id, provider_url = self._selected_provider()
@@ -1804,9 +1850,14 @@ def main() -> None:
 
             request_conversation_id = self.conversation_id
 
-            def on_success(answer: str) -> None:
+            def on_success(result: str | ServerChatResult) -> None:
                 if self.conversation_id != request_conversation_id:
                     return
+                answer = result.answer if isinstance(result, ServerChatResult) else result
+                if use_knowledge:
+                    self.conversation_used_knowledge = True
+                    references = result.references if isinstance(result, ServerChatResult) else ()
+                    self.knowledge_references.append((len(self.messages), references))
                 self.chat_request_active = False
                 self.sphere_emotion = _sphere_emotion_for_text(answer)
                 self._layout_home()
@@ -1815,7 +1866,8 @@ def main() -> None:
                     note.id for note in selected_memories
                 )
                 self._append_chat("IA", answer)
-                self.status_var.set(f"Respuesta de {model}")
+                suffix = f" · {len(references)} fuentes recuperadas" if use_knowledge else ""
+                self.status_var.set(f"Respuesta de {model}{suffix}")
 
             self._background(
                 operation,
@@ -1841,8 +1893,21 @@ def main() -> None:
             self.prompt.delete("1.0", "end")
             self.prompt_is_placeholder = False
             self.api_key_var.set("")
+            self.use_knowledge_var.set(False)
+
+        def _show_knowledge_references(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Fuentes recuperadas de esta conversación")
+            window.geometry("760x500")
+            content = tk.Text(window, wrap="word")
+            content.pack(fill="both", expand=True, padx=12, pady=12)
+            content.insert("end", format_knowledge_references(self.knowledge_references))
+            content.configure(state="disabled")
 
         def _clear_chat(self) -> None:
+            self.knowledge_references.clear()
+            self.conversation_used_knowledge = False
             self.chat_request_active = False
             self.training_submission_active = False
             self.messages.clear()
@@ -1856,6 +1921,14 @@ def main() -> None:
             self.chat_messages_canvas.yview_moveto(0)
 
         def _submit_training_candidate(self) -> None:
+            if self.conversation_used_knowledge:
+                messagebox.showerror(
+                    "AI@Home",
+                    "Esta conversación usó fuentes recuperadas. Su envío para entrenamiento "
+                    "requiere conservar y revisar las licencias de las fuentes; inicia otra conversación.",
+                    parent=self,
+                )
+                return
             if self.training_submission_active:
                 return
             if self.training_candidate_submitted:

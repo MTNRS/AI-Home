@@ -231,3 +231,13 @@ retrieval, not weight training or a demonstrated improvement in model quality.
 See [Knowledge retrieval](KNOWLEDGE.md) for commands,
 permissions, tests and limitations. Network connectors and desktop references
 remain outstanding.
+
+
+### Desktop retrieval references (2026-11-26)
+
+Connected the opt-in server retrieval request to the desktop chat. Source metadata
+is validated and rendered in a read-only viewer separate from conversation text.
+Account transitions reset retrieval selection and close private viewers. Training
+submission of retrieval conversations is held pending a provenance-preserving
+export/review workflow. Validation: 175 passed, 4 skipped; actual hidden Windows
+Tk construction/viewer/clear/profile-switch check passed. See KNOWLEDGE.md.

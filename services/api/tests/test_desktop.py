@@ -512,3 +512,29 @@ def test_training_candidate_management_client_lists_and_withdraws():
     assert contributions[0].model == "gpt-test"
     assert contribution.messages[0].content == "Question"
 
+
+
+def test_server_retrieval_opt_in_preserves_structured_references():
+    from ai_home.desktop import server_chat_result, format_knowledge_references
+    reference = dict(id="document:0", source="Reviewed source", url="https://example.org/source",
+                     license="CC0", date="2026-11-26", language="es", document_sha256="a" * 64,
+                     offset=0, text="Marte tiene dos lunas.", score=0.8, index_version="b" * 64)
+
+    def handle(request):
+        assert json.loads(request.read())["use_knowledge"] is True
+        assert request.headers["Authorization"] == "Bearer account-token"
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "Respuesta real del servidor"}}],
+            "references": [reference],
+        })
+
+    result = server_chat_result("https://community.example", "account-token",
+                                [{"role": "user", "content": "Marte"}], use_knowledge=True,
+                                transport=httpx.MockTransport(handle))
+    assert result.answer == "Respuesta real del servidor"
+    assert result.references[0].model_dump() == reference
+    display = format_knowledge_references([(1, result.references)])
+    assert reference["url"] in display and reference["text"] in display
+    assert reference["index_version"] in display
+    assert "no garantizan" in display
+    assert "No se encontraron" in format_knowledge_references([(1, ())])
