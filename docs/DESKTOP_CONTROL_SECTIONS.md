@@ -41,4 +41,8 @@ and Python `-I`, rather than the development checkout. Linux Foundation CI now
 installs Tk/Xvfb and runs the same script with an isolated interpreter on a virtual
 display after installing the wheel. This is a widget/routing test, not a screenshot
 review; visual claims still come only from the explicit Windows observations.
-The first remote execution of this new gate is pending verification.
+The first remote execution passed on revision `2969fa1`: [Foundation run
+45827171081](https://github.com/MTNRS/AI-Home/actions/runs/45827171081). Its log
+confirms all ten real-Tk routes and opening the training form. The same run passed
+291 tests (15 optional PostgreSQL/CUDA omissions), real training/packaging,
+installed API and distributed-worker checks, and artifact upload.

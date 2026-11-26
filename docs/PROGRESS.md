@@ -1086,3 +1086,12 @@ rutas y abrió formulario real de training correctamente en Windows. Workflow
 Foundation añade Xvfb/Tk y misma prueba sobre wheel instalado en Linux. Resultado
 remoto pendiente; no sustituye revisión visual. No entrenamiento/red/cuenta en
 el smoke GUI. La suite neuronal no se repite por este ajuste de CI/script.
+
+### Resultado remoto del gate Tk
+
+Ejecución Foundation 45827171081 de 2969fa1 terminada correctamente: Tk real sobre
+Xvfb desde wheel instalado verifica diez rutas y formulario de training. 291 tests
+correctos / 15 omisiones opcionales; entrenamiento, paquete, API instalada,
+distribuido y subida de artefactos correctos. PostgreSQL Python 3.11/3.12 también
+correctos en 45827171504. Resultado observado, no inferido de configuración.
+La ejecución Foundation duplicada de PR aún corría al registrar esta evidencia.
