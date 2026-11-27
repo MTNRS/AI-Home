@@ -511,3 +511,99 @@ def test_training_candidate_management_client_lists_and_withdraws():
 
     assert contributions[0].model == "gpt-test"
     assert contribution.messages[0].content == "Question"
+
+
+
+def test_server_retrieval_opt_in_preserves_structured_references():
+    from ai_home.desktop import server_chat_result, format_knowledge_references
+    reference = dict(id="document:0", source="Reviewed source", url="https://example.org/source",
+                     license="CC0", date="2026-11-26", language="es", document_sha256="a" * 64,
+                     offset=0, text="Marte tiene dos lunas.", score=0.8, index_version="b" * 64)
+
+    def handle(request):
+        assert json.loads(request.read())["use_knowledge"] is True
+        assert request.headers["Authorization"] == "Bearer account-token"
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "Respuesta real del servidor"}}],
+            "references": [reference],
+        })
+
+    result = server_chat_result("https://community.example", "account-token",
+                                [{"role": "user", "content": "Marte"}], use_knowledge=True,
+                                transport=httpx.MockTransport(handle))
+    assert result.answer == "Respuesta real del servidor"
+    assert result.references[0].model_dump() == reference
+    display = format_knowledge_references([(1, result.references)])
+    assert reference["url"] in display and reference["text"] in display
+    assert reference["index_version"] in display
+    assert "no garantizan" in display
+    assert "No se encontraron" in format_knowledge_references([(1, ())])
+
+
+def test_model_catalog_and_version_pin_contract():
+    from uuid import uuid4
+    from ai_home.desktop import server_model_versions, server_chat_result
+    version, other = str(uuid4()), str(uuid4())
+    def handle(request):
+        assert request.headers["Authorization"] == "Bearer token"
+        if request.method == "GET":
+            return httpx.Response(200, json={"models": [{"id": version, "active": True}]})
+        assert json.loads(request.read())["model_version"] == version
+        return httpx.Response(200, json={"choices": [{"message": {"content": "answer"}}],
+                                        "model_version": other})
+    transport = httpx.MockTransport(handle)
+    assert server_model_versions("https://example.org", "token", transport=transport) == [version]
+    with pytest.raises(ValueError, match="versión distinta"):
+        server_chat_result("https://example.org", "token", [{"role": "user", "content": "Hi"}],
+                           model_version=version, transport=transport)
+
+
+def test_credit_view_uses_authenticated_balances_and_signed_transactions():
+    from ai_home.desktop import server_credits, format_credits
+    balance = {"available": 93, "reserved": 7, "earned": 0}
+    transactions = [{"transaction_id": 2, "operation": "job_reserve", "amount": -7,
+                     "created_at": "2026-11-26T10:00:00"},
+                    {"transaction_id": 1, "operation": "operator_grant:test", "amount": 100,
+                     "created_at": "2026-11-26T09:00:00"}]
+    def handle(request):
+        assert request.headers["Authorization"] == "Bearer own-account"
+        assert request.method == "GET"
+        return httpx.Response(200, json=transactions if request.url.path.endswith("transactions") else balance)
+    result = server_credits("https://example.org", "own-account", transport=httpx.MockTransport(handle))
+    assert result == (balance, transactions)
+    text = format_credits(*result)
+    assert "Disponibles: 93" in text and "Reservados: 7" in text
+    assert "-7" in text and "+100" in text
+    assert "Reserva para trabajo" in text and "Asignación del operador" in text
+    assert "No hay movimientos" in format_credits(balance, [])
+
+
+def test_credit_view_rejects_invalid_balance_and_auth_failure():
+    from ai_home.desktop import server_credits
+    def invalid(request):
+        return httpx.Response(200, json=[] if request.url.path.endswith("transactions") else
+                              {"available": True, "reserved": 0, "earned": 0})
+    with pytest.raises(ValueError, match="saldo"):
+        server_credits("https://example.org", "token", transport=httpx.MockTransport(invalid))
+    with pytest.raises(httpx.HTTPStatusError):
+        server_credits("https://example.org", "expired", transport=httpx.MockTransport(
+            lambda request: httpx.Response(401)))
+
+
+def test_generation_dialog_parsing_and_complete_request_forwarding():
+    from ai_home.desktop import parse_generation_settings, server_chat_result
+    values = {"temperature": "0", "top_k": "20", "top_p": "0.8",
+              "repetition_penalty": "1.2", "seed": "7", "max_new_tokens": ""}
+    options = parse_generation_settings(values)
+    assert "max_new_tokens" not in options
+    assert options["temperature"] == 0 and options["seed"] == 7
+    for key, value in (("temperature", "nan"), ("top_k", "1.5"), ("max_new_tokens", "5000"),
+                       ("seed", "-1"), ("top_p", "0")):
+        with pytest.raises(ValueError):
+            parse_generation_settings({**values, key: value})
+    def handle(request):
+        assert json.loads(request.read())["generation"] == options
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+    result = server_chat_result("https://example.org", "token", [{"role": "user", "content": "Hi"}],
+                                generation=options, transport=httpx.MockTransport(handle))
+    assert result.answer == "ok"

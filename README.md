@@ -1,5 +1,9 @@
 # AI@Home
 
+Estado experimental Foundation: [inventario de implementación, pruebas y pendientes](docs/FOUNDATION_STATUS.md). [PR de desarrollo #1](https://github.com/MTNRS/AI-Home/pull/1), todavía en borrador. Hay entrenamiento textual y visual propio desde cero, sin calidad conversacional ni comprensión visual general demostradas.
+
+La [vía visual experimental](docs/VISION_PREFIX.md) permite entrenar pares PNG/JPEG–texto autorizados, reanudar checkpoints FP32/FP16/BF16 y ejecutar inferencia local con streaming desde el escritorio. TRAINING incluye entrenamiento visual con métricas y cancelación; FOUNDATION MODEL incluye prueba de imágenes. El único aprendizaje visual medido por ahora es un experimento de tres colores sólidos: 6/6 intensidades reservadas, control blanco 2/6; no representa fotografías ni objetos reales. Consulta la documentación para formatos, comandos reproducibles y límites.
+
 AI@Home es un proyecto comunitario de inteligencia artificial abierta, con el
 objetivo de permitir investigación colaborativa y computación voluntaria sin
 comprometer la privacidad de sus participantes.
@@ -25,6 +29,11 @@ los trabajos de nodos no están conectados a créditos.
   datos y resultados; no se afirman entrenamientos ni mejoras no realizados.
 - **Acceso responsable al conocimiento:** se respetan licencias, permisos,
   privacidad y controles de acceso de las fuentes.
+
+Desarrollos experimentales locales: [adquisición de fuentes revisables](docs/KNOWLEDGE_CONNECTORS.md),
+[entrenamiento sobre documentación propia](docs/REPOSITORY_DOCUMENT_EXPERIMENT.md) y
+[preferencias DPO con pares explícitamente revisados](docs/PREFERENCE_LEARNING.md).
+Sus informes distinguen mecanismos comprobados de capacidades aún no demostradas.
 
 ## Documentación
 
@@ -259,3 +268,77 @@ con consentimiento explícito pueden enviarse a nodos; no deben incluir datos
 personales, secretos ni valores confidenciales. El repositorio de GitHub sigue
 siendo privado. Apache-2.0 se aplica al código de este repositorio; modelos,
 pesos y datasets tienen licencias propias que deben comprobarse individualmente.
+
+## Foundation Model — implementación inicial (2026-11-26)
+
+**Registro histórico del primer hito.** Los resultados y pendientes de este apartado corresponden a aquella ejecución; para el estado actual usa [FOUNDATION_STATUS.md](docs/FOUNDATION_STATUS.md) y [PROGRESS.md](docs/PROGRESS.md).
+
+Se añade un subsistema propio en `ai_home.foundation` con BPE desde cero, Transformer RoPE/GQA, entrenamiento, checkpoints e inferencia. El modelo byte-level y las funcionalidades anteriores se conservan. La integración de escritorio añade un proveedor independiente para checkpoints propios.
+
+**Estado: parcial, mecánica neuronal verificada en CPU (2026-11-26).** La suite ejecutada obtiene 127 pruebas aprobadas y 5 omitidas (CUDA y PostgreSQL). El smoke entrena 27.808 parámetros desde cero durante ocho pasos, reanuda desde el paso cuatro, guarda/carga checkpoints y genera texto real todavía incoherente. Cambio L2 de embeddings tras reanudación: 0,02502243; pérdida de validación: 5,615235. PyTorch disponible: 2.15.0+cpu. La integración visual y distribución siguen sin demostrar; CUDA se verificó posteriormente en un entorno separado (ver CUDA_VALIDATION.md). Las restricciones de instalación descritas anteriormente ya no bloquean CPU; la publicación remota sigue pendiente.
+
+Consultar [auditoría y matriz completa](docs/FOUNDATION_AUDIT.md), [modelo](docs/FOUNDATION_MODEL.md), [entrenamiento](docs/TRAINING.md) y [pruebas](docs/TESTING.md). Aprendizaje continuo, distribución, créditos de entrenamiento, RAG público, evolución y paneles completos siguen pendientes; no se reduce el objetivo ni se declaran demostrados.
+
+
+
+## Chat HTTP con Foundation (2026-11-26)
+
+Configurar `AI_HOME_CHAT_BACKEND=foundation` (valor predeterminado),
+`AI_HOME_FOUNDATION_CHECKPOINT` con la ruta al checkpoint propio y
+`AI_HOME_FOUNDATION_DEVICE=cpu`, `cuda` o `auto`. El límite de salida se configura
+con `AI_HOME_FOUNDATION_MAX_NEW_TOKENS` (1–4096); el presupuesto de carga con
+`AI_HOME_FOUNDATION_MEMORY_BUDGET_BYTES`. El checkpoint lo elige el operador,
+no una ruta arbitraria enviada por el cliente.
+
+La ruta autenticada `/api/v1/chat/completions` usa inferencia neuronal local.
+Un checkpoint ausente, corrupto o una dependencia no disponible devuelve 503;
+no hay fallback externo. Cada petición crea su propio modelo/cache y no guarda
+mensajes ni los incorpora al entrenamiento. Una generación simultánea por
+proceso; se devuelve 503 y Retry-After cuando está ocupado. Desplegar un único
+worker por dispositivo para respetar este límite. La carga por petición es
+conservadora y puede añadir latencia; caché de pesos compartida pendiente.
+
+Para conservar el proxy externo, configurar explícitamente
+`AI_HOME_CHAT_BACKEND=openai-compatible` además de sus variables anteriores.
+Esta selección explícita es necesaria al actualizar instalaciones del proxy.
+El endpoint HTTP devuelve una respuesta completa; streaming/cancelación HTTP
+siguen pendientes (el generador neuronal ya soporta ambos localmente).
+
+## Validación GPU completada — 2026-11-26
+
+Entrenamiento, reanudación e inferencia propios verificados en RTX 4070 SUPER con FP32/FP16/BF16. Suite del entorno CUDA: 139 aprobadas, 4 omitidas (PostgreSQL). Checkpoint y métricas reales conservados. No se atribuye calidad conversacional. Comandos y límites: [docs/CUDA_VALIDATION.md](docs/CUDA_VALIDATION.md).
+
+## Entrenamiento experimental en nodos
+
+Existe una demostración reproducible de gradientes reales aportados por dos identidades de nodo mediante procesos separados y HTTP loopback. Agrega gradientes, actualiza pesos, guarda checkpoints y genera texto. Solo se ha verificado en un equipo y CPU; no se reclama rendimiento distribuido multihost. Véase [DISTRIBUTED_TRAINING.md](docs/DISTRIBUTED_TRAINING.md).
+
+La API experimental tambien admite `foundation.evaluate.v1` para perdida causal
+sobre pesos y datos publicos acotados, con recomputacion CPU antes de conceder
+creditos. Requiere habilitacion independiente en servidor y trabajador; no esta
+activada por defecto. El panel de nodos permite autorizar evaluacion por separado. Hay un smoke reproducible con sockets HTTP loopback y trabajadores CPU/CUDA
+en procesos separados; no se ha demostrado entre equipos distintos.
+
+
+## Créditos por contribuciones verificadas
+
+Los trabajos Foundation pueden financiar recompensas mediante reservas del solicitante. La verificación del resultado y el abono al contribuyente comparten transacción; cancelaciones y fallos terminales devuelven fondos. Consultas de saldo/movimientos propios y migración 0006 disponibles. Véase [CREDITS.md](docs/CREDITS.md). El cobro de inferencia sigue pendiente.
+
+
+### Public knowledge retrieval increment (2026-11-26)
+
+Added a versioned reviewed-public TF-IDF index with provenance, bounded context
+packing, and opt-in retrieval in authenticated Foundation chat. Retrieved text
+and personal memories use user-level context, not system instructions. This is
+retrieval, not weight training or a demonstrated improvement in model quality.
+See [Knowledge retrieval](docs/KNOWLEDGE.md) for commands,
+permissions, tests and limitations. Network connectors and desktop references
+remain outstanding.
+
+
+### Model lifecycle registry (2026-11-26)
+
+Added local content-addressed candidate storage with real retained-checkpoint
+evaluation, explicit approval gates, transactional activation history and rollback.
+Foundation API serving can select the active approved registry version. Direct
+checkpoint mode remains available and is not an approval claim. See
+[Model registry](docs/MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.

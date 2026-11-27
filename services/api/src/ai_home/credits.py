@@ -168,56 +168,66 @@ class CreditLedger:
 
         try:
             with Session(self._engine) as session, session.begin():
-                existing = session.scalar(
-                    select(LedgerTransaction).where(
-                        LedgerTransaction.idempotency_key == idempotency_key
-                    )
-                )
-                if existing is not None:
-                    return self._existing_receipt(existing, request_hash)
-
-                transaction = LedgerTransaction(
-                    idempotency_key=idempotency_key,
-                    operation=operation,
-                    request_hash=request_hash,
-                )
-                session.add(transaction)
-                session.flush()
-
-                for account_id, amount in canonical_postings:
-                    result = session.execute(
-                        update(Account)
-                        .where(Account.account_id == account_id)
-                        .where(
-                            (Account.allow_negative.is_(True))
-                            | (Account.balance + amount >= 0)
-                        )
-                        .values(balance=Account.balance + amount)
-                    )
-                    if result.rowcount != 1:
-                        account = session.get(Account, account_id)
-                        if account is None:
-                            raise AccountNotFound(account_id)
-                        raise InsufficientCredits(account_id)
-                    session.add(
-                        Posting(
-                            transaction_id=transaction.transaction_id,
-                            account_id=account_id,
-                            amount=amount,
-                        )
-                    )
-
-                session.flush()
-                return LedgerReceipt(
-                    transaction_id=transaction.transaction_id,
-                    idempotency_key=idempotency_key,
-                    operation=operation,
-                )
+                return self.post_in_session(session, idempotency_key=idempotency_key,
+                                            operation=operation, postings=postings)
         except IntegrityError:
             existing = self._find_transaction(idempotency_key)
             if existing is None:
                 raise
             return self._existing_receipt(existing, request_hash)
+
+    @classmethod
+    def post_in_session(cls, session: Session, *, idempotency_key: str,
+                        operation: str, postings: Mapping[str, int]) -> LedgerReceipt:
+        """Join the caller transaction; the caller must roll back on failure."""
+        canonical_postings = cls._validate(idempotency_key=idempotency_key,
+                                          operation=operation, postings=postings)
+        request_hash = cls._request_hash(operation, canonical_postings)
+        existing = session.scalar(
+            select(LedgerTransaction).where(
+                LedgerTransaction.idempotency_key == idempotency_key
+            )
+        )
+        if existing is not None:
+            return cls._existing_receipt(existing, request_hash)
+
+        transaction = LedgerTransaction(
+            idempotency_key=idempotency_key,
+            operation=operation,
+            request_hash=request_hash,
+        )
+        session.add(transaction)
+        session.flush()
+
+        for account_id, amount in canonical_postings:
+            result = session.execute(
+                update(Account)
+                .where(Account.account_id == account_id)
+                .where(
+                    (Account.allow_negative.is_(True))
+                    | (Account.balance + amount >= 0)
+                )
+                .values(balance=Account.balance + amount)
+            )
+            if result.rowcount != 1:
+                account = session.get(Account, account_id)
+                if account is None:
+                    raise AccountNotFound(account_id)
+                raise InsufficientCredits(account_id)
+            session.add(
+                Posting(
+                    transaction_id=transaction.transaction_id,
+                    account_id=account_id,
+                    amount=amount,
+                )
+            )
+
+        session.flush()
+        return LedgerReceipt(
+            transaction_id=transaction.transaction_id,
+            idempotency_key=idempotency_key,
+            operation=operation,
+        )
 
     @staticmethod
     def _validate(
@@ -278,3 +288,4 @@ class CreditLedger:
             idempotency_key=transaction.idempotency_key,
             operation=transaction.operation,
         )
+

@@ -187,3 +187,4 @@ def test_native_adapters_reject_malformed_responses(provider, body):
                 lambda _request: httpx.Response(200, json=body)
             ),
         )
+

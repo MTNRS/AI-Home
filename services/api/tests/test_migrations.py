@@ -29,6 +29,8 @@ def test_initial_migration_creates_identity_and_credit_tables(tmp_path, monkeypa
         "credit_accounts",
         "credit_transactions",
         "credit_postings",
+        "job_funding",
+        "inference_funding",
         "compute_nodes",
         "compute_jobs",
         "training_contributions",
@@ -54,8 +56,42 @@ def test_initial_migration_creates_identity_and_credit_tables(tmp_path, monkeypa
         "credit_accounts",
         "credit_transactions",
         "credit_postings",
+        "job_funding",
+        "inference_funding",
         "compute_nodes",
         "compute_jobs",
         "training_contributions",
         "training_datasets",
     } & table_names
+
+
+def test_packaged_migrations_outside_checkout(tmp_path, monkeypatch):
+    from ai_home.migrate import migration_config
+    from sqlalchemy import text
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('AI_HOME_ENVIRONMENT', 'test')
+    monkeypatch.setenv('AI_HOME_DATABASE_URL', 'sqlite+pysqlite:///packaged.db')
+    config = migration_config()
+    command.upgrade(config, '0008_inference_expiry')
+    command.upgrade(config, 'head')
+    command.upgrade(config, 'head')
+    command.check(config)
+    engine = create_engine('sqlite+pysqlite:///packaged.db')
+    try:
+        with engine.connect() as connection:
+            assert connection.scalar(text('select version_num from alembic_version')) == '0010_job_scheduling'
+        assert 'correction' in {column['name'] for column in inspect(engine).get_columns('training_contributions')}
+    finally:
+        engine.dispose()
+
+def test_explicit_migration_settings_do_not_target_environment_database(tmp_path, monkeypatch):
+    from ai_home.config import Settings
+    from ai_home.migrate import migration_config
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('AI_HOME_DATABASE_URL', 'sqlite+pysqlite:///untouched.db')
+    settings = Settings(_env_file=None, environment='test', database_url='sqlite+pysqlite:///selected.db')
+    command.upgrade(migration_config(settings), 'head')
+    command.check(migration_config(settings))
+    assert (tmp_path / 'selected.db').exists()
+    assert not (tmp_path / 'untouched.db').exists()

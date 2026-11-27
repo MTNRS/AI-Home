@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 import hashlib
 import json
 import math
@@ -14,18 +15,20 @@ from pathlib import Path
 import sys
 from typing import TypeGuard, TypeVar
 from urllib.parse import urlsplit
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import keyring
 
+from ai_home.chat_credits import credit_authorization, validate_credit_receipt
+from ai_home.chat_stream import GenerationCancelled, stream_server_chat
 from ai_home.inference import chat_completion, extract_chat_content
 from ai_home.memory import (
     MemoryNote,
     delete_memory,
     load_memories,
     messages_with_memory_context,
-    memory_vault_path,
+    profile_memory_vault,
     retrieve_memories,
     save_memory,
 )
@@ -35,10 +38,16 @@ from ai_home.providers import (
     PROVIDER_LABELS,
     ChatProviderId,
     ProviderId,
+    TrainingProviderId,
+    FoundationChatResult,
+    foundation_chat_result,
     provider_completion,
 )
 from ai_home.privacy import contains_common_secret
 from ai_home.schemas import (
+    KnowledgeReference,
+    FoundationGeneration,
+    JobSummaryResponse,
     NodeCredentialResponse,
     SessionResponse,
     TrainingContributionExportResponse,
@@ -111,12 +120,12 @@ def _is_provider_id(value: str) -> TypeGuard[ChatProviderId]:
     return value in PROVIDER_LABELS
 
 
-def _is_training_provider(value: str) -> TypeGuard[ProviderId]:
-    return value in {"openai", "anthropic", "gemini", "openai-compatible"}
+def _is_training_provider(value: str) -> TypeGuard[TrainingProviderId]:
+    return value in {"openai", "anthropic", "gemini", "openai-compatible", "ai-home-foundation"}
 
 
 def _provider_keyring_account(provider: ChatProviderId, endpoint: str) -> str:
-    if provider == "ai-home-local":
+    if provider in {"ai-home-local", "ai-home-foundation"}:
         return "local-model"
     if provider == "openai-compatible":
         normalized_endpoint = normalize_base_url(endpoint)
@@ -197,7 +206,7 @@ def submit_training_candidate(
     server_url: str,
     user_token: str,
     conversation_id: str,
-    provider: ProviderId,
+    provider: TrainingProviderId,
     source_endpoint: str,
     model: str,
     messages: list[dict[str, str]],
@@ -255,6 +264,23 @@ def list_training_candidates(
     if not isinstance(body, list):
         raise ValueError("El servidor devolvió una lista de aportaciones no válida.")
     return [TrainingContributionResponse.model_validate(item) for item in body]
+
+
+def submit_training_correction(server_url, user_token, contribution_id, message_index, replacement,
+                               *, consent, reviewed, conversation_id, transport=None):
+    from ai_home.schemas import TrainingCorrectionRequest
+    payload = TrainingCorrectionRequest(conversation_id=conversation_id, message_index=message_index,
+        replacement=replacement, consent=consent, consent_version="training_consent_v1",
+        consent_scope="conversation_for_aihome_training_candidates", provider_terms_allow_reuse=reviewed,
+        content_reviewed_for_sensitive_data=reviewed)
+    if not consent or not reviewed:
+        raise ValueError("Renueva consentimiento y revisión antes de enviar la corrección.")
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20, transport=transport,
+                      headers={"Authorization": f"Bearer {user_token}"}) as client:
+        response = client.post(f"/api/v1/training/conversations/{contribution_id}/corrections",
+                               json=payload.model_dump(mode="json"))
+        response.raise_for_status()
+        return TrainingContributionResponse.model_validate(response.json())
 
 
 def get_training_candidate(
@@ -353,14 +379,38 @@ def _raise_for_auth_response(response: httpx.Response) -> None:
     response.raise_for_status()
 
 
-def server_chat_completion(
+@dataclass(frozen=True)
+class ServerChatResult:
+    answer: str
+    references: tuple[KnowledgeReference, ...] = ()
+    model_version: str | None = None
+    charged_credits: int = 0
+
+
+def server_stream_result(server_url, user_token, messages, **options):
+    result = stream_server_chat(server_url, user_token, messages, **options)
+    return ServerChatResult(result["answer"], tuple(KnowledgeReference.model_validate(r)
+                            for r in result["references"]), result["model_version"], result.get("charged_credits", 0))
+
+
+def server_chat_completion(server_url, user_token, messages, **options) -> str:
+    return server_chat_result(server_url, user_token, messages, **options).answer
+
+
+def server_chat_result(
     server_url: str,
     user_token: str,
     messages: list[dict[str, str]],
     *,
+    credit_limit: int = 0,
+    credit_request_id: str | None = None,
+    generation: dict | None = None,
+    use_knowledge: bool = False,
+    model_version: str | None = None,
     timeout_seconds: float = 180,
     transport: httpx.BaseTransport | None = None,
-) -> str:
+) -> ServerChatResult:
+    authorization = credit_authorization(credit_limit, credit_request_id)
     with httpx.Client(
         base_url=normalize_base_url(server_url),
         headers={"Authorization": f"Bearer {user_token}"},
@@ -369,10 +419,154 @@ def server_chat_completion(
     ) as client:
         response = client.post(
             "/api/v1/chat/completions",
-            json={"messages": messages},
+            json={"messages": messages, **authorization,
+                  **({"generation": FoundationGeneration.model_validate(generation).model_dump(exclude_none=True)} if generation is not None else {}),
+                  **({"use_knowledge": True} if use_knowledge else {}),
+                  **({"model_version": str(UUID(model_version))} if model_version else {})},
         )
         response.raise_for_status()
-        return extract_chat_content(response.json())
+        data = response.json()
+        references = tuple(KnowledgeReference.model_validate(item) for item in data.get("references", []))
+        actual_version = str(UUID(data["model_version"])) if data.get("model_version") else None
+        if model_version is not None and actual_version != str(UUID(model_version)):
+            raise ValueError("El servidor respondió con una versión distinta de la solicitada.")
+        return ServerChatResult(extract_chat_content(data), references, actual_version, validate_credit_receipt(data, authorization))
+
+
+DEFAULT_SERVER_VERSION = "Versión activa del servidor"
+
+
+def server_job_summaries(server_url, user_token, *, limit=100, before=None, transport=None):
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise ValueError("Límite de página inválido.")
+    params = {"limit": limit}
+    if before is not None:
+        params.update(before_created_at=before[0], before_job_id=before[1])
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
+                      headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
+        with client.stream("GET", "/api/v1/jobs/summary", params=params) as response:
+            response.raise_for_status()
+            raw = bytearray()
+            for chunk in response.iter_bytes(chunk_size=65_536):
+                raw.extend(chunk)
+                if len(raw) > 2_000_000:
+                    raise ValueError("El resumen de trabajos supera el límite de lectura.")
+    data = json.loads(raw)
+    if not isinstance(data, list) or len(data) > limit:
+        raise ValueError("Lista de trabajos inválida.")
+    return [JobSummaryResponse.model_validate(row) for row in data]
+
+
+def format_job_summary(job):
+    lines = [f"Trabajo: {job.job_id}", f"Tipo: {job.job_type}", f"Estado: {job.status}",
+             f"Creado: {job.created_at.isoformat()}", f"Intentos: {job.attempt_count}",
+             f"Código de fallo: {job.failure_code or 'ninguno'}", ""]
+    if job.scheduling:
+        labels = {"min_gradient_tokens_per_second": "Gradientes mínimos (tokens/s)",
+                  "min_claim_service_bytes_per_second": "Recepción mínima de servicio (bytes/s)",
+                  "min_submit_service_bytes_per_second": "Envío mínimo de servicio (bytes/s)",
+                  "max_heartbeat_service_seconds": "Heartbeat máximo de servicio (s)",
+                  "min_transfer_download_bytes_per_second": "Descarga mínima de sonda HTTP (bytes/s)",
+                  "min_transfer_upload_bytes_per_second": "Subida mínima de sonda HTTP (bytes/s)",
+                  "max_transfer_http_round_trip_seconds": "Ida y vuelta máxima de sonda HTTP (s)",
+                  "profile_sha256": "Perfil de arquitectura/tokenizador/runtime"}
+        lines.append("Requisitos de asignación:")
+        lines.extend(f"{labels.get(key, key)}: {value}" for key, value in job.scheduling.items())
+        lines.append("\nExigen muestras y recursos recientes (120 s), mismo dispositivo y perfil compatible. "
+                     "Las tasas incluyen trabajo del servidor; no son ancho de banda físico.")
+    else:
+        lines.append("Sin umbrales de rendimiento; siguen aplicándose memoria, compatibilidad y consentimiento.")
+    if job.status == "queued":
+        lines.append("\nEn cola no identifica por sí solo la causa de espera. Este resumen no confirma "
+                     "que haya nodos disponibles. Los nodos nuevos necesitan trabajo sin restricciones para obtener una muestra.")
+    return "\n".join(lines)
+
+
+def server_model_versions(server_url, user_token, *, transport=None):
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
+                      headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
+        response = client.get("/api/v1/models")
+        response.raise_for_status()
+        models = response.json()["models"]
+        return [str(UUID(model["id"])) for model in models]
+
+
+def server_inference_price(server_url, user_token, *, transport=None):
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
+                      headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
+        response = client.get("/api/v1/credits/inference-price")
+        response.raise_for_status()
+        price = response.json()["credits_per_completion"]
+        credit_authorization(price)
+        return price
+
+
+def server_credits(server_url, user_token, *, transport=None):
+    with httpx.Client(base_url=normalize_base_url(server_url), timeout=20,
+                      headers={"Authorization": f"Bearer {user_token}"}, transport=transport) as client:
+        balance_response = client.get("/api/v1/credits")
+        balance_response.raise_for_status()
+        transactions_response = client.get("/api/v1/credits/transactions")
+        transactions_response.raise_for_status()
+    balance, transactions = balance_response.json(), transactions_response.json()
+    if not isinstance(balance, dict) or any(type(balance.get(key)) is not int or balance[key] < 0
+                                          for key in ("available", "reserved", "earned")):
+        raise ValueError("El servidor devolvió un saldo de créditos inválido.")
+    if not isinstance(transactions, list) or len(transactions) > 100:
+        raise ValueError("El servidor devolvió movimientos inválidos.")
+    for row in transactions:
+        if (not isinstance(row, dict) or type(row.get("amount")) is not int
+                or type(row.get("transaction_id")) is not int
+                or not isinstance(row.get("operation"), str) or not isinstance(row.get("created_at"), str)):
+            raise ValueError("El servidor devolvió un movimiento inválido.")
+    return balance, transactions
+
+
+def format_credits(balance, transactions):
+    labels = {"job_reserve": "Reserva para trabajo", "job_settle": "Trabajo verificado",
+              "job_refund": "Reembolso de trabajo"}
+    lines = [f"Disponibles: {balance['available']}", f"Reservados: {balance['reserved']}",
+             f"Ganados por trabajo para otras cuentas: {balance['earned']}", "",
+             "Créditos computacionales internos; no son dinero ni criptomonedas.",
+             "Saldo y movimientos consultados por separado; pueden cambiar entre consultas.",
+             "Últimos movimientos (hasta 100, más recientes primero):", ""]
+    if not transactions:
+        lines.append("No hay movimientos registrados.")
+    for row in transactions:
+        label = labels.get(row["operation"], row["operation"])
+        if row["operation"].startswith("operator_grant:"):
+            label = "Asignación del operador: " + row["operation"].split(":", 1)[1]
+        lines.append(f"{row['created_at']} | {row['amount']:+d} | {label} | ID {row['transaction_id']}")
+    return "\n".join(lines)
+
+
+def parse_generation_settings(values):
+    parsed = {}
+    for key in ("max_new_tokens", "top_k", "seed"):
+        value = values[key].strip()
+        if key == "max_new_tokens" and not value:
+            continue
+        parsed[key] = int(value)
+    for key in ("temperature", "top_p", "repetition_penalty"):
+        parsed[key] = float(values[key].strip())
+    return FoundationGeneration.model_validate(parsed).model_dump(exclude_none=True)
+
+
+def format_knowledge_references(turns) -> str:
+    lines = ["Fragmentos enviados al modelo; no garantizan que su respuesta sea correcta.",
+             "Conocimiento recuperado, separado de los pesos y de la memoria personal.", ""]
+    if not turns:
+        lines.append("Todavía no se ha utilizado recuperación en esta conversación.")
+    for message_index, references in turns:
+        lines.append(f"Respuesta en el mensaje {message_index + 1}")
+        if not references:
+            lines.append("No se encontraron fragmentos relevantes.")
+        for number, reference in enumerate(references, 1):
+            lines.extend([f"[{number}] {reference.source}", reference.url,
+                          f"Licencia: {reference.license} · Fecha: {reference.date} · Idioma: {reference.language}",
+                          f"Documento: {reference.document_sha256} · Posición: {reference.offset}",
+                          f"Índice: {reference.index_version}", reference.text, ""])
+    return "\n".join(lines)
 
 
 def settings_path() -> Path:
@@ -442,7 +636,7 @@ def save_settings(settings: dict[str, str]) -> None:
 
 def main() -> None:
     import tkinter as tk
-    from tkinter import messagebox, ttk
+    from tkinter import filedialog, messagebox, ttk
 
     class AIHomeDesktop(tk.Tk):
         def __init__(self) -> None:
@@ -455,9 +649,18 @@ def main() -> None:
             self.session_token: str | None = None
             self.session_server_url: str | None = None
             self.guest_session_active = False
+            self.memory_vault = profile_memory_vault()
+            self.private_windows = []
             self.messages: list[dict[str, str]] = []
+            self.knowledge_references = []
+            self.conversation_used_knowledge = False
+            self.pinned_server_version = None
+            self.pinned_foundation_checkpoint = None
             self.conversation_id = str(uuid4())
             self.conversation_source: tuple[str, str, str] | None = None
+            self.generation_settings = None
+            self.chat_credit_limit = 0
+            self.chat_cancel = None
             self.chat_request_active = False
             self.training_submission_active = False
             self.training_candidate_submitted = False
@@ -493,17 +696,18 @@ def main() -> None:
             self.page_stack.configure(style="AIHome.TNotebook")
             self.page_stack.pack(fill="both", expand=True)
             chat_tab = ttk.Frame(self.page_stack)
-            provider_tab = ttk.Frame(self.page_stack, padding=20)
-            account_tab = ttk.Frame(self.page_stack, padding=20)
-            node_tab = ttk.Frame(self.page_stack, padding=20)
+            provider_tab = ttk.Frame(self.page_stack)
+            account_tab = ttk.Frame(self.page_stack)
+            node_tab = ttk.Frame(self.page_stack)
             self.page_stack.add(chat_tab, text="Chat")
             self.page_stack.add(provider_tab, text="Conectar IA")
             self.page_stack.add(account_tab, text="Cuenta y aportes")
             self.page_stack.add(node_tab, text="Colaborar")
             self._build_chat_tab(ttk, chat_tab)
-            self._build_provider_tab(ttk, provider_tab)
-            self._build_account_tab(ttk, account_tab)
-            self._build_node_tab(ttk, node_tab)
+            self._build_provider_tab(ttk, self._scrollable_page(provider_tab))
+            self._build_account_tab(ttk, self._scrollable_page(account_tab))
+            self._build_node_tab(ttk, self._scrollable_page(node_tab))
+            self._build_control_sections(ttk, chat_tab, provider_tab, account_tab, node_tab)
             nav = ttk.Frame(header)
             nav.pack(side="right", anchor="n")
             ttk.Button(
@@ -542,7 +746,110 @@ def main() -> None:
                 anchor="w",
                 padding=(16, 3),
                 foreground="#62676b",
-            ).pack(fill="x", padx=8, pady=(0, 3))
+            ).pack(side="bottom", fill="x", padx=8, pady=(0, 3), before=self.page_stack)
+
+        def _build_control_sections(self, ttk, chat_tab, provider_tab, account_tab, node_tab):
+            self.control_sections = {"CHAT": chat_tab, "DISTRIBUTED COMPUTE": node_tab}
+            definitions = [
+                ("FOUNDATION MODEL", "Inspecciona la arquitectura, configuración, parámetros y estado de un checkpoint propio.",
+                 [("Inspeccionar checkpoint", self._inspect_checkpoint_dialog),
+                  ("Probar imagen local (experimental)", self._visual_inference_dialog)]),
+                ("TRAINING", "Selecciona datasets autorizados, configuración y checkpoints. El entrenamiento produce un candidato; no lo publica automáticamente.",
+                 [("Entrenar o reanudar", self._run_training_dialog), ("Entrenamiento visual (experimental)", self._visual_training_dialog), ("Inspeccionar entrenamiento", self._inspect_checkpoint_dialog),
+                  ("Mis aportaciones consentidas", self._manage_training_candidates),
+                  ("Abrir resultado de preferencias", self._experiment_report_dialog),
+                  ("Entrenar preferencias", self._preference_training_dialog),
+                  ("Entrenar adaptadores", self._adapter_training_dialog)]),
+                ("EVALUATION", "Ejecuta una suite reproducible o consulta sus resultados. Una prueba ejecutable no demuestra una capacidad adquirida.",
+                 [("Ejecutar evaluación", self._run_evaluation_dialog), ("Planificar evaluación distribuida", self._evaluation_plan_dialog), ("Abrir informe", self._experiment_report_dialog)]),
+                ("EVOLUTION", "Ejecuta un experimento controlado y consulta su comparación y decisión. No activa modelos automáticamente.",
+                 [("Nuevo experimento", self._run_evolution_dialog), ("Abrir resultado", self._experiment_report_dialog)]),
+                ("KNOWLEDGE", "Consulta fuentes y fragmentos de índices revisados o crea una versión nueva. La recuperación no modifica los pesos.",
+                 [("Explorar conocimiento", self._knowledge_dialog), ("Crear índice", self._build_knowledge_dialog),
+                  ("Adquirir fuentes públicas", self._knowledge_acquisition_dialog)]),
+                ("MODELS", "Selecciona versiones del modelo propio o revisa el registro local, sus aprobaciones y activaciones.",
+                 [("Selección y conexión", lambda: self._show_page(provider_tab)),
+                  ("Registro, aprobación y rollback", self._model_registry_dialog), ("Inspeccionar checkpoint", self._inspect_checkpoint_dialog)]),
+                ("PRIVACY", "Gestiona memoria local, cuenta y aportaciones consentidas. Retirar datos no garantiza borrar su influencia de pesos ya entrenados.",
+                 [("Memoria de este perfil", self._manage_memories), ("Mis aportaciones", self._manage_training_candidates),
+                  ("Cuenta y consentimiento", lambda: self._show_page(account_tab))]),
+                ("CREDITS", "Consulta saldo, movimientos y límites de inferencia de tu cuenta. Son créditos computacionales internos, no dinero ni criptomonedas.",
+                 [("Saldo, movimientos y límite", self._show_credits)]),
+            ]
+            for title, description, actions in definitions:
+                page = ttk.Frame(self.page_stack)
+                self.page_stack.add(page, text=title)
+                content = self._scrollable_page(page)
+                ttk.Label(content, text=title, font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=(0, 8))
+                ttk.Label(content, text=description, wraplength=620).pack(anchor="w", pady=(0, 12))
+                for label, action in actions:
+                    ttk.Button(content, text=label, command=action).pack(anchor="w", pady=5)
+                self.control_sections[title] = page
+            order = ("FOUNDATION MODEL", "TRAINING", "EVALUATION", "EVOLUTION", "KNOWLEDGE",
+                     "DISTRIBUTED COMPUTE", "MODELS", "CHAT", "PRIVACY", "CREDITS")
+            navigation = ttk.Frame(self, padding=(18, 0, 18, 6))
+            navigation.pack(fill="x", before=self.page_stack)
+            ttk.Label(navigation, text="Sección").pack(side="left", padx=(0, 8))
+            self.control_section_var = tk.StringVar(value="CHAT")
+            selector = ttk.Combobox(navigation, textvariable=self.control_section_var,
+                                    values=order, state="readonly", width=28)
+            selector.pack(side="left")
+            selector.bind("<<ComboboxSelected>>", lambda _: self._show_page(self.control_sections[self.control_section_var.get()]))
+            def synchronize(*args):
+                selected = self.page_stack.select()
+                name = next((name for name, page in self.control_sections.items() if str(page) == selected), None)
+                self.control_section_var.set(name or "Configuración de cuenta / conexión")
+            self.page_stack.bind("<<NotebookTabChanged>>", synchronize, add="+")
+
+        def _visual_inference_dialog(self):
+            from ai_home.visual_desktop import open_visual_dialog
+            open_visual_dialog(self)
+
+        def _evaluation_plan_dialog(self):
+            from ai_home.evaluation_plan_desktop import open_evaluation_plan_dialog
+            open_evaluation_plan_dialog(self)
+
+        def _adapter_training_dialog(self):
+            from ai_home.adapter_training_desktop import open_adapter_training_dialog
+            open_adapter_training_dialog(self)
+
+        def _knowledge_acquisition_dialog(self):
+            from ai_home.knowledge_acquisition_desktop import open_acquisition_dialog
+            open_acquisition_dialog(self)
+
+        def _visual_training_dialog(self):
+            from ai_home.visual_training_desktop import open_visual_training_dialog
+            open_visual_training_dialog(self)
+
+        def _preference_training_dialog(self):
+            from ai_home.preference_training_desktop import open_preference_training_dialog
+            open_preference_training_dialog(self)
+
+        def _scrollable_page(self, parent):
+            canvas = tk.Canvas(parent, highlightthickness=0, background="#eeeeee", height=400)
+            scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+            scrollbar.pack(side="right", fill="y")
+            canvas.pack(side="left", fill="both", expand=True)
+            canvas.configure(yscrollcommand=scrollbar.set)
+            content = ttk.Frame(canvas, padding=20)
+            item = canvas.create_window(0, 0, window=content, anchor="nw")
+            content.bind("<Configure>", lambda _: canvas.configure(scrollregion=canvas.bbox("all")))
+
+            def resize(event):
+                canvas.itemconfigure(item, width=event.width)
+                def wrap(widget):
+                    for child in widget.winfo_children():
+                        if isinstance(child, ttk.Label) and int(child.cget("wraplength") or 0):
+                            child.configure(wraplength=max(160, event.width - 80))
+                        wrap(child)
+                wrap(content)
+            canvas.bind("<Configure>", resize)
+
+            def wheel(event):
+                if self.page_stack.select() == str(parent) and not isinstance(event.widget, (tk.Text, tk.Listbox, ttk.Combobox)):
+                    canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            self.bind("<MouseWheel>", wheel, add="+")
+            return content
 
         def _show_page(self, page) -> None:
             self.page_stack.select(page)
@@ -858,7 +1165,7 @@ def main() -> None:
             messagebox.showinfo(note.title, note.content, parent=self)
 
         def _reload_memories(self) -> None:
-            self.memory_notes = load_memories()
+            self.memory_notes = load_memories(self.memory_vault)
             self.active_memory_ids.intersection_update(
                 note.id for note in self.memory_notes
             )
@@ -866,12 +1173,13 @@ def main() -> None:
 
         def _manage_memories(self) -> None:
             window = tk.Toplevel(self)
+            self.private_windows.append(window)
             window.title("Memoria personal local")
             window.geometry("700x440")
             window.transient(self)
             ttk.Label(
                 window,
-                text=f"Recuerdos guardados solo en este equipo: {memory_vault_path()}",
+                text=f"Recuerdos guardados solo en este equipo: {self.memory_vault}",
                 wraplength=660,
             ).pack(anchor="w", padx=12, pady=(12, 8))
             body = ttk.Frame(window, padding=(12, 0, 12, 8))
@@ -931,7 +1239,7 @@ def main() -> None:
                     parent=window,
                 ):
                     return
-                delete_memory(note.id)
+                delete_memory(note.id, vault_path=self.memory_vault)
                 refresh()
 
             memories_list.bind("<<ListboxSelect>>", show_selected)
@@ -954,6 +1262,7 @@ def main() -> None:
 
         def _add_memory_dialog(self, parent, on_saved) -> None:
             window = tk.Toplevel(parent)
+            self.private_windows.append(window)
             window.title("Añadir recuerdo")
             window.geometry("540x500")
             window.transient(parent)
@@ -989,6 +1298,7 @@ def main() -> None:
                         title.get(),
                         body.get("1.0", "end"),
                         links=selected_links,
+                        vault_path=self.memory_vault,
                     )
                 except (OSError, RuntimeError, ValueError) as error:
                     messagebox.showerror("Memoria local", str(error), parent=window)
@@ -1062,6 +1372,9 @@ def main() -> None:
             )
             ttk.Button(account, text="Cerrar sesión", command=self._logout).grid(
                 row=2, column=2, padx=6, pady=3
+            )
+            ttk.Button(account, text="Créditos y movimientos", command=self._show_credits).grid(
+                row=4, column=0, columnspan=3, sticky="w", padx=6, pady=(6, 3)
             )
             account.columnconfigure(1, weight=1)
             ttk.Button(
@@ -1155,18 +1468,28 @@ def main() -> None:
             self.face_canvas.bind("<Configure>", self._layout_home)
             memory_controls = ttk.Frame(parent)
             memory_controls.pack(fill="x", padx=28, pady=(0, 3))
-            ttk.Label(
-                memory_controls,
+            memory_notice = ttk.Label(
+                parent,
                 text=(
                     "La memoria local se usa automáticamente; solo los recuerdos "
                     "relevantes se envían al proveedor. No entrena el modelo."
                 ),
-                foreground="#666666",
-            ).pack(side="left", padx=(8, 0))
+                foreground="#666666", wraplength=650,
+            )
+            memory_notice.pack(fill="x", padx=28, before=memory_controls)
+            parent.bind("<Configure>", lambda event: memory_notice.configure(wraplength=max(200, event.width - 60)))
+            ttk.Button(memory_controls, text="Fuentes recuperadas",
+                       command=self._show_knowledge_references).pack(side="right")
+            self.chat_preview_var = tk.StringVar(value="")
+            self.chat_preview = tk.Text(parent, height=4, wrap="word", state="disabled")
+            self.chat_preview.pack(fill="x", padx=28, pady=(0, 4))
+            self.chat_preview_var.trace_add("write", lambda *_: self._render_stream_preview())
+            ttk.Button(memory_controls, text="Detener generación",
+                       command=self._stop_generation).pack(side="right", padx=6)
             conversation = ttk.Frame(parent)
             conversation.pack(fill="both", expand=True, padx=24, pady=(0, 8))
             self.chat_messages_canvas = tk.Canvas(
-                conversation,
+                conversation, height=1,
                 background="#eeeeee",
                 highlightthickness=0,
             )
@@ -1178,7 +1501,7 @@ def main() -> None:
             )
             scrollbar.pack(side="right", fill="y"            )
             self.chat_messages_canvas.configure(yscrollcommand=scrollbar.set)
-            self.memory_notes = load_memories()
+            self.memory_notes = load_memories(self.memory_vault)
             self.active_memory_ids: set[str] = set()
             self.chat_message_items: list[tuple[int, int, str]] = []
             self.chat_messages_canvas.bind(
@@ -1396,17 +1719,767 @@ def main() -> None:
                 ),
                 wraplength=760,
             ).pack(anchor="w")
+            self.server_version_var = tk.StringVar(value=DEFAULT_SERVER_VERSION)
+            self.server_version_combo = ttk.Combobox(
+                routing, textvariable=self.server_version_var, state="readonly",
+                values=[DEFAULT_SERVER_VERSION], width=44,
+            )
+            self.server_version_combo.pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Actualizar versiones aprobadas",
+                       command=self._refresh_server_versions).pack(anchor="w", pady=(4, 0))
+            ttk.Button(routing, text="Administrar registro local de modelos",
+                       command=self._model_registry_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Explorar conocimiento local",
+                       command=self._knowledge_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Crear versión de conocimiento",
+                       command=self._build_knowledge_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Entrenar modelo local",
+                       command=self._run_training_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Ejecutar evaluación local",
+                       command=self._run_evaluation_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Ejecutar evolución local",
+                       command=self._run_evolution_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Ver evaluación o evolución",
+                       command=self._experiment_report_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Inspeccionar checkpoint local",
+                       command=self._inspect_checkpoint_dialog).pack(anchor="w", pady=(6, 0))
+            ttk.Button(routing, text="Ajustes de generación Foundation",
+                       command=self._generation_dialog).pack(anchor="w", pady=(6, 0))
+            self.stream_enabled_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(routing, text="Texto progresivo (servidor Foundation)",
+                            variable=self.stream_enabled_var).pack(anchor="w", pady=(6, 0))
+            self.use_knowledge_var = tk.BooleanVar(value=False)
             self.use_server_ai_var = tk.BooleanVar(value=False)
             ttk.Checkbutton(
                 routing,
                 text="Usar el proveedor configurado por mi servidor AI@Home",
                 variable=self.use_server_ai_var,
             ).pack(anchor="w", pady=(8, 0))
+            ttk.Checkbutton(
+                routing,
+                text="Recuperar fuentes públicas revisadas (requiere Foundation en el servidor)",
+                variable=self.use_knowledge_var,
+            ).pack(anchor="w", pady=(6, 0))
             ttk.Label(
                 routing,
                 text="La clave nunca se envía al servidor AI@Home.",
                 foreground="#52606d",
             ).pack(anchor="w", pady=(6, 0))
+
+        def _model_registry_dialog(self) -> None:
+            directory = filedialog.askdirectory(parent=self, title="Registro local de modelos")
+            if not directory:
+                return
+            if not (Path(directory) / "registry.sqlite3").is_file():
+                messagebox.showerror("Modelos", "La carpeta no contiene un registro de modelos.", parent=self)
+                return
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Modelos: aprobación, activación y rollback local")
+            window.geometry("900x650")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            ttk.Label(frame, text=f"Registro local: {directory}", wraplength=850).pack(anchor="w")
+            ttk.Label(frame, text="Afecta al modelo predeterminado de los procesos que usan este registro.\n"
+                      "El chat con versión fijada conserva su selección. Rollback: elija una versión anterior aprobada y actívela.",
+                      wraplength=850).pack(anchor="w", pady=8)
+            version = tk.StringVar()
+            selector = ttk.Combobox(frame, textvariable=version, state="readonly", width=65)
+            selector.pack(fill="x")
+            operator = tk.StringVar()
+            reason = tk.StringVar()
+            for label, variable in (("Operador (queda en auditoría)", operator), ("Motivo de activación / rollback", reason)):
+                ttk.Label(frame, text=label).pack(anchor="w", pady=(6, 0))
+                ttk.Entry(frame, textvariable=variable).pack(fill="x")
+            actions = ttk.Frame(frame)
+            actions.pack(fill="x", pady=10)
+            status = tk.StringVar(value="Cargando registro…")
+            ttk.Label(frame, textvariable=status, wraplength=850).pack(anchor="w")
+            report_frame = ttk.Frame(frame)
+            report_frame.pack(fill="both", expand=True, pady=(8, 0))
+            scroll = ttk.Scrollbar(report_frame)
+            scroll.pack(side="right", fill="y")
+            content = tk.Text(report_frame, wrap="word", state="disabled", yscrollcommand=scroll.set)
+            content.pack(fill="both", expand=True)
+            scroll.configure(command=content.yview)
+            busy = False
+            buttons = []
+            def run(action):
+                nonlocal busy
+                if busy:
+                    return
+                selected, who, why = version.get(), operator.get().strip(), reason.get().strip()
+                if action != "refresh" and not selected:
+                    messagebox.showerror("Modelos", "Seleccione una versión.", parent=window)
+                    return
+                if action in {"approve", "activate"} and (not who or (action == "activate" and not why)):
+                    messagebox.showerror("Modelos", "Indique operador y, para activar, el motivo.", parent=window)
+                    return
+                busy = True
+                selector.configure(state="disabled")
+                for button in buttons:
+                    button.configure(state="disabled")
+                status.set("Comprobando registro y pesos…")
+                def finish():
+                    nonlocal busy
+                    busy = False
+                    selector.configure(state="readonly")
+                    for button in buttons:
+                        button.configure(state="normal")
+                def failure():
+                    status.set("Operación rechazada o fallida; revise el error y actualice el registro.")
+                    finish()
+                def operation():
+                    from ai_home.foundation.registry import ModelRegistry
+                    registry = ModelRegistry(directory)
+                    if action == "approve":
+                        registry.approve(selected, operator=who)
+                    elif action == "activate":
+                        registry.activate(selected, operator=who, reason=why)
+                    return {"candidates": registry.list(), "approved_catalog": registry.catalog(),
+                            "history": registry.history(),
+                            "selected": registry.inspect(selected) if selected else None}
+                def display(report):
+                    selector.configure(values=[row["id"] for row in report["candidates"]])
+                    content.configure(state="normal")
+                    content.delete("1.0", "end")
+                    content.insert("end", json.dumps(report, ensure_ascii=False, indent=2))
+                    content.configure(state="disabled")
+                    status.set("Registro actualizado. Aprobación: umbral 100%, procedencia y ausencia de regresiones obligatorias.")
+                    finish()
+                self._background(operation, display, failure, is_current=lambda: bool(window.winfo_exists()))
+            for label, action in (("Actualizar", "refresh"), ("Ver evaluación", "inspect"),
+                                  ("Aprobar candidato", "approve"), ("Activar / rollback", "activate")):
+                button = ttk.Button(actions, text=label, command=lambda value=action: run(value))
+                button.pack(side="left", padx=(0, 8))
+                buttons.append(button)
+            run("refresh")
+
+        def _build_knowledge_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Crear versión de conocimiento")
+            window.geometry("800x440")
+            frame = ttk.Frame(window, padding=16)
+            frame.pack(fill="both", expand=True)
+            fields = [tk.StringVar() for _ in range(3)]
+            inputs = []
+            for row, label in enumerate(("Dataset autorizado JSON", "Nuevo índice JSON", "Checkpoint opcional (neuronal)")):
+                ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=8)
+                entry = ttk.Entry(frame, textvariable=fields[row], width=50)
+                entry.grid(row=row, column=1, sticky="ew")
+                def choose(index=row):
+                    path = (filedialog.asksaveasfilename(parent=window, defaultextension=".json")
+                            if index == 1 else filedialog.askopenfilename(parent=window))
+                    if path:
+                        fields[index].set(path)
+                picker = ttk.Button(frame, text="Elegir", command=choose)
+                picker.grid(row=row, column=2, padx=6)
+                inputs.extend((entry, picker))
+            frame.columnconfigure(1, weight=1)
+            device = tk.StringVar(value="cpu")
+            device_box = ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=10)
+            ttk.Label(frame, text="Dispositivo neuronal").grid(row=3, column=0, sticky="w")
+            device_box.grid(row=3, column=1, sticky="w")
+            ttk.Label(frame, text="Sin checkpoint: TF-IDF. Solo datos públicos revisados con permiso de recuperación.\n"
+                      "Cada actualización crea otro archivo; no activa el índice del servidor ni entrena el modelo.",
+                      wraplength=740).grid(row=4, column=0, columnspan=3, sticky="w", pady=14)
+            status = tk.StringVar(value="Seleccione el dataset y una ruta nueva para el índice.")
+            ttk.Label(frame, textvariable=status, wraplength=740).grid(row=5, column=0, columnspan=3, sticky="w")
+            cancellation = threading.Event()
+            busy = False
+            def finish():
+                nonlocal busy
+                busy = False
+                for widget in inputs:
+                    widget.configure(state="normal")
+                device_box.configure(state="readonly")
+                start.configure(state="normal")
+                stop.configure(state="disabled")
+            def failure():
+                status.set("No se publicó el índice; revise el error y los permisos del dataset.")
+                finish()
+            def run():
+                nonlocal busy
+                if busy:
+                    return
+                dataset, output, checkpoint = [field.get().strip() for field in fields]
+                if not dataset or not output:
+                    messagebox.showerror("Conocimiento", "Seleccione dataset e índice de salida.", parent=window)
+                    return
+                selected_device = device.get()
+                cancellation.clear()
+                busy = True
+                for widget in (*inputs, device_box, start):
+                    widget.configure(state="disabled")
+                stop.configure(state="normal")
+                status.set("Validando e indexando… Cancelar detiene antes de publicar, entre fragmentos.")
+                def operation():
+                    from ai_home.knowledge import build_from_dataset
+                    return build_from_dataset(dataset, output, embedding_checkpoint=checkpoint or None,
+                                              device=selected_device, cancel=cancellation)
+                def success(report):
+                    status.set(f"Índice creado: {report['output']}\nVersión: {report['index_version']}\nDocumentos: {report['documents']}")
+                    finish()
+                self._background(operation, success, failure, is_current=lambda: bool(window.winfo_exists()))
+            start = ttk.Button(frame, text="Crear índice", command=run)
+            start.grid(row=6, column=1, sticky="w", pady=16)
+            stop = ttk.Button(frame, text="Cancelar", command=cancellation.set, state="disabled")
+            stop.grid(row=6, column=2)
+            window.bind("<Destroy>", lambda event: cancellation.set() if event.widget == window else None)
+
+        def _knowledge_dialog(self) -> None:
+            path = filedialog.askopenfilename(parent=self, title="Índice de conocimiento revisado",
+                                             filetypes=[("Índice JSON", "*.json")])
+            if not path:
+                return
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Conocimiento: índice local y fuentes")
+            window.geometry("820x580")
+            embedding_controls = ttk.Frame(window, padding=12)
+            embedding_controls.pack(fill="x")
+            ttk.Label(embedding_controls, text="Checkpoint para índice neuronal (opcional)").grid(row=0, column=0, columnspan=3, sticky="w")
+            embedding_path = tk.StringVar()
+            embedding_entry = ttk.Entry(embedding_controls, textvariable=embedding_path)
+            embedding_entry.grid(row=1, column=0, sticky="ew")
+            embedding_controls.columnconfigure(0, weight=1)
+            def choose_embedding():
+                selected = filedialog.askopenfilename(parent=window, title="Checkpoint de embeddings",
+                                                      filetypes=[("Foundation", "*.pt")])
+                if selected:
+                    embedding_path.set(selected)
+            embedding_button = ttk.Button(embedding_controls, text="Elegir checkpoint", command=choose_embedding)
+            embedding_button.grid(row=1, column=1, padx=6)
+            embedding_device = tk.StringVar(value="cpu")
+            device_box = ttk.Combobox(embedding_controls, textvariable=embedding_device,
+                                     values=("cpu", "cuda"), state="readonly", width=8)
+            device_box.grid(row=1, column=2)
+            ttk.Label(embedding_controls, text="TF-IDF no requiere checkpoint. El índice neuronal exige el usado al crearlo.",
+                      wraplength=760).grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
+            controls = ttk.Frame(window, padding=12)
+            controls.pack(fill="x")
+            query = ttk.Entry(controls)
+            query.pack(side="left", fill="x", expand=True)
+            scrollbar = ttk.Scrollbar(window)
+            scrollbar.pack(side="right", fill="y")
+            content = tk.Text(window, wrap="word", state="disabled", yscrollcommand=scrollbar.set)
+            content.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+            scrollbar.configure(command=content.yview)
+            busy = False
+
+            def search():
+                nonlocal busy
+                if busy:
+                    return
+                text = query.get().strip()
+                if len(text.encode("utf-8")) > 32000:
+                    messagebox.showerror("Conocimiento", "La consulta supera el límite de 32.000 bytes UTF-8.", parent=window)
+                    return
+                checkpoint_path = embedding_path.get().strip() or None
+                device = embedding_device.get()
+                busy = True
+                button.configure(state="disabled")
+                for widget in (embedding_entry, embedding_button, device_box):
+                    widget.configure(state="disabled")
+
+                def inspect():
+                    from ai_home.knowledge import inspect_knowledge
+                    return inspect_knowledge(path, text, embedding_checkpoint=checkpoint_path, device=device)
+
+                def finish():
+                    nonlocal busy
+                    busy = False
+                    button.configure(state="normal")
+                    embedding_entry.configure(state="normal")
+                    embedding_button.configure(state="normal")
+                    device_box.configure(state="readonly")
+
+                def display(report):
+                    content.configure(state="normal")
+                    content.delete("1.0", "end")
+                    content.insert("end", "Recuperación local de fragmentos. No genera respuestas ni entrena pesos.\n"
+                                   "La consulta no se envía a Internet.\n\n")
+                    content.insert("end", json.dumps(report, indent=2, ensure_ascii=False))
+                    if text and not report["results"]:
+                        content.insert("end", "\n\nNo se encontraron fragmentos relevantes.")
+                    content.configure(state="disabled")
+                    finish()
+
+                self._background(inspect, display, finish, is_current=lambda: bool(window.winfo_exists()))
+
+            button = ttk.Button(controls, text="Buscar / actualizar", command=search)
+            button.pack(side="right", padx=(8, 0))
+            query.bind("<Return>", lambda _: search())
+            search()
+
+        def _run_evolution_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Experimento de evolución Foundation")
+            window.geometry("900x650")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            names = ("Checkpoint padre", "Suite JSON", "Validación JSON", "Replay JSON", "Datos nuevos JSON",
+                     "Entrenamiento JSON", "Carpeta nueva")
+            fields = [tk.StringVar() for _ in names]
+            for row, (label, variable) in enumerate(zip(names, fields)):
+                ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=6)
+                ttk.Entry(frame, textvariable=variable, width=60).grid(row=row, column=1, sticky="ew")
+                def choose(index=row, value=variable):
+                    path = (filedialog.asksaveasfilename(parent=window, title="Nueva carpeta de experimento")
+                            if index == 6 else filedialog.askopenfilename(parent=window))
+                    if path:
+                        value.set(path)
+                ttk.Button(frame, text="Elegir", command=choose).grid(row=row, column=2, padx=5)
+            frame.columnconfigure(1, weight=1)
+            reviewed = tk.BooleanVar(value=False)
+            ttk.Checkbutton(frame, text="Los datos nuevos son una exportación SFT revisada", variable=reviewed).grid(row=7, column=1, sticky="w")
+            device = tk.StringVar(value="cpu")
+            multiplier = tk.StringVar(value="0.5")
+            tokens = tk.StringVar(value="64")
+            for row, label, value in ((8, "Dispositivo", device), (9, "Multiplicador learning rate", multiplier), (10, "Tokens por prueba", tokens)):
+                ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w")
+                widget = (ttk.Combobox(frame, textvariable=value, values=("cpu", "cuda"), state="readonly", width=12)
+                          if row == 8 else ttk.Entry(frame, textvariable=value, width=12))
+                widget.grid(row=row, column=1, sticky="w")
+            disk_sequences = tk.BooleanVar(value=False)
+            ttk.Checkbutton(frame, text="Guardar secuencias en disco para reducir RAM (ocupa espacio local)",
+                            variable=disk_sequences).grid(row=11, column=0, columnspan=3, sticky="w", pady=6)
+            status = tk.StringVar(value="Entrena control y experimento, compara y propone una decisión. No activa modelos.")
+            ttk.Label(frame, textvariable=status, wraplength=820).grid(row=13, column=0, columnspan=3, sticky="w", pady=12)
+            cancellation = threading.Event()
+            events = queue.Queue()
+            def stop():
+                cancellation.set()
+                status.set("Parada solicitada; esperando al paso o evaluación en curso…")
+            def start():
+                if any(getattr(self, name, None) is not None and getattr(self, name).is_alive()
+                       for name in ("training_worker", "evaluation_worker", "evolution_worker")):
+                    status.set("Ya hay un trabajo Foundation local en curso.")
+                    return
+                try:
+                    paths = [field.get().strip() for field in fields]
+                    rate, count = float(multiplier.get()), int(tokens.get())
+                    if not all(paths) or not math.isfinite(rate) or not .1 <= rate <= 4 or rate == 1 or not 1 <= count <= 4096:
+                        raise ValueError("Completa las rutas; multiplicador 0.1–4 distinto de 1 y tokens 1–4096.")
+                except ValueError as error:
+                    status.set(str(error))
+                    return
+                selected_device, selected_review = device.get(), reviewed.get()
+                selected_disk_sequences = disk_sequences.get()
+                cancellation.clear()
+                self.evolution_cancel = cancellation
+                start_button.configure(state="disabled")
+                status.set("Preparando experimento…")
+                def execute():
+                    try:
+                        from ai_home.foundation.evolution_job import run_evolution
+                        result = run_evolution(*paths, reviewed_export=selected_review, device=selected_device,
+                                               multiplier=rate, max_new_tokens=count, cancel=cancellation,
+                                               disk_sequences=selected_disk_sequences,
+                                               on_progress=lambda item: events.put(("progress", item)))
+                        events.put(("done", result))
+                    except Exception as error:
+                        events.put(("error", str(error)))
+                self.evolution_worker = threading.Thread(target=execute, daemon=True)
+                self.evolution_worker.start()
+            def poll():
+                if not window.winfo_exists():
+                    return
+                while not events.empty():
+                    kind, value = events.get_nowait()
+                    if kind == "progress":
+                        detail = (f"paso {value['step']}, pérdida {value['train_loss']:.4f}" if "step" in value
+                                  else f"pruebas {value['completed']}/{value['total']}" if "completed" in value else "")
+                        status.set(f"{value['stage']} · {detail}")
+                    elif kind == "done":
+                        status.set(f"{value['decision']}: {value['reason']}. Sin promoción automática.")
+                        start_button.configure(state="normal")
+                    else:
+                        status.set(value)
+                        start_button.configure(state="normal")
+                window.after(100, poll)
+            start_button = ttk.Button(frame, text="Ejecutar experimento", command=start)
+            start_button.grid(row=12, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Parar", command=stop).grid(row=12, column=2)
+            window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
+            poll()
+
+        def _run_training_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Entrenar Foundation")
+            window.geometry("850x580")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            names = ("Dataset JSON", "Modelo JSON (opcional)", "Entrenamiento JSON", "Carpeta nueva", "Checkpoint de origen (opcional)", "Validación JSON (opcional)")
+            values = {name: tk.StringVar() for name in names}
+            for row, (name, value) in enumerate(values.items()):
+                ttk.Label(frame, text=name).grid(row=row, column=0, sticky="w", pady=6)
+                ttk.Entry(frame, textvariable=value, width=50).grid(row=row, column=1, sticky="ew")
+                def choose(label=name, variable=value):
+                    if label == "Carpeta nueva":
+                        path = filedialog.asksaveasfilename(parent=window, title="Nombre de carpeta nueva para el entrenamiento")
+                    else:
+                        path = filedialog.askopenfilename(parent=window)
+                    if path:
+                        variable.set(path)
+                ttk.Button(frame, text="Elegir", command=choose).grid(row=row, column=2, padx=5)
+            frame.columnconfigure(1, weight=1)
+            source_type = tk.StringVar(value="Dataset público")
+            mode = tk.StringVar(value="Desde cero")
+            ttk.Label(frame, text="Fuente").grid(row=6, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=source_type, values=("Dataset público", "Exportación revisada SFT"), state="readonly", width=30).grid(row=6, column=1, sticky="w")
+            ttk.Label(frame, text="Inicio").grid(row=7, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=mode, values=("Desde cero", "Reanudar exactamente", "Padre con optimizador nuevo"), state="readonly", width=30).grid(row=7, column=1, sticky="w")
+            device = tk.StringVar(value="cpu")
+            ttk.Label(frame, text="Dispositivo").grid(row=8, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=12).grid(row=8, column=1, sticky="w")
+            disk_sequences = tk.BooleanVar(value=False)
+            ttk.Checkbutton(frame, text="Guardar secuencias en disco para reducir RAM (ocupa espacio local)",
+                            variable=disk_sequences).grid(row=9, column=0, columnspan=3, sticky="w", pady=6)
+            status = tk.StringVar(value="Datos autorizados o exportación SFT revisada. El candidato no se activa ni se distribuye.")
+            ttk.Label(frame, textvariable=status, wraplength=730).grid(row=11, column=0, columnspan=3, sticky="w", pady=12)
+            cancellation = threading.Event()
+            events = queue.Queue()
+            def stop():
+                cancellation.set()
+                status.set("Parada solicitada; guardando al terminar el paso en curso…")
+            def start():
+                if any(getattr(self, name, None) is not None and getattr(self, name).is_alive()
+                       for name in ("training_worker", "evaluation_worker", "evolution_worker")):
+                    status.set("Ya hay un entrenamiento o evaluación local en curso.")
+                    return
+                paths = [value.get().strip() for value in values.values()]
+                if any(not paths[index] for index in (0, 2, 3)):
+                    status.set("Selecciona dataset, configuración de entrenamiento y una carpeta nueva.")
+                    return
+                selected_mode, selected_source = mode.get(), source_type.get()
+                if (selected_mode == "Desde cero") != (not paths[4]):
+                    status.set("Selecciona un checkpoint para reanudar o continuar desde un padre; déjalo vacío para empezar de cero.")
+                    return
+                selected_device = device.get()
+                selected_disk_sequences = disk_sequences.get()
+                cancellation.clear()
+                self.training_cancel = cancellation
+                start_button.configure(state="disabled")
+                status.set("Preparando datos y entrenamiento…")
+                def execute():
+                    try:
+                        from ai_home.foundation.training_job import run_training
+                        result = run_training(paths[0], paths[1] or None, paths[2], paths[3],
+                                              device=selected_device,
+                                              resume=paths[4] if selected_mode == "Reanudar exactamente" else None,
+                                              initial_checkpoint=paths[4] if selected_mode == "Padre con optimizador nuevo" else None,
+                                              reviewed_export=selected_source == "Exportación revisada SFT",
+                                              validation_dataset=paths[5] or None,
+                                              disk_sequences=selected_disk_sequences,
+                                              cancel=cancellation, on_step=lambda item: events.put(("progress", dict(item))))
+                        events.put(("done", result))
+                    except Exception as error:
+                        events.put(("error", str(error)))
+                self.training_worker = threading.Thread(target=execute, daemon=True)
+                self.training_worker.start()
+            def poll():
+                if not window.winfo_exists():
+                    return
+                while not events.empty():
+                    kind, value = events.get_nowait()
+                    if kind == "progress":
+                        status.set(f"Paso {value['step']} — pérdida {value['train_loss']:.4f} — "
+                                   f"{value.get('tokens_per_second', 0):.1f} tokens/s")
+                    elif kind == "done":
+                        status.set(f"{value['stop_reason']}. Paso {value['step']}. Checkpoint: {value['checkpoint']}")
+                        start_button.configure(state="normal")
+                    else:
+                        status.set(value)
+                        start_button.configure(state="normal")
+                window.after(100, poll)
+            start_button = ttk.Button(frame, text="Entrenar", command=start)
+            start_button.grid(row=10, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Parar y guardar", command=stop).grid(row=10, column=2)
+            window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
+            poll()
+
+        def _run_evaluation_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Ejecutar evaluación Foundation")
+            window.geometry("740x420")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            values = {name: tk.StringVar() for name in ("Checkpoint", "Suite JSON", "Informe nuevo")}
+            for row, (name, value) in enumerate(values.items()):
+                ttk.Label(frame, text=name).grid(row=row, column=0, sticky="w", pady=6)
+                ttk.Entry(frame, textvariable=value, width=58).grid(row=row, column=1, sticky="ew")
+                def choose(label=name, variable=value):
+                    if label == "Informe nuevo":
+                        path = filedialog.asksaveasfilename(parent=window, defaultextension=".json")
+                    else:
+                        path = filedialog.askopenfilename(parent=window)
+                    if path:
+                        variable.set(path)
+                ttk.Button(frame, text="Elegir", command=choose).grid(row=row, column=2, padx=5)
+            frame.columnconfigure(1, weight=1)
+            device = tk.StringVar(value="cpu")
+            budget = tk.StringVar(value="64")
+            ttk.Label(frame, text="Dispositivo").grid(row=3, column=0, sticky="w")
+            ttk.Combobox(frame, textvariable=device, values=("cpu", "cuda"), state="readonly", width=12).grid(row=3, column=1, sticky="w")
+            ttk.Label(frame, text="Tokens por prueba").grid(row=4, column=0, sticky="w")
+            ttk.Entry(frame, textvariable=budget, width=12).grid(row=4, column=1, sticky="w")
+            status = tk.StringVar(value="Se ejecutará inferencia real. El informe no activa ni aprueba el modelo.")
+            ttk.Label(frame, textvariable=status, wraplength=660).grid(row=6, column=0, columnspan=3, sticky="w", pady=14)
+            cancellation = threading.Event()
+            events = queue.Queue()
+            def stop():
+                cancellation.set()
+                status.set("Cancelación solicitada; esperando al trabajo en curso…")
+            def start():
+                if any(getattr(self, name, None) is not None and getattr(self, name).is_alive()
+                       for name in ("training_worker", "evaluation_worker", "evolution_worker")):
+                    status.set("Ya hay un entrenamiento o evaluación local en curso.")
+                    return
+                try:
+                    count = int(budget.get())
+                    if not 1 <= count <= 4096 or any(not value.get().strip() for value in values.values()):
+                        raise ValueError("Completa las rutas y elige entre 1 y 4096 tokens.")
+                except ValueError as error:
+                    status.set(str(error))
+                    return
+                paths = [value.get().strip() for value in values.values()]
+                selected_device = device.get()
+                cancellation.clear()
+                start_button.configure(state="disabled")
+                status.set("Cargando checkpoint y ejecutando pruebas…")
+                def execute():
+                    try:
+                        from ai_home.foundation.evaluation_job import run_evaluation
+                        report = run_evaluation(*paths, device=selected_device, max_new_tokens=count,
+                                                cancel=cancellation, on_probe=lambda item: events.put(("progress", item)))
+                        events.put(("done", report))
+                    except Exception as error:
+                        events.put(("error", str(error)))
+                self.evaluation_worker = threading.Thread(target=execute, daemon=True)
+                self.evaluation_worker.start()
+            def poll():
+                if not window.winfo_exists():
+                    return
+                while not events.empty():
+                    kind, value = events.get_nowait()
+                    if kind == "progress":
+                        status.set(f"Pruebas completadas: {value['completed']}/{value['total']}")
+                    elif kind == "done":
+                        passed = sum(row["passed"] for row in value["results"])
+                        status.set(f"Informe guardado. Resultado: {passed}/{len(value['results'])} pruebas superadas.")
+                        start_button.configure(state="normal")
+                    else:
+                        status.set(value)
+                        start_button.configure(state="normal")
+                window.after(100, poll)
+            start_button = ttk.Button(frame, text="Evaluar y guardar", command=start)
+            start_button.grid(row=5, column=1, sticky="w", pady=12)
+            ttk.Button(frame, text="Cancelar", command=stop).grid(row=5, column=2)
+            window.bind("<Destroy>", lambda event: cancellation.set() if event.widget is window else None)
+            poll()
+
+        def _experiment_report_dialog(self) -> None:
+            path = filedialog.askopenfilename(parent=self, title="Informe de evaluación, preferencias o evolución",
+                                             filetypes=[("Informe JSON", "*.json")])
+            if not path:
+                return
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Foundation: informes de experimentos")
+            window.geometry("820x580")
+            ttk.Label(window, text="Informe local: no verifica por sí solo la ejecución, los pesos ni la aprobación.",
+                      wraplength=760).pack(padx=12, pady=10)
+            summary = tk.StringVar(value="Cargando informe…")
+            window.report_summary = summary
+            ttk.Label(window, textvariable=summary, wraplength=760).pack(padx=12, pady=6)
+            frame = ttk.Frame(window)
+            frame.pack(fill="both", expand=True, padx=12, pady=12)
+            scrollbar = ttk.Scrollbar(frame)
+            scrollbar.pack(side="right", fill="y")
+            content = tk.Text(frame, wrap="word", state="disabled", yscrollcommand=scrollbar.set)
+            content.pack(fill="both", expand=True)
+            scrollbar.configure(command=content.yview)
+            def inspect():
+                from ai_home.foundation.reports import read_report
+                return read_report(path)
+            def display(document):
+                report = document["report"]
+                if report["format"] == "ai-home-evaluation-v1":
+                    passed = sum(row["passed"] for row in report["results"])
+                    summary.set(f"Evaluación: {passed}/{len(report['results'])} pruebas superadas. "
+                                f"Versión de suite: {report.get('suite_version', 'sin especificar')}")
+                elif report["format"] == "ai-home-distributed-loss-report-v1":
+                    summary.set(f"Pérdida causal distribuida: {report['mean_loss']:.6f}. "
+                                f"{report['tokens']} tokens en {len(report['shards'])} fragmentos. "
+                                "No mide capacidad lingüística ni autoriza promoción.")
+                elif report["format"] == "ai-home-preference-training-v1":
+                    candidate = report["candidate"]
+                    result = (f"Margen reservado: {report['baseline']['mean_margin']:.4f} → "
+                              f"{candidate['mean_margin']:.4f}, {candidate['pairs']} pares."
+                              if candidate else "Cancelado; sin evaluación final.")
+                    summary.set(f"Preferencias: paso {report['step']}. {result} "
+                                "Candidato restringido; no mide calidad lingüística ni activa el modelo.")
+                elif report["format"] == "ai-home-adapter-training-v1":
+                    candidate = report["candidate"]
+                    result = (f"Pérdida reservada: {report['baseline']['loss']:.6f} → "
+                              f"{candidate['loss']:.6f}, {candidate['tokens']} tokens."
+                              if candidate else "Cancelado; sin evaluación final.")
+                    summary.set(f"Adaptadores ({report.get('objective', 'causal')}): paso {report['step']}/{report['identity']['settings']['steps']}. "
+                                f"{report['trainable_parameters']} parámetros entrenables. {result} "
+                                "Candidato restringido; no mide calidad lingüística ni activa el modelo.")
+                else:
+                    summary.set(f"Evolución: {report['decision']}. {report['reason']} — Sin promoción automática.")
+                content.configure(state="normal")
+                content.insert("end", json.dumps(document, indent=2, ensure_ascii=False))
+                content.configure(state="disabled")
+            self._background(inspect, display, is_current=lambda: bool(window.winfo_exists()))
+
+        def _inspect_checkpoint_dialog(self) -> None:
+            path = filedialog.askopenfilename(parent=self, title="Checkpoint Foundation",
+                                             filetypes=[("PyTorch checkpoint", "*.pt"), ("Todos", "*.*")])
+            if not path:
+                return
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Foundation: arquitectura y entrenamiento")
+            window.geometry("820x580")
+            notebook = ttk.Notebook(window)
+            notebook.pack(fill="both", expand=True, padx=12, pady=12)
+            views = {}
+            for name in ("Modelo", "Entrenamiento"):
+                frame = ttk.Frame(notebook)
+                notebook.add(frame, text=name)
+                scrollbar = ttk.Scrollbar(frame)
+                scrollbar.pack(side="right", fill="y")
+                content = tk.Text(frame, wrap="word", state="disabled", yscrollcommand=scrollbar.set)
+                content.pack(fill="both", expand=True)
+                scrollbar.configure(command=content.yview)
+                views[name] = content
+            ttk.Label(window, text="Inspección local. Los datos del checkpoint no certifican capacidades ni aprobación.",
+                      wraplength=760).pack(padx=12, pady=(0, 12))
+
+            def inspect():
+                from ai_home.foundation.inspection import inspect_checkpoint
+                return inspect_checkpoint(path)
+
+            def display(report):
+                training_keys = {"training_config", "metrics", "validation", "embedding_delta_l2",
+                                 "training_device", "step", "training_complete", "stop_reason",
+                                 "training_document_count", "validation_document_count"}
+                sections = {"Modelo": {k: v for k, v in report.items() if k not in training_keys},
+                            "Entrenamiento": {k: v for k, v in report.items() if k in training_keys}}
+                for name, value in sections.items():
+                    views[name].configure(state="normal")
+                    views[name].insert("end", json.dumps(value, indent=2, ensure_ascii=False))
+                    views[name].configure(state="disabled")
+                self.status_var.set("Checkpoint inspeccionado; no se ha cambiado el modelo de chat.")
+
+            self._background(inspect, display, is_current=lambda: bool(window.winfo_exists()))
+
+        def _generation_dialog(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Generación Foundation del servidor")
+            window.transient(self)
+            frame = ttk.Frame(window, padding=16)
+            frame.pack(fill="both", expand=True)
+            custom = tk.BooleanVar(value=self.generation_settings is not None)
+            ttk.Checkbutton(frame, text="Usar ajustes personalizados", variable=custom).grid(
+                row=0, column=0, columnspan=2, sticky="w")
+            defaults = FoundationGeneration().model_dump()
+            selected = self.generation_settings or defaults
+            labels = [("temperature", "Temperatura (0 = determinista)"),
+                      ("top_k", "Top-k (0 = sin filtro)"), ("top_p", "Top-p"),
+                      ("repetition_penalty", "Penalización de repetición"),
+                      ("seed", "Semilla"), ("max_new_tokens", "Máximo de tokens (vacío = servidor)")]
+            fields = {}
+            for row, (key, label) in enumerate(labels, 1):
+                value = selected.get(key, defaults[key])
+                fields[key] = tk.StringVar(value="" if value is None else str(value))
+                ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
+                ttk.Entry(frame, textvariable=fields[key], width=18).grid(row=row, column=1, pady=4)
+            ttk.Label(frame, text="Se aplican a la próxima petición al servidor Foundation.\n"
+                      "El servidor mantiene su propio límite de tokens.").grid(row=7, column=0, columnspan=2, pady=8)
+
+            def save():
+                try:
+                    settings = parse_generation_settings({key: value.get() for key, value in fields.items()}) if custom.get() else None
+                except (ValueError, TypeError):
+                    messagebox.showerror("Generación", "Revisa los números y los límites de los ajustes.", parent=window)
+                    return
+                self.generation_settings = settings
+                self.status_var.set("Ajustes personalizados de generación." if settings is not None else "Generación con valores del servidor.")
+                window.destroy()
+
+            ttk.Button(frame, text="Aplicar", command=save).grid(row=8, column=0, columnspan=2)
+
+        def _show_credits(self) -> None:
+            if self.session_token is None or self.session_server_url is None:
+                messagebox.showerror("AI@Home", "Inicia sesión para consultar tus créditos.", parent=self)
+                return
+            server_url, token = self.session_server_url, self.session_token
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Créditos de mi cuenta")
+            window.geometry("800x620")
+            controls = ttk.Frame(window, padding=12)
+            controls.pack(fill="x")
+            price_label = tk.StringVar(value="Precio del servidor: pendiente de consulta")
+            ttk.Label(controls, textvariable=price_label).pack(anchor="w")
+            ttk.Label(controls, text="Máximo de créditos por respuesta (0 = no autorizar gasto):").pack(anchor="w")
+            limit = tk.StringVar(value=str(self.chat_credit_limit))
+            ttk.Entry(controls, textvariable=limit, width=12).pack(anchor="w")
+            def apply_limit():
+                try:
+                    value = int(limit.get())
+                    credit_authorization(value)
+                except ValueError as error:
+                    messagebox.showerror("AI@Home", str(error), parent=window)
+                    return
+                self.chat_credit_limit = value
+                self.status_var.set(f"Límite autorizado: {value} créditos por respuesta del servidor.")
+            ttk.Button(controls, text="Aplicar límite a próximas respuestas", command=apply_limit).pack(anchor="w", pady=6)
+            ttk.Label(controls, text="El límite es por respuesta, no un presupuesto total. Se cobra el cálculo completado, aunque se pierda la conexión. Una nueva solicitud puede generar otro cobro. El límite se borra al cambiar de cuenta.", wraplength=740).pack(anchor="w")
+            self._background(lambda: server_inference_price(server_url, token),
+                             lambda price: price_label.set(f"Precio actual: {price} créditos por respuesta completada"),
+                             is_current=lambda: bool(window.winfo_exists()))
+            content = tk.Text(window, wrap="word", state="disabled")
+            content.pack(fill="both", expand=True, padx=12, pady=12)
+
+            def refresh():
+                refresh_button.configure(state="disabled")
+
+                def success(result):
+                    content.configure(state="normal")
+                    content.delete("1.0", "end")
+                    content.insert("end", format_credits(*result))
+                    content.configure(state="disabled")
+                    refresh_button.configure(state="normal")
+
+                self._background(lambda: server_credits(server_url, token), success,
+                                 lambda: refresh_button.configure(state="normal"),
+                                 is_current=lambda: bool(window.winfo_exists()))
+
+            refresh_button = ttk.Button(window, text="Actualizar", command=refresh)
+            refresh_button.pack(pady=(0, 12))
+            refresh()
+
+        def _refresh_server_versions(self) -> None:
+            if self.session_token is None or self.session_server_url is None:
+                messagebox.showerror("AI@Home", "Inicia sesión para consultar las versiones.", parent=self)
+                return
+            server_url, token = self.session_server_url, self.session_token
+
+            def on_success(versions):
+                self.server_version_combo.configure(values=[DEFAULT_SERVER_VERSION, *versions])
+                self.status_var.set(f"{len(versions)} versiones aprobadas disponibles.")
+
+            self._background(lambda: server_model_versions(server_url, token), on_success)
 
         def _provider_changed(self, *_args) -> None:
             provider_id = _PROVIDER_ID_BY_LABEL.get(self.provider_var.get())
@@ -1433,7 +2506,7 @@ def main() -> None:
             provider = self.provider_id
             if not _is_provider_id(provider):
                 raise ValueError("Selecciona un proveedor compatible.")
-            if provider == "ai-home-local":
+            if provider in {"ai-home-local", "ai-home-foundation"}:
                 return provider, ""
             if provider == "openai-compatible":
                 configured_endpoint = self.endpoint_var.get().strip()
@@ -1454,7 +2527,7 @@ def main() -> None:
         def _save_provider_key(self) -> None:
             try:
                 provider, endpoint = self._selected_provider()
-                if provider == "ai-home-local":
+                if provider in {"ai-home-local", "ai-home-foundation"}:
                     raise ValueError("El modelo local no necesita una clave API.")
                 save_provider_api_key(
                     provider,
@@ -1489,7 +2562,83 @@ def main() -> None:
                 parent=self,
             )
 
+        def _show_compute_jobs(self) -> None:
+            if self.session_token is None or self.session_server_url is None:
+                messagebox.showerror("AI@Home", "Inicia sesión para consultar tus trabajos.", parent=self)
+                return
+            from tkinter.scrolledtext import ScrolledText
+            server_url, token = self.session_server_url, self.session_token
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Mis trabajos distribuidos")
+            window.geometry("860x640")
+            window.minsize(640, 480)
+            frame = ttk.Frame(window, padding=12)
+            frame.pack(fill="both", expand=True)
+            notice = tk.StringVar(value="Consultando trabajos de esta cuenta…")
+            ttk.Label(frame, textvariable=notice, wraplength=600).pack(anchor="w", pady=6)
+            controls = ttk.Frame(frame)
+            controls.pack(fill="x")
+            listing_frame = ttk.Frame(frame)
+            listing_frame.pack(fill="x", pady=8)
+            listing = tk.Listbox(listing_frame, height=8, exportselection=False)
+            scroll = ttk.Scrollbar(listing_frame, orient="vertical", command=listing.yview)
+            listing.configure(yscrollcommand=scroll.set)
+            scroll.pack(side="right", fill="y")
+            listing.pack(side="left", fill="both", expand=True)
+            detail = ScrolledText(frame, wrap="word", state="disabled", height=10)
+            detail.pack(fill="both", expand=True)
+            records = []
+            history, has_more = [None], False
+            def selected(*args):
+                indices = listing.curselection()
+                detail.configure(state="normal")
+                detail.delete("1.0", "end")
+                if indices:
+                    detail.insert("end", format_job_summary(records[indices[0]]))
+                detail.configure(state="disabled")
+            listing.bind("<<ListboxSelect>>", selected)
+            def restore_controls():
+                button.configure(state="normal")
+                first_button.configure(state="normal")
+                previous_button.configure(state="normal" if len(history) > 1 else "disabled")
+                next_button.configure(state="normal" if has_more else "disabled")
+            def refresh(target_history=None):
+                pending = list(history if target_history is None else target_history)
+                for control in (button, first_button, previous_button, next_button):
+                    control.configure(state="disabled")
+                notice.set("Actualizando; los datos visibles pueden pertenecer a la consulta anterior.")
+                def success(result):
+                    nonlocal has_more
+                    history[:] = pending
+                    has_more = len(result) > 50
+                    records[:] = result[:50]
+                    listing.delete(0, "end")
+                    for job in records:
+                        listing.insert("end", f"{job.status} | {job.job_type} | {job.job_id}")
+                    if records:
+                        listing.selection_set(0)
+                    selected()
+                    notice.set(f"Página {len(history)}: {len(records)} trabajos de tu cuenta. Vista de solo lectura.")
+                    restore_controls()
+                def failure():
+                    notice.set("No se pudo actualizar. Los datos visibles, si los hay, pertenecen a la consulta anterior.")
+                    restore_controls()
+                self._background(lambda: server_job_summaries(server_url, token, limit=51, before=pending[-1]), success,
+                    failure, is_current=lambda: bool(window.winfo_exists()))
+            button = ttk.Button(controls, text="Actualizar", command=refresh)
+            button.pack(side="left")
+            first_button = ttk.Button(controls, text="Inicio", command=lambda: refresh([None]))
+            first_button.pack(side="left", padx=4)
+            previous_button = ttk.Button(controls, text="Más recientes", command=lambda: refresh(history[:-1]))
+            previous_button.pack(side="left", padx=4)
+            next_button = ttk.Button(controls, text="Más antiguos", command=lambda: refresh(
+                [*history, (records[-1].created_at.isoformat(), records[-1].job_id)]))
+            next_button.pack(side="left", padx=4)
+            refresh()
+
         def _build_node_tab(self, ttk, parent) -> None:
+            ttk.Button(parent, text="Mis trabajos distribuidos", command=self._show_compute_jobs).pack(anchor="w", pady=6)
             ttk.Label(
                 parent,
                 text=(
@@ -1500,11 +2649,40 @@ def main() -> None:
                 wraplength=800,
             ).pack(anchor="w", pady=6)
             self.consent_var = tk.BooleanVar(value=False)
+            self.transfer_probe_var = tk.BooleanVar(value=False)
+            self.node_training_var = tk.BooleanVar(value=False)
+            self.node_evaluation_var = tk.BooleanVar(value=False)
+            self.node_adapters_var = tk.BooleanVar(value=False)
+            self.node_device_var = tk.StringVar(value="cpu")
             ttk.Checkbutton(
                 parent,
                 text="Acepto registrar este equipo y ejecutar trabajos comunitarios.",
                 variable=self.consent_var,
             ).pack(anchor="w", pady=8)
+            ttk.Checkbutton(parent, text="Permitir entrenamiento Foundation experimental con datos públicos.",
+                            variable=self.node_training_var).pack(anchor="w", pady=4)
+            ttk.Checkbutton(parent, text="Permitir evaluación Foundation experimental con datos públicos.",
+                            variable=self.node_evaluation_var).pack(anchor="w", pady=4)
+            ttk.Checkbutton(parent, text="Permitir entrenamiento de adaptadores con datos y pesos públicos.",
+                            variable=self.node_adapters_var).pack(anchor="w", pady=4)
+            ttk.Label(parent, text="Los permisos y el dispositivo se aplican al iniciar el nodo; detén y reinicia para cambiarlos.",
+                      wraplength=800).pack(anchor="w", pady=4)
+            device_row = ttk.Frame(parent)
+            device_row.pack(anchor="w", pady=4)
+            ttk.Label(device_row, text="Dispositivo Foundation:").pack(side="left")
+            ttk.Combobox(device_row, textvariable=self.node_device_var, values=("cpu", "cuda"),
+                         state="readonly", width=8).pack(side="left", padx=8)
+            ttk.Label(parent, text="Requiere PyTorch compatible y autorización del servidor. CUDA no usa CPU como alternativa.",
+                      wraplength=800).pack(anchor="w", pady=4)
+            ttk.Checkbutton(
+                parent,
+                text="Medir y compartir rendimiento HTTP al buscar trabajo (cada 60 s).",
+                variable=self.transfer_probe_var,
+            ).pack(anchor="w", pady=4)
+            ttk.Label(parent, text=(
+                "Opcional: envía y recibe 64 KiB por medición, sin conversaciones. "
+                "Se aplica al iniciar el nodo; detén y reinicia para cambiarlo."
+            ), wraplength=800).pack(anchor="w", pady=4)
             ttk.Button(
                 parent,
                 text="Iniciar contribución",
@@ -1526,16 +2704,20 @@ def main() -> None:
             operation: Callable[[], T],
             on_success: Callable[[T], None],
             on_failure: Callable[[], None] | None = None,
+            *,
+            is_current: Callable[[], bool] | None = None,
         ) -> None:
             self.status_var.set("Procesando…")
+            session_token = self.session_token
+            valid = lambda: self.session_token == session_token and (is_current is None or is_current())
 
             def execute() -> None:
                 try:
                     result = operation()
                 except Exception as error:
-                    self.events.put(("error", (error, on_failure)))
+                    self.events.put(("error", (error, on_failure, valid)))
                 else:
-                    self.events.put(("success", (on_success, result)))
+                    self.events.put(("success", (on_success, result, valid)))
 
             threading.Thread(target=execute, daemon=True).start()
 
@@ -1546,20 +2728,33 @@ def main() -> None:
                 except queue.Empty:
                     break
                 if kind == "error":
-                    error, on_failure = payload
+                    error, on_failure, valid = payload
+                    if not valid():
+                        continue
                     if on_failure is not None:
                         on_failure()
-                    self.status_var.set("Error")
-                    messagebox.showerror("AI@Home", str(error), parent=self)
+                    if isinstance(error, GenerationCancelled):
+                        self.status_var.set("Generación cancelada; respuesta parcial descartada.")
+                    else:
+                        self.status_var.set("Error")
+                        messagebox.showerror("AI@Home", str(error), parent=self)
+                elif kind == "chat_delta":
+                    conversation_id, cancellation, content = payload
+                    if self.conversation_id == conversation_id and self.chat_cancel is cancellation and not cancellation.is_set():
+                        self.chat_preview_var.set((self.chat_preview_var.get() + content)[-2000:])
                 elif kind == "success":
-                    callback, result = payload
+                    callback, result, valid = payload
+                    if not valid():
+                        continue
                     try:
                         callback(result)
                     except Exception as error:
                         self.status_var.set("Error")
                         messagebox.showerror("AI@Home", str(error), parent=self)
                 elif kind == "node_status":
-                    self.status_var.set(str(payload))
+                    status, valid = payload
+                    if valid():
+                        self.status_var.set(status)
             self.after(100, self._drain_events)
 
         def _credentials(self) -> tuple[str, str, str]:
@@ -1586,6 +2781,9 @@ def main() -> None:
                 return
 
             def on_success(session: SessionResponse) -> None:
+                if session.user_id is None:
+                    raise ValueError("Actualiza el servidor: falta la identidad de la cuenta.")
+                self._switch_memory_profile(server_url, str(session.user_id))
                 updated_settings = {
                     **self.settings,
                     "server_url": server_url,
@@ -1651,6 +2849,7 @@ def main() -> None:
             if self.session_token is None:
                 if self.guest_session_active:
                     self.guest_session_active = False
+                    self._switch_memory_profile()
                     self.account_status_var.set(
                         "Sin sesión activa. Puedes continuar como invitado."
                     )
@@ -1675,6 +2874,7 @@ def main() -> None:
                     response.raise_for_status()
 
             def on_success(_result) -> None:
+                self._switch_memory_profile()
                 self.session_token = None
                 self.session_server_url = None
                 self.account_status_var.set(
@@ -1699,6 +2899,8 @@ def main() -> None:
                 *self.messages,
                 {"role": "user", "content": prompt},
             ]
+            request_cancel = threading.Event()
+            request_conversation_id = self.conversation_id
             selected_memories = retrieve_memories(prompt, self.memory_notes)
             request_messages = messages_with_memory_context(
                 messages,
@@ -1706,6 +2908,17 @@ def main() -> None:
             )
             try:
                 use_server = self.use_server_ai_var.get()
+                use_stream = self.stream_enabled_var.get()
+                credit_limit = self.chat_credit_limit
+                credit_request_id = str(uuid4()) if credit_limit else None
+                generation = dict(self.generation_settings) if self.generation_settings is not None else None
+                if generation is not None and not use_server:
+                    raise ValueError("Los ajustes personalizados requieren el servidor Foundation.")
+                if use_stream and not use_server:
+                    raise ValueError("El texto progresivo requiere activar el servidor Foundation.")
+                use_knowledge = self.use_knowledge_var.get()
+                if use_knowledge and not use_server:
+                    raise ValueError("La recuperación de fuentes requiere activar el servidor AI@Home.")
                 if use_server:
                     if self.session_token is None or self.session_server_url is None:
                         raise ValueError(
@@ -1713,7 +2926,13 @@ def main() -> None:
                         )
                     server_url = self.session_server_url
                     user_token = self.session_token
-                    model = "AI@Home"
+                    selected_version = self.server_version_var.get()
+                    requested_version = None if selected_version == DEFAULT_SERVER_VERSION else str(UUID(selected_version))
+                    if self.pinned_server_version is not None:
+                        if requested_version not in (None, self.pinned_server_version):
+                            raise ValueError("Limpia la conversación antes de cambiar de versión.")
+                        requested_version = self.pinned_server_version
+                    model = f"AI@Home:{requested_version}" if requested_version else "AI@Home"
                     selected_source = (
                         "ai-home-server",
                         model,
@@ -1728,11 +2947,21 @@ def main() -> None:
                             "conversación, o límpiala antes de cambiar."
                         )
                     self.api_key_var.set("")
-                    operation = lambda: server_chat_completion(
-                        server_url,
-                        user_token,
-                        request_messages,
-                    )
+                    if use_stream:
+                        operation = lambda: server_stream_result(
+                            server_url, user_token, request_messages,
+                            use_knowledge=use_knowledge, model_version=requested_version, generation=generation,
+                            credit_limit=credit_limit, credit_request_id=credit_request_id,
+                            cancel=request_cancel,
+                            on_delta=lambda content: self.events.put(("chat_delta", (
+                                request_conversation_id, request_cancel, content))),
+                        )
+                    else:
+                        operation = lambda: server_chat_result(
+                            server_url, user_token, request_messages,
+                            use_knowledge=use_knowledge, model_version=requested_version, generation=generation,
+                            credit_limit=credit_limit, credit_request_id=credit_request_id,
+                        )
                 else:
                     provider_id, provider_url = self._selected_provider()
                     model = self.model_var.get().strip()
@@ -1757,7 +2986,7 @@ def main() -> None:
                         self.settings["chat_model"] = model
                     save_settings(self.settings)
                     provider_api_key = entered_api_key
-                    if not provider_api_key and provider_id != "ai-home-local":
+                    if not provider_api_key and provider_id not in {"ai-home-local", "ai-home-foundation"}:
                         provider_api_key = get_provider_api_key(
                             provider_id,
                             provider_url,
@@ -1769,6 +2998,10 @@ def main() -> None:
                         api_key=provider_api_key,
                         endpoint_url=provider_url,
                     )
+                    if provider_id == "ai-home-foundation":
+                        expected_checkpoint = self.pinned_foundation_checkpoint
+                        operation = lambda: foundation_chat_result(model, request_messages,
+                                                                    expected_checkpoint=expected_checkpoint)
             except ValueError as error:
                 messagebox.showerror("AI@Home", str(error), parent=self)
                 return
@@ -1780,11 +3013,37 @@ def main() -> None:
                 self.conversation_source = selected_source
             self.prompt.delete("1.0", "end")
             self.chat_request_active = True
+            self.chat_cancel = request_cancel if use_stream else None
+            self.chat_preview_var.set("")
             self.messages.append({"role": "user", "content": prompt})
             self._append_chat("Tú", prompt)
             messages = list(self.messages)
 
-            def on_success(answer: str) -> None:
+            def on_failure():
+                if self.conversation_id == request_conversation_id:
+                    self.chat_request_active = False
+                    self.chat_cancel = None
+                    self.chat_preview_var.set("")
+
+            def on_success(result: str | ServerChatResult | FoundationChatResult) -> None:
+                if self.conversation_id != request_conversation_id:
+                    return
+                if request_cancel.is_set():
+                    on_failure()
+                    self.status_var.set("Generación cancelada; respuesta parcial descartada.")
+                    return
+                on_failure()
+                answer = result.answer if isinstance(result, (ServerChatResult, FoundationChatResult)) else result
+                if isinstance(result, FoundationChatResult):
+                    self.pinned_foundation_checkpoint = result.checkpoint_sha256
+                if isinstance(result, ServerChatResult) and result.model_version is not None:
+                    self.pinned_server_version = result.model_version
+                    self.server_version_var.set(result.model_version)
+                    self.conversation_source = ("ai-home-server", f"AI@Home:{result.model_version}", server_url)
+                if use_knowledge:
+                    self.conversation_used_knowledge = True
+                    references = result.references if isinstance(result, ServerChatResult) else ()
+                    self.knowledge_references.append((len(self.messages), references))
                 self.chat_request_active = False
                 self.sphere_emotion = _sphere_emotion_for_text(answer)
                 self._layout_home()
@@ -1793,19 +3052,83 @@ def main() -> None:
                     note.id for note in selected_memories
                 )
                 self._append_chat("IA", answer)
-                self.status_var.set(f"Respuesta de {model}")
+                suffix = f" · {len(references)} fuentes recuperadas" if use_knowledge else ""
+                charge = f" · {result.charged_credits} créditos" if isinstance(result, ServerChatResult) else ""
+                self.status_var.set(f"Respuesta de {model}{suffix}{charge}")
 
             self._background(
                 operation,
                 on_success,
-                lambda: setattr(self, "chat_request_active", False),
+                on_failure,
+                is_current=lambda: self.conversation_id == request_conversation_id,
             )
 
         def _append_chat(self, speaker: str, content: str) -> None:
             self._render_chat_canvas()
             self.chat_messages_canvas.yview_moveto(1.0)
 
+        def _switch_memory_profile(self, server_url=None, user_id=None) -> None:
+            vault = profile_memory_vault(server_url, user_id)
+            notes = load_memories(vault)
+            if self.node_stop is not None:
+                self.node_stop.set()
+            self.node_stop = None
+            self.node_registration_active = False
+            self.consent_var.set(False)
+            self.node_training_var.set(False)
+            self.node_evaluation_var.set(False)
+            self.node_adapters_var.set(False)
+            self.transfer_probe_var.set(False)
+            for window in self.private_windows:
+                if window.winfo_exists():
+                    window.destroy()
+            self.private_windows.clear()
+            self.memory_vault = vault
+            self.memory_notes = notes
+            self._clear_chat()
+            self.prompt.delete("1.0", "end")
+            self.prompt_is_placeholder = False
+            self.api_key_var.set("")
+            self.use_knowledge_var.set(False)
+            self.stream_enabled_var.set(False)
+            self.generation_settings = None
+            self.chat_credit_limit = 0
+            self.server_version_combo.configure(values=[DEFAULT_SERVER_VERSION])
+
+        def _show_knowledge_references(self) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Fuentes recuperadas de esta conversación")
+            window.geometry("760x500")
+            content = tk.Text(window, wrap="word")
+            content.pack(fill="both", expand=True, padx=12, pady=12)
+            content.insert("end", format_knowledge_references(self.knowledge_references))
+            content.configure(state="disabled")
+
+        def _render_stream_preview(self) -> None:
+            self.chat_preview.configure(state="normal")
+            self.chat_preview.delete("1.0", "end")
+            self.chat_preview.insert("end", self.chat_preview_var.get())
+            self.chat_preview.configure(state="disabled")
+            self.chat_preview.yview_moveto(1.0)
+
+        def _stop_generation(self) -> None:
+            if self.chat_cancel is not None:
+                self.chat_cancel.set()
+                self.chat_preview_var.set("")
+                self.status_var.set("Cancelando generación…")
+
         def _clear_chat(self) -> None:
+            self._stop_generation()
+            self.chat_cancel = None
+            self.chat_preview_var.set("")
+            self.pinned_server_version = None
+            self.pinned_foundation_checkpoint = None
+            self.server_version_var.set(DEFAULT_SERVER_VERSION)
+            self.knowledge_references.clear()
+            self.conversation_used_knowledge = False
+            self.chat_request_active = False
+            self.training_submission_active = False
             self.messages.clear()
             self.conversation_id = str(uuid4())
             self.conversation_source = None
@@ -1817,6 +3140,14 @@ def main() -> None:
             self.chat_messages_canvas.yview_moveto(0)
 
         def _submit_training_candidate(self) -> None:
+            if self.conversation_used_knowledge:
+                messagebox.showerror(
+                    "AI@Home",
+                    "Esta conversación usó fuentes recuperadas. Su envío para entrenamiento "
+                    "requiere conservar y revisar las licencias de las fuentes; inicia otra conversación.",
+                    parent=self,
+                )
+                return
             if self.training_submission_active:
                 return
             if self.training_candidate_submitted:
@@ -1861,8 +3192,7 @@ def main() -> None:
             if not _is_training_provider(source_provider):
                 messagebox.showerror(
                     "AI@Home",
-                    "Solo se pueden aportar conversaciones de proveedores "
-                    "externos con procedencia verificable.",
+                    "La conversación necesita una procedencia compatible y verificable.",
                     parent=self,
                 )
                 return
@@ -1880,7 +3210,13 @@ def main() -> None:
                     parent=self,
                 )
                 return
-            provider: ProviderId = source_provider
+            provider: TrainingProviderId = source_provider
+            if provider == "ai-home-foundation":
+                if not self.pinned_foundation_checkpoint:
+                    messagebox.showerror("AI@Home", "Falta la identidad del checkpoint cargado.", parent=self)
+                    return
+                model = self.pinned_foundation_checkpoint
+                source_endpoint = f"ai-home-foundation://sha256/{model}"
             messages = [
                 message
                 for message in self.messages
@@ -1901,6 +3237,8 @@ def main() -> None:
             self.training_submission_active = True
 
             def on_success(contribution: TrainingContributionResponse) -> None:
+                if self.conversation_id != conversation_id:
+                    return
                 self.training_submission_active = False
                 self.training_candidate_submitted = True
                 self.training_consent_var.set(False)
@@ -1927,8 +3265,71 @@ def main() -> None:
                     reviewed_for_submission=True,
                 ),
                 on_success,
-                lambda: setattr(self, "training_submission_active", False),
+                lambda: setattr(self, "training_submission_active", False) if self.conversation_id == conversation_id else None,
+                is_current=lambda: self.conversation_id == conversation_id,
             )
+
+        def _correction_dialog(self, contribution, server_url, user_token) -> None:
+            window = tk.Toplevel(self)
+            self.private_windows.append(window)
+            window.title("Corregir respuesta: nueva aportación")
+            window.geometry("800x620")
+            frame = ttk.Frame(window, padding=14)
+            frame.pack(fill="both", expand=True)
+            indices = [i for i, message in enumerate(contribution.messages) if message.role == "assistant"]
+            selected = tk.StringVar(value=str(indices[-1]))
+            ttk.Label(frame, text="Respuesta del asistente (índice del mensaje)").pack(anchor="w")
+            selector = ttk.Combobox(frame, textvariable=selected, values=[str(i) for i in indices], state="readonly")
+            selector.pack(fill="x")
+            original = tk.Text(frame, height=7, wrap="word", state="disabled")
+            original.pack(fill="both", expand=True, pady=8)
+            replacement = tk.Text(frame, height=7, wrap="word")
+            ttk.Label(frame, text="Respuesta corregida").pack(anchor="w")
+            replacement.pack(fill="both", expand=True)
+            consent, reviewed = tk.BooleanVar(value=False), tk.BooleanVar(value=False)
+            ttk.Checkbutton(frame, text="Consiento enviar el prefijo y esta corrección como nuevo candidato.", variable=consent).pack(anchor="w", pady=(10, 0))
+            ttk.Checkbutton(frame, text="He revisado datos sensibles y derechos de reutilización.", variable=reviewed).pack(anchor="w")
+            ttk.Label(frame, text="El original no se modifica. Se excluyen los turnos posteriores; requiere nueva revisión humana.",
+                      wraplength=750).pack(anchor="w", pady=8)
+            def show_original(*args):
+                index = int(selected.get())
+                original.configure(state="normal")
+                original.delete("1.0", "end")
+                original.insert("end", "\n\n".join(f"{message.role}: {message.content}"
+                    for message in contribution.messages[:index + 1]))
+                original.configure(state="disabled")
+                replacement.delete("1.0", "end")
+                replacement.insert("end", contribution.messages[index].content)
+                consent.set(False); reviewed.set(False)
+            selector.bind("<<ComboboxSelected>>", show_original)
+            show_original()
+            candidate_id = str(uuid4())
+            busy = False
+            def send():
+                nonlocal busy
+                if busy:
+                    return
+                if not consent.get() or not reviewed.get():
+                    messagebox.showerror("Corrección", "Confirma consentimiento y revisión.", parent=window)
+                    return
+                index, text = int(selected.get()), replacement.get("1.0", "end-1c")
+                if not text.strip() or text == contribution.messages[index].content or len(text) > 8192:
+                    messagebox.showerror("Corrección", "Escribe una corrección distinta de hasta 8192 caracteres.", parent=window)
+                    return
+                busy = True
+                button.configure(state="disabled")
+                def failure():
+                    nonlocal busy
+                    busy = False
+                    button.configure(state="normal")
+                def success(result):
+                    self.status_var.set(f"Corrección pendiente de revisión: {result.contribution_id}")
+                    window.destroy()
+                self._background(lambda: submit_training_correction(server_url, user_token, contribution.contribution_id,
+                    index, text, consent=True, reviewed=True, conversation_id=candidate_id), success, failure,
+                    is_current=lambda: bool(window.winfo_exists()))
+            button = ttk.Button(frame, text="Enviar nueva corrección", command=send)
+            button.pack(anchor="e", pady=8)
 
         def _manage_training_candidates(self) -> None:
             if self.session_token is None or self.session_server_url is None:
@@ -1939,6 +3340,7 @@ def main() -> None:
                 )
                 return
             window = tk.Toplevel(self)
+            self.private_windows.append(window)
             window.title("Mis aportaciones para entrenamiento")
             window.geometry("760x360")
             listing = tk.Listbox(window, height=12)
@@ -2004,6 +3406,16 @@ def main() -> None:
                     on_success,
                 )
 
+            def correct_selected():
+                selection = listing.curselection()
+                if not selection:
+                    messagebox.showerror("Corrección", "Selecciona una aportación.", parent=window)
+                    return
+                contribution_id = records[selection[0]].contribution_id
+                self._background(lambda: get_training_candidate(server_url, user_token, contribution_id),
+                    lambda result: self._correction_dialog(result, server_url, user_token),
+                    is_current=lambda: bool(window.winfo_exists()))
+
             buttons = ttk.Frame(window)
             buttons.pack(fill="x", padx=10, pady=(0, 10))
             previous_button = ttk.Button(
@@ -2029,6 +3441,7 @@ def main() -> None:
                 text="Retirar seleccionada",
                 command=withdraw_selected,
             ).pack(side="left")
+            ttk.Button(buttons, text="Corregir respuesta", command=correct_selected).pack(side="left", padx=6)
             ttk.Label(
                 window,
                 text=(
@@ -2110,7 +3523,20 @@ def main() -> None:
                 self._launch_node(server_url, credentials.node_id, credentials.node_token)
 
             if token:
-                self._launch_node(server_url, existing_id, token)
+                def verify_owned_node():
+                    with httpx.Client(base_url=server_url, timeout=20) as client:
+                        response = client.get(f"/api/v1/nodes/{existing_id}", headers={"Authorization": f"Bearer {user_token}"})
+                        if response.status_code == 404:
+                            raise ValueError("El nodo guardado no pertenece a esta cuenta o está revocado. Inicia sesión con su propietario para gestionarlo.")
+                        response.raise_for_status()
+                        if response.json()["node_id"] != existing_id:
+                            raise ValueError("El servidor devolvió otro nodo; no se iniciará la contribución.")
+                self.node_registration_active = True
+                def on_owned(_):
+                    self.node_registration_active = False
+                    self._launch_node(server_url, existing_id, token)
+                self._background(verify_owned_node, on_owned,
+                                 lambda: setattr(self, "node_registration_active", False))
             else:
                 self.node_registration_active = True
                 self._background(
@@ -2124,7 +3550,9 @@ def main() -> None:
             self.node_stop = stop_event
             self.node_thread = threading.Thread(
                 target=self._node_loop,
-                args=(server_url, node_id, token, stop_event),
+                args=(server_url, node_id, token, stop_event, self.transfer_probe_var.get(),
+                      self.node_training_var.get(), self.node_device_var.get(), self.node_evaluation_var.get(),
+                      self.node_adapters_var.get()),
                 daemon=True,
             )
             self.node_thread.start()
@@ -2136,9 +3564,21 @@ def main() -> None:
             node_id: str,
             token: str,
             stop_event: threading.Event,
+            measure_transfer: bool = False,
+            allow_training: bool = False,
+            foundation_device: str = "cpu",
+            allow_evaluation: bool = False,
+            allow_adapters: bool = False,
         ) -> None:
-            agent = NodeAgent(server_url=server_url, node_token=token)
+            agent = NodeAgent(server_url=server_url, node_token=token,
+                              allow_foundation_training=allow_training,
+                              allow_foundation_evaluation=allow_evaluation,
+                              allow_foundation_adapters=allow_adapters,
+                              foundation_device=foundation_device if allow_training or allow_evaluation or allow_adapters else "cpu",
+                              transfer_probe_interval=60 if measure_transfer else None)
+            valid = lambda: self.node_stop is stop_event
             try:
+                agent.configure_capabilities()
                 while not stop_event.is_set():
                     did_work = agent.run_once()
                     status = (
@@ -2146,13 +3586,18 @@ def main() -> None:
                         if did_work
                         else f"Nodo {node_id}: esperando trabajo"
                     )
-                    self.events.put(("node_status", status))
+                    if measure_transfer:
+                        if agent.last_transfer_probe_error:
+                            status += "; medición HTTP fallida (se reintentará)"
+                        elif agent.last_transfer_measurement is not None:
+                            status += "; medición HTTP enviada"
+                    self.events.put(("node_status", (status, valid)))
                     stop_event.wait(10)
             except Exception as error:
-                self.events.put(("error", error))
+                self.events.put(("error", (error, None, valid)))
             finally:
                 agent.close()
-                self.events.put(("node_status", f"Nodo {node_id} detenido."))
+                self.events.put(("node_status", (f"Nodo {node_id} detenido.", valid)))
 
         def _stop_contribution(self) -> None:
             if self.node_stop is None:
@@ -2213,6 +3658,19 @@ def main() -> None:
             self._background(revoke, on_success)
 
         def _close(self) -> None:
+            evolution = getattr(self, "evolution_worker", None)
+            if evolution is not None and evolution.is_alive():
+                self.evolution_cancel.set()
+                self.status_var.set("Esperando a detener el experimento antes de cerrar…")
+                self.after(100, self._close)
+                return
+            worker = getattr(self, "training_worker", None)
+            if worker is not None and worker.is_alive():
+                self.training_cancel.set()
+                self.status_var.set("Esperando a guardar el entrenamiento antes de cerrar…")
+                self.after(100, self._close)
+                return
+            self._stop_generation()
             if self.node_stop is not None:
                 self.node_stop.set()
             self.destroy()
@@ -2227,3 +3685,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

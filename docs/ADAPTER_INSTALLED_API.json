@@ -1,0 +1,88 @@
+{
+  "format": "ai-home-installed-api-smoke-v1",
+  "installed_package": true,
+  "transport": "real loopback HTTP",
+  "schema": "packaged Alembic upgrade + check",
+  "unauthenticated_status": 401,
+  "completion": {
+    "charged_credits": 0,
+    "credit_request_id": null,
+    "generation": {
+      "max_new_tokens": 8,
+      "temperature": 0.0,
+      "top_k": 40,
+      "top_p": 0.95,
+      "repetition_penalty": 1.0,
+      "seed": 42
+    },
+    "model_version": null,
+    "references": [],
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "��������"
+        },
+        "finish_reason": "stop"
+      }
+    ]
+  },
+  "stream_events": [
+    {
+      "type": "metadata",
+      "model_version": null,
+      "references": [],
+      "generation": {
+        "max_new_tokens": 8,
+        "temperature": 0.0,
+        "top_k": 40,
+        "top_p": 0.95,
+        "repetition_penalty": 1.0,
+        "seed": 42
+      },
+      "reserved_credits": 0
+    },
+    {
+      "type": "delta",
+      "content": "�"
+    },
+    {
+      "type": "delta",
+      "content": "�"
+    },
+    {
+      "type": "delta",
+      "content": "�"
+    },
+    {
+      "type": "delta",
+      "content": "�"
+    },
+    {
+      "type": "delta",
+      "content": "�"
+    },
+    {
+      "type": "delta",
+      "content": "�"
+    },
+    {
+      "type": "delta",
+      "content": "�"
+    },
+    {
+      "type": "delta",
+      "content": "�"
+    },
+    {
+      "type": "done",
+      "chunks": 8,
+      "characters": 8,
+      "generation_seconds": 0.008863299997756258,
+      "charged_credits": 0,
+      "credit_request_id": null
+    }
+  ],
+  "claim": "Mechanical API inference only; no language quality established"
+}

@@ -37,3 +37,4 @@ El repositorio se mantiene privado por ahora. Antes de hacerlo público, se
 deben escoger una licencia de software y políticas compatibles para
 documentación, datos y modelos, además de revisar que los artefactos incluidos
 puedan redistribuirse.
+

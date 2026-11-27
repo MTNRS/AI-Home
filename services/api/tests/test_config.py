@@ -77,3 +77,4 @@ def test_supabase_auth_requires_publishable_key_and_project_scoped_jwks():
             supabase_publishable_key="sb_publishable_test",
             supabase_jwks_url="https://other.supabase.co/auth/v1/.well-known/jwks.json",
         )
+

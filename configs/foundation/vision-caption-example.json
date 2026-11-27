@@ -1,0 +1,7 @@
+{
+  "model": {"width": 32, "layers": 2, "heads": 4, "kv_heads": 2, "hidden": 64, "context": 64},
+  "vision": {"image_size": 8, "patch_size": 4},
+  "training": {"steps": 4, "batch_size": 2, "accumulation": 1, "warmup": 1, "checkpoint_every": 2, "objective": "sft", "precision": "fp32"},
+  "prompt": "Describe the image.",
+  "tokenizer_vocab_size": 270
+}

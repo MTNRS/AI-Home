@@ -91,6 +91,27 @@ def create_node(client: TestClient, token: str, name: str = "node-one") -> dict:
     return response.json()
 
 
+def test_node_lookup_is_owner_scoped_and_excludes_revoked(client):
+    register(client, "node-owner@example.com")
+    register(client, "node-other@example.com")
+    owner = login(client, "node-owner@example.com")
+    other = login(client, "node-other@example.com")
+    node = create_node(client, owner)
+    path = f"/api/v1/nodes/{node['node_id']}"
+    assert client.get(path).status_code == 401
+    response = client.get(path, headers=user_headers(owner))
+    assert response.status_code == 200
+    assert response.json()["node_id"] == node["node_id"]
+    assert "node_token" not in response.json() and "token_hash" not in response.json()
+    assert response.headers["cache-control"] == "private, no-store"
+    absent = client.get("/api/v1/nodes/missing", headers=user_headers(other))
+    foreign = client.get(path, headers=user_headers(other))
+    assert absent.status_code == foreign.status_code == 404
+    assert absent.json() == foreign.json()
+    assert client.delete(path, headers=user_headers(owner)).status_code == 204
+    assert client.get(path, headers=user_headers(owner)).status_code == 404
+
+
 def create_job(
     client: TestClient,
     token: str,
@@ -351,13 +372,16 @@ def test_expired_lease_result_is_rejected(client: TestClient, monkeypatch):
     assert expired.status_code == 409
 
 
-def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient):
+@pytest.mark.parametrize("telemetry_unavailable", [False, True])
+def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient, telemetry_unavailable):
     register(client, "alice@example.com")
     token = login(client, "alice@example.com")
     node = create_node(client, token)
     create_job(client, token, values=[6, 8])
 
     def forward(request: httpx.Request) -> httpx.Response:
+        if telemetry_unavailable and request.url.path.endswith('/measurement'):
+            raise httpx.ReadTimeout('Telemetry response lost')
         response = client.request(
             request.method,
             request.url.path,
@@ -384,7 +408,15 @@ def test_node_agent_runs_one_job_using_typed_http_protocol(client: TestClient):
     )
     try:
         did_work = agent.run_once()
+        assert agent.last_measurement_uploaded is not telemetry_unavailable
+        measurement = agent.last_run_metrics
+        assert measurement["job_type"] == "math.sum.v1"
+        assert measurement["execution_seconds"] > 0
+        assert measurement["claim_response_bytes"] > 0
+        assert measurement["submit_request_bytes"] > 0
+        assert "token" not in str(measurement)
         no_work = agent.run_once()
+        assert agent.last_run_metrics is None
     finally:
         agent.close()
 
@@ -435,7 +467,7 @@ def test_node_onboarding_reports_detected_hardware(
 
     assert registration.node_id
     assert registration.node_token
-    assert registration.supported_job_types == ["math.sum.v1"]
+    assert registration.supported_job_types == ["foundation.tokenize.v1", "math.sum.v1"]
 
 
 def test_account_deletion_removes_owned_nodes_and_jobs(client: TestClient):
@@ -506,3 +538,155 @@ def test_node_clients_require_https_for_remote_servers():
             user_token="user-secret",
             name="desktop-node",
         )
+
+
+
+def test_lease_renewal_requires_current_owner_token_and_unexpired_lease(client, monkeypatch):
+    register(client, "renew@example.com")
+    token = login(client, "renew@example.com")
+    first, second = create_node(client, token), create_node(client, token, "second")
+    create_job(client, token)
+    headers = user_headers(first["node_token"])
+    claim = client.post("/api/v1/node/jobs/claim", headers=headers).json()
+    route = f"/api/v1/node/jobs/{claim['job_id']}/renew"
+    body = {"lease_token": claim["lease_token"]}
+    original_expiry = claim["lease_expires_epoch"]
+    monkeypatch.setattr(job_service.time, "time", lambda: original_expiry - 30)
+    assert client.post(route, headers=user_headers(second["node_token"]), json=body).status_code == 404
+    assert client.post(route, headers=headers, json={"lease_token": "x"*32}).status_code == 404
+    renewed = client.post(route, headers=headers, json=body)
+    assert renewed.status_code == 200
+    assert renewed.json()["lease_expires_epoch"] == original_expiry - 30 + JOB_LEASE_SECONDS
+    monkeypatch.setattr(job_service.time, "time", lambda: renewed.json()["lease_expires_epoch"])
+    assert client.post(route, headers=headers, json=body).status_code == 404
+    with client.app.state.session_factory() as session:
+        assert session.get(ComputeJob, claim["job_id"]).attempt_count == 1
+
+
+@pytest.mark.parametrize("renew_status", [200, 404])
+def test_worker_renews_during_work_and_discards_result_after_lost_lease(monkeypatch, renew_status):
+    import threading
+    import ai_home.node_worker as worker
+    renewed = threading.Event()
+    submitted = []
+    def forward(request):
+        if request.url.path.endswith("/heartbeat"):
+            return httpx.Response(200, json={})
+        if request.url.path.endswith("/claim"):
+            return httpx.Response(200, json={"job_id":"test-job", "job_type":"math.sum.v1",
+                "payload":{"values":[1,2]}, "lease_token":"x"*32, "lease_expires_epoch":4000000000})
+        if request.url.path.endswith("/renew"):
+            renewed.set()
+            return httpx.Response(renew_status, json={"lease_expires_epoch":4000000120})
+        submitted.append(request.url.path)
+        return httpx.Response(200, json={})
+    def work(*args, **kwargs):
+        assert renewed.wait(3)
+        return {"sum":3}
+    monkeypatch.setattr(worker, "execute_job", work)
+    agent = NodeAgent(server_url="http://localhost", node_token="test", lease_renew_interval=1,
+                      transport=httpx.MockTransport(forward))
+    try:
+        if renew_status == 200:
+            assert agent.run_once()
+            assert submitted == ["/api/v1/node/jobs/test-job/result", "/api/v1/node/jobs/test-job/measurement"]
+        else:
+            with pytest.raises(RuntimeError, match="not submitted"):
+                agent.run_once()
+            assert not submitted
+    finally:
+        agent.close()
+
+def test_measurement_bound_to_verified_node_completion_and_expiry(client, monkeypatch):
+    register(client, 'measure@example.com')
+    token = login(client, 'measure@example.com')
+    node = create_node(client, token)
+    other = create_node(client, token, name='other')
+    create_job(client, token, values=[6, 8])
+    headers = user_headers(node['node_token'])
+    claim = client.post('/api/v1/node/jobs/claim', headers=headers).json()
+    url = f"/api/v1/node/jobs/{claim['job_id']}/measurement"
+    sample = {'format': 'ai-home-worker-service-measurement-v1', 'job_type': 'math.sum.v1',
+              'device': 'cpu', 'heartbeat_service_seconds': 0.01, 'claim_service_seconds': 0.02,
+              'execution_seconds': 0.001, 'submit_service_seconds': 0.03,
+              'claim_response_bytes': 1000, 'submit_request_bytes': 100}
+    assert client.post(url, headers=headers, json=sample).status_code == 404
+    response = client.post(f"/api/v1/node/jobs/{claim['job_id']}/result", headers=headers,
+        json={'lease_token': claim['lease_token'], 'result': {'sum': 14}})
+    assert response.status_code == 200
+    assert client.post(url, headers=user_headers(other['node_token']), json=sample).status_code == 404
+    assert client.post(url, headers=headers, json={**sample, 'device': 'cuda'}).status_code == 422
+    assert client.post(url, headers=headers, json={**sample, 'execution_seconds': 0.0}).status_code == 422
+    assert client.post(url, headers=headers, json={**sample, 'submit_request_bytes': True}).status_code == 422
+    first = client.post(url, headers=headers, json=sample)
+    assert first.status_code == 200
+    assert client.post(url, headers=headers, json=sample).json() == first.json()
+    assert client.post(url, headers=headers, json={**sample, 'execution_seconds': 0.002}).status_code == 409
+    with client.app.state.session_factory() as session:
+        saved = session.get(ComputeNode, node['node_id']).hardware['service_measurement']
+        assert saved['claim_service_bytes_per_second'] == 50000
+        assert saved['sample'] == sample
+    monkeypatch.setattr(job_service.time, 'time', lambda: first.json()['completed_epoch'] + 121)
+    assert client.post(url, headers=headers, json=sample).status_code == 404
+
+def test_owned_job_summary_omits_payloads_results_and_reaches_desktop(client):
+    from ai_home.desktop import server_job_summaries, format_job_summary
+    register(client, 'summary-owner@example.com')
+    owner = login(client, 'summary-owner@example.com')
+    register(client, 'summary-other@example.com')
+    other = login(client, 'summary-other@example.com')
+    created = create_job(client, owner, values=[1, 2]).json()
+    create_job(client, other, values=[3, 4])
+    assert client.get('/api/v1/jobs/summary').status_code == 401
+    def forward(request):
+        response = client.get(request.url.path, headers={'Authorization':request.headers['Authorization']})
+        return httpx.Response(response.status_code, content=response.content, request=request)
+    summaries = server_job_summaries('http://localhost', owner, transport=httpx.MockTransport(forward))
+    assert len(summaries) == 1 and summaries[0].job_id == created['job_id']
+    raw = client.get('/api/v1/jobs/summary', headers=user_headers(owner)).json()[0]
+    assert not {'payload','result','lease_token','owner_user_id'} & set(raw)
+    assert 'Sin umbrales' in format_job_summary(summaries[0])
+    constrained = summaries[0].model_copy(update={'scheduling':{'min_gradient_tokens_per_second':5.0}})
+    detail = format_job_summary(constrained)
+    assert '5.0' in detail and '120 s' in detail and 'no identifica' in detail
+    huge = httpx.MockTransport(lambda request: httpx.Response(200,content=b' '*2_000_001))
+    with pytest.raises(ValueError, match='límite'):
+        server_job_summaries('http://localhost', owner, transport=huge)
+
+def test_summary_keyset_pages_tied_timestamps_and_new_insert(client):
+    from datetime import datetime, timezone
+    from ai_home.desktop import server_job_summaries
+    from sqlalchemy import update
+    owner = register(client, 'pages@example.com')
+    token = login(client, 'pages@example.com')
+    ids = {create_job(client, token, key=f'page-{i}').json()['job_id'] for i in range(105)}
+    # Exercise database-generated second-resolution timestamps, including ties.
+    with client.app.state.session_factory() as session, session.begin():
+        from sqlalchemy import text
+        session.execute(text("UPDATE compute_jobs SET created_at = '2026-11-26 12:00:00' WHERE owner_user_id = :owner"), {'owner':owner['user_id']})
+        precision_ids = sorted(ids)[:3]
+        for microsecond, job_id in enumerate(precision_ids):
+            session.execute(update(ComputeJob).where(ComputeJob.job_id == job_id).values(
+                created_at=datetime(2026, 11, 26, 12, 0, 0, microsecond, tzinfo=timezone.utc)))
+    def forward(request):
+        response = client.get(str(request.url), headers={'Authorization':request.headers['Authorization']})
+        return httpx.Response(response.status_code, content=response.content, request=request)
+    transport = httpx.MockTransport(forward)
+    page = server_job_summaries('http://localhost',token,limit=51,transport=transport)
+    assert [job.job_id for job in page[:2]] == [precision_ids[2], precision_ids[1]]
+    seen = [job.job_id for job in page[:50]]
+    newer = create_job(client,token,key='arrived-between-pages').json()['job_id']
+    with client.app.state.session_factory() as session, session.begin():
+        session.execute(update(ComputeJob).where(ComputeJob.job_id == newer).values(
+            created_at=datetime(2026, 11, 27, tzinfo=timezone.utc)))
+    while len(page) > 50:
+        last = page[49]
+        page = server_job_summaries('http://localhost',token,limit=51,
+            before=(last.created_at.isoformat(),last.job_id),transport=transport)
+        seen.extend(job.job_id for job in page[:50])
+        assert len(seen) <= 150, 'cursor repeated a page'
+    assert len(seen) == len(set(seen)) == 105
+    assert set(seen) == ids and newer not in seen
+    for params in ({'limit':101},{'before_job_id':newer},{'before_created_at':'2026-11-26T12:00:00'},
+                   {'before_created_at':'bad','before_job_id':newer}):
+        assert client.get('/api/v1/jobs/summary',headers=user_headers(token),params=params).status_code == 422

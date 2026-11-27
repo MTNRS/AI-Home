@@ -1,0 +1,48 @@
+{
+  "checkpoint": "C:\\Users\\freak\\Documents\\ChatGPT\\AI@Home\\artifacts\\desktop-cached-training-v2\\run\\model.pt",
+  "step": 4,
+  "training_complete": true,
+  "stop_reason": "completed",
+  "parameters": 6672,
+  "validation": {
+    "loss": 5.601269985767121,
+    "tokens": 94,
+    "perplexity": 270.77006328747456
+  },
+  "embedding_delta_l2": 0.03582410886883736,
+  "metrics": [
+    {
+      "step": 1,
+      "train_loss": 5.6148905754089355,
+      "learning_rate": 0.0003,
+      "elapsed_seconds": 0.07831299999088515,
+      "tokens_per_second": 408.61670480922044,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 2,
+      "train_loss": 5.613424301147461,
+      "learning_rate": 0.00023249999999999999,
+      "elapsed_seconds": 0.08058779999555554,
+      "tokens_per_second": 794.1648736350866,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 3,
+      "train_loss": 5.606217384338379,
+      "learning_rate": 9.750000000000003e-05,
+      "elapsed_seconds": 0.08251629999722354,
+      "tokens_per_second": 1163.4065027543668,
+      "gpu_peak_bytes": 0
+    },
+    {
+      "step": 4,
+      "train_loss": 5.6020989418029785,
+      "learning_rate": 2.9999999999999997e-05,
+      "elapsed_seconds": 0.08436349999101367,
+      "tokens_per_second": 1517.2438319134988,
+      "gpu_peak_bytes": 0,
+      "validation_loss": 5.601269985767121
+    }
+  ]
+}

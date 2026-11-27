@@ -1,0 +1,17 @@
+{
+  "version": "authored-probes-v1",
+  "source": "AI@Home authored mechanical evaluation fixtures; not a representative benchmark",
+  "license": "Apache-2.0",
+  "cases": [
+    {"id": "es-plural", "category": "spanish", "prompt": "Plural de gato. Solo la palabra.", "answers": ["gatos"]},
+    {"id": "en-plural", "category": "english", "prompt": "Plural of cat. One word only.", "answers": ["cats"]},
+    {"id": "instruction", "category": "instructions", "prompt": "Responde exactamente: AZUL", "answers": ["AZUL"]},
+    {"id": "python", "category": "programming", "prompt": "Python: len([4, 5]) vale? Solo numero.", "answers": ["2"]},
+    {"id": "sum", "category": "mathematics", "prompt": "3 + 4 = ? Solo numero.", "answers": ["7"]},
+    {"id": "water", "category": "knowledge", "prompt": "Formula del agua. Solo formula.", "answers": ["H2O", "H₂O"]},
+    {"id": "order", "category": "reasoning", "prompt": "Ana > Bea > Cora en altura. La mayor? Solo nombre.", "answers": ["Ana"]},
+    {"id": "consistent-a", "category": "consistency", "prompt": "2 mas 2? Solo numero.", "answers": ["4"]},
+    {"id": "consistent-b", "category": "consistency", "prompt": "2 + 2 = ? Solo numero.", "answers": ["4"]},
+    {"id": "robust-space", "category": "robustness", "prompt": "  3  +  4  = ? Solo numero.  ", "answers": ["7"]}
+  ]
+}

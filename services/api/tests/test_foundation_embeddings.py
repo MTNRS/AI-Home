@@ -1,0 +1,97 @@
+from dataclasses import asdict
+import hashlib
+
+import pytest
+torch = pytest.importorskip("torch")
+
+from ai_home.foundation.checkpoint import FORMAT, atomic_save
+from ai_home.foundation.embeddings import FoundationEmbedder
+from ai_home.foundation.model import FoundationConfig, FoundationModel
+from ai_home.foundation.tokenizer import ByteBPE
+
+
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="CUDA hardware unavailable"))])
+def test_embeddings_cover_all_tokens_and_preserve_logits(tmp_path, device):
+    torch.manual_seed(12)
+    tokenizer = ByteBPE()
+    config = FoundationConfig(vocab_size=262, width=32, layers=1, heads=4,
+                              kv_heads=2, hidden=64, context=16)
+    model = FoundationModel(config).eval()
+    path = tmp_path / "model.pt"
+    atomic_save({"format": FORMAT, "config": asdict(config), "tokenizer": tokenizer.to_dict(),
+                 "tokenizer_sha256": tokenizer.fingerprint, "model_state": model.state_dict()}, path)
+    embedder = FoundationEmbedder(path, device=device)
+    assert embedder.identity["checkpoint_sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    text = "Texto español con ventanas múltiples. English too."
+    tokens = tokenizer.encode(text)
+    states = []
+    with torch.inference_mode():
+        for offset in range(0, len(tokens), 16):
+            batch = torch.tensor([tokens[offset:offset + 16]], device=device)
+            hidden, _ = embedder.model.hidden_states(batch)
+            logits, _ = embedder.model(batch)
+            torch.testing.assert_close(logits, embedder.model.output(hidden))
+            states.append(hidden[0])
+        expected = torch.cat(states).mean(0)
+        expected /= expected.norm()
+    actual = torch.tensor(embedder.embed(text), device=device)
+    torch.testing.assert_close(actual, expected)
+    assert embedder.embed(text) == embedder.embed(text)
+    assert embedder.embed(text + " changed") != embedder.embed(text)
+    for invalid in ("", " ", "é" * 16001, None):
+        with pytest.raises(ValueError):
+            embedder.embed(invalid)
+
+    from ai_home.knowledge import KnowledgeIndex, build_index, retrieval_messages
+    from ai_home.foundation.data import canonical_hash
+    import json
+    common = dict(source="Authored fixture", url="https://example.org/fixture",
+                  license="Apache-2.0", date="2026-11-26", language="es",
+                  training_allowed=False, retrieval_allowed=True,
+                  privacy_reviewed=True, visibility="public")
+    records = [{**common, "text": text}, {**common, "text": "Una segunda fuente diferente."}]
+    index_path = tmp_path / "neural.json"
+    version = build_index(records, index_path, embedder=embedder)
+    index = KnowledgeIndex(index_path, embedder=embedder)
+    matches = index.search(text)
+    assert matches[0]["text"] == text
+    assert matches[0]["score"] == pytest.approx(1, abs=1e-5)
+    assert matches[0]["index_version"] == version
+    assert matches[0]["url"] == common["url"]
+    assert index.summary()["embedding"] == embedder.identity
+    from ai_home.knowledge import inspect_knowledge
+    inspected = inspect_knowledge(index_path, text, embedding_checkpoint=path, device=device)
+    assert inspected["summary"]["embedding"] == embedder.identity
+    assert inspected["results"][0]["text"] == text
+    import threading
+    cancellation = threading.Event()
+    original_embed = embedder.embed
+    def cancel_after_embedding(value):
+        result = original_embed(value)
+        cancellation.set()
+        return result
+    embedder.embed = cancel_after_embedding
+    cancelled_path = tmp_path / "cancelled.json"
+    with pytest.raises(ValueError, match="cancelled"):
+        build_index(records, cancelled_path, embedder=embedder, cancel=cancellation)
+    assert not cancelled_path.exists()
+    embedder.embed = original_embed
+    from ai_home.knowledge import prepare_knowledge_context
+    with pytest.raises(ValueError, match="too small for retrieved evidence"):
+        prepare_knowledge_context([{"role": "user", "content": "Q"}],
+                                  embedder.model, embedder.tokenizer, index_path)
+    assert retrieval_messages([{"role": "user", "content": text}], matches)[0]["role"] == "user"
+    with pytest.raises(ValueError, match="exact embedding"):
+        KnowledgeIndex(index_path)
+    embedder.model.checkpoint_sha256 = "0" * 64
+    with pytest.raises(ValueError, match="exact embedding"):
+        KnowledgeIndex(index_path, embedder=embedder)
+    embedder.model.checkpoint_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    payload["neural"]["vectors"][0] = [0.] * config.width
+    payload.pop("version")
+    payload["version"] = canonical_hash(payload)
+    index_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="normalized neural"):
+        KnowledgeIndex(index_path, embedder=embedder)

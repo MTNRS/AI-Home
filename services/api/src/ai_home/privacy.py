@@ -16,3 +16,4 @@ _COMMON_SECRET_PATTERNS = (
 
 def contains_common_secret(value: str) -> bool:
     return any(pattern.search(value) for pattern in _COMMON_SECRET_PATTERNS)
+

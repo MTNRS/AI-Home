@@ -1,0 +1,62 @@
+{
+  "format": "ai-home-evaluation-smoke-v1",
+  "transport": "real loopback HTTP",
+  "workers": [
+    {
+      "format": "ai-home-worker-service-measurement-v1",
+      "job_type": "foundation.evaluate.v1",
+      "device": "cpu",
+      "heartbeat_service_seconds": 0.005080600007204339,
+      "claim_service_seconds": 0.010933300000033341,
+      "execution_seconds": 1.2982654999941587,
+      "submit_service_seconds": 0.03865980000409763,
+      "claim_response_bytes": 38603,
+      "submit_request_bytes": 651,
+      "claim_service_bytes_per_second": 3530772.9596628905,
+      "submit_service_bytes_per_second": 16839.19730394361
+    },
+    {
+      "format": "ai-home-worker-service-measurement-v1",
+      "job_type": "foundation.evaluate.v1",
+      "device": "cpu",
+      "heartbeat_service_seconds": 0.004812900006072596,
+      "claim_service_seconds": 0.00742730000638403,
+      "execution_seconds": 1.298369800002547,
+      "submit_service_seconds": 0.03967929999635089,
+      "claim_response_bytes": 38603,
+      "submit_request_bytes": 651,
+      "claim_service_bytes_per_second": 5197447.250928244,
+      "submit_service_bytes_per_second": 16406.539431387882
+    }
+  ],
+  "worker_balances": [
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    },
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    }
+  ],
+  "owner_balance": {
+    "available": 0,
+    "reserved": 0,
+    "earned": 0
+  },
+  "coordinator_processes": 3,
+  "completed_jobs": 2,
+  "checkpoint_sha256": "6eb46f66d38b3ad9391bf84e1efdfabebea264ea922042262c514b6dee401af1",
+  "training_embedding_delta_l2": 0.012670348398387432,
+  "reference": {
+    "loss": 5.634302383814102,
+    "tokens": 468,
+    "perplexity": 279.86361180874,
+    "checkpoint_sha256": "6eb46f66d38b3ad9391bf84e1efdfabebea264ea922042262c514b6dee401af1"
+  },
+  "distributed_loss": 5.634302383814102,
+  "tokens": 468,
+  "scope": "One machine, two worker processes; no multi-host or general capability claim"
+}

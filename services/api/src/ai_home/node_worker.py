@@ -8,6 +8,8 @@ import platform
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from csv import Error as CsvError
 from csv import reader
 from pathlib import Path
@@ -113,7 +115,33 @@ def _parse_nvidia_smi(output: str) -> list[dict[str, int | str]]:
     return devices
 
 
-def execute_job(job_type: str, payload: dict) -> dict[str, int]:
+def execute_job(job_type: str, payload: dict, *, allow_foundation_training=False, foundation_device="cpu", allow_foundation_evaluation=False, allow_foundation_adapters=False) -> dict[str, int | str]:
+    if job_type == "foundation.adapter-gradient.v1":
+        if allow_foundation_adapters is not True:
+            raise ValueError("Adapter work requires separate explicit worker opt-in")
+        if psutil.virtual_memory().available < 1024**3:
+            raise ValueError("Insufficient available RAM for adapter task")
+        from ai_home.foundation.adapter_tasks import execute_adapter_gradient
+        return execute_adapter_gradient(payload, device=foundation_device)
+    if job_type == "foundation.evaluate.v1":
+        if not allow_foundation_evaluation:
+            raise ValueError("Evaluation requires explicit worker opt-in")
+        if psutil.virtual_memory().available < 1024**3:
+            raise ValueError("Insufficient available RAM for neural evaluation")
+        from ai_home.foundation.distributed_evaluation import execute_evaluation
+        return execute_evaluation(payload, device=foundation_device)
+    if job_type == "foundation.gradient.v1":
+        if not allow_foundation_training:
+            raise ValueError("Neural work requires explicit worker opt-in")
+        if psutil.virtual_memory().available < 1024**3:
+            raise ValueError("Insufficient available RAM for neural task")
+        from ai_home.foundation.distributed import execute_gradient
+        return execute_gradient(payload, device=foundation_device)
+    if job_type == "foundation.tokenize.v1":
+        from ai_home.foundation.tasks import execute_tokenize
+        if psutil.virtual_memory().available < 256 * 1024**2:
+            raise ValueError("Insufficient available RAM for tokenization")
+        return execute_tokenize(payload)
     if job_type != "math.sum.v1":
         raise ValueError(f"Unsupported job type: {job_type}")
     validated = MathSumJobPayload.model_validate(payload)
@@ -141,6 +169,7 @@ def register_node_with_server(
             json={
                 "name": name,
                 "hardware": hardware.model_dump(mode="json"),
+                "supported_job_types": ["math.sum.v1", "foundation.tokenize.v1"],
             },
         )
         response.raise_for_status()
@@ -157,7 +186,32 @@ class NodeAgent:
         node_token: str,
         timeout_seconds: float = 30,
         transport: httpx.BaseTransport | None = None,
+        allow_foundation_training: bool = False,
+        allow_foundation_evaluation: bool = False,
+        allow_foundation_adapters: bool = False,
+        foundation_device: str = "cpu",
+        lease_renew_interval: int = 30,
+        transfer_probe_interval: int | None = None,
     ) -> None:
+        if foundation_device not in {"cpu", "cuda"}:
+            raise ValueError("Foundation worker device must be cpu or cuda")
+        if type(lease_renew_interval) is not int or not 1 <= lease_renew_interval <= 60:
+            raise ValueError("Lease renewal interval must be between 1 and 60 seconds")
+        self.lease_renew_interval = lease_renew_interval
+        if transfer_probe_interval is not None and (
+            type(transfer_probe_interval) is not int or not 60 <= transfer_probe_interval <= 120
+        ):
+            raise ValueError("Transfer probe interval must be between 60 and 120 seconds")
+        self.transfer_probe_interval = transfer_probe_interval
+        self._transfer_probe_finished = None
+        self.last_transfer_measurement = None
+        self.last_transfer_probe_error = None
+        self.foundation_device = foundation_device
+        self.last_run_metrics = None
+        self.last_measurement_uploaded = False
+        self.allow_foundation_training = allow_foundation_training
+        self.allow_foundation_evaluation = allow_foundation_evaluation
+        self.allow_foundation_adapters = allow_foundation_adapters
         server_url = normalize_base_url(server_url)
         self._client = httpx.Client(
             base_url=server_url,
@@ -166,17 +220,100 @@ class NodeAgent:
             transport=transport,
         )
 
-    def run_once(self) -> bool:
-        heartbeat = self._client.post("/api/v1/node/heartbeat")
-        heartbeat.raise_for_status()
+    def configure_capabilities(self):
+        """Replace this node's capabilities from the current explicit opt-in."""
+        capabilities = {"supported_job_types": ["math.sum.v1", "foundation.tokenize.v1"]}
+        if self.allow_foundation_training or self.allow_foundation_evaluation or self.allow_foundation_adapters is True:
+            import torch
+            if self.foundation_device == "cuda" and not torch.cuda.is_available():
+                raise ValueError("CUDA worker requested but CUDA is unavailable")
+            if self.allow_foundation_training:
+                capabilities["supported_job_types"].append("foundation.gradient.v1")
+            if self.allow_foundation_evaluation:
+                capabilities["supported_job_types"].append("foundation.evaluate.v1")
+            if self.allow_foundation_adapters is True:
+                capabilities["supported_job_types"].append("foundation.adapter-gradient.v1")
+            capabilities["foundation_torch_version"] = str(torch.__version__)
+        response = self._client.put("/api/v1/node/capabilities", json=capabilities)
+        response.raise_for_status()
 
+    def measure_transfer(self, size=65536, *, publish=False):
+        """Explicit HTTP transfer probe; does not claim jobs or change credits."""
+        from ai_home.network_probe import measure_transfer
+        report = measure_transfer(self._client, size=size)
+        if publish:
+            fields = ("format", "payload_bytes", "empty_round_trip_seconds", "download_seconds", "upload_seconds")
+            response = self._client.post("/api/v1/node/transfer-measurement", json={key: report[key] for key in fields})
+            response.raise_for_status()
+            report["stored_measurement"] = response.json()
+        return report
+
+    def run_once(self) -> bool:
+        # Only publish a sample after the server accepts a result; never reuse it
+        # after an idle/failed attempt. Timings include service processing.
+        self.last_run_metrics = None
+        self.last_measurement_uploaded = False
+        resources = {"ram_available_bytes": psutil.virtual_memory().available,
+                     "foundation_device": self.foundation_device}
+        if self.foundation_device == "cuda":
+            import torch
+            if not torch.cuda.is_available():
+                raise ValueError("CUDA worker requested but CUDA is unavailable")
+            resources["cuda_free_bytes"] = torch.cuda.mem_get_info()[0]
+        started = time.perf_counter()
+        heartbeat = self._client.post("/api/v1/node/heartbeat", json=resources)
+        heartbeat.raise_for_status()
+        heartbeat_seconds = time.perf_counter() - started
+
+        if self.transfer_probe_interval is not None and (
+            self._transfer_probe_finished is None
+            or time.monotonic() - self._transfer_probe_finished >= self.transfer_probe_interval
+        ):
+            self.last_transfer_measurement = None
+            self.last_transfer_probe_error = None
+            try:
+                self.last_transfer_measurement = self.measure_transfer(publish=True)
+            except (httpx.HTTPError, ValueError) as exc:
+                # Do not expose response bodies, URLs or credentials in telemetry.
+                self.last_transfer_probe_error = type(exc).__name__
+            finally:
+                # Wait from completion, including failures, to avoid overlapping
+                # the server's sliding request budget with a slow prior probe.
+                self._transfer_probe_finished = time.monotonic()
+
+        started = time.perf_counter()
         response = self._client.post("/api/v1/node/jobs/claim")
+        claim_seconds = time.perf_counter() - started
         if response.status_code == 204:
             return False
         response.raise_for_status()
 
         job = ClaimedJobResponse.model_validate(response.json())
-        result = execute_job(job.job_type, job.payload)
+        stop_renewal, renewal_failed = threading.Event(), threading.Event()
+        def renew():
+            while not stop_renewal.wait(self.lease_renew_interval):
+                try:
+                    response = self._client.post(f"/api/v1/node/jobs/{job.job_id}/renew",
+                                                 json={"lease_token": job.lease_token})
+                    response.raise_for_status()
+                except Exception:
+                    renewal_failed.set()
+                    return
+        renewer = threading.Thread(target=renew, daemon=True)
+        renewer.start()
+        started = time.perf_counter()
+        try:
+            result = execute_job(job.job_type, job.payload, allow_foundation_training=self.allow_foundation_training,
+                                 allow_foundation_evaluation=self.allow_foundation_evaluation,
+                                 allow_foundation_adapters=self.allow_foundation_adapters,
+                                 foundation_device=self.foundation_device)
+            execution_seconds = time.perf_counter() - started
+        finally:
+            stop_renewal.set()
+            renewer.join()
+        if renewal_failed.is_set():
+            raise RuntimeError("Job lease renewal failed; result was not submitted")
+        started = time.perf_counter()
         submitted = self._client.post(
             f"/api/v1/node/jobs/{job.job_id}/result",
             json={
@@ -185,7 +322,33 @@ class NodeAgent:
             },
         )
         submitted.raise_for_status()
+        submit_seconds = time.perf_counter() - started
+        self.last_run_metrics = {
+            "format": "ai-home-worker-service-measurement-v1",
+            "job_type": job.job_type,
+            "device": self.foundation_device,
+            "heartbeat_service_seconds": heartbeat_seconds,
+            "claim_service_seconds": claim_seconds,
+            "execution_seconds": execution_seconds,
+            "submit_service_seconds": submit_seconds,
+            "claim_response_bytes": len(response.content),
+            "submit_request_bytes": len(submitted.request.content),
+            "claim_service_bytes_per_second": len(response.content) / max(claim_seconds, 1e-9),
+            "submit_service_bytes_per_second": len(submitted.request.content) / max(submit_seconds, 1e-9),
+        }
+        if job.job_type == "foundation.gradient.v1":
+            self.last_run_metrics["gradient_tokens_per_second"] = result["token_count"] / max(execution_seconds, 1e-9)
+        from ai_home.schemas import WorkerServiceMeasurement
+        sample = {key: self.last_run_metrics[key] for key in WorkerServiceMeasurement.model_fields}
+        try:
+            telemetry = self._client.post(f"/api/v1/node/jobs/{job.job_id}/measurement", json=sample)
+            self.last_measurement_uploaded = telemetry.is_success
+        except httpx.TransportError:
+            # The result and credits are already committed. Telemetry loss must
+            # not report useful work as failed or cause a second submission.
+            pass
         return True
 
     def close(self) -> None:
         self._client.close()
+

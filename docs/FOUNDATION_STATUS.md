@@ -1,0 +1,106 @@
+# Estado del objetivo Foundation — 2026-11-26
+
+Este inventario conserva el alcance del objetivo original. No es una declaración
+de aceptación ni una auditoría exhaustiva concluida. La evidencia enumerada cubre
+las ejecuciones indicadas; no demuestra capacidades generales, seguridad absoluta,
+calidad conversacional ni escalabilidad comunitaria. Los apartados históricos de
+otros documentos describen el estado en que se escribieron, no el estado actual.
+
+## Validación remota más reciente
+
+El commit `e8f41848a33c7aa3e17ac3adba45317e05b162d5` pasó la
+[matriz Python 3.11/3.12 y PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45878428592)
+y [Foundation CPU en Linux](https://github.com/MTNRS/AI-Home/actions/runs/45878428583).
+Se comprobaron los pasos individuales: paquete instalado, preferencias, adaptadores,
+reanudación, trabajadores concurrentes, formularios Tk causal/SFT, aislamiento de
+perfil, visor, adquisición con HTTP controlado, inferencia API y distribución con
+reinicio del coordinador. La creación y subida de artefactos también concluyeron.
+Esto sustituye las notas históricas de CI pendiente para ese commit. No demuestra
+calidad general, revisión visual de las ventanas ni operación multihost. Los
+resultados CUDA corresponden a la validación local, no a los runners CPU.
+
+## Evidencia vigente de ejecución y entrega
+
+Trabajo incorporado en esta rama posterior a `2724cf7`: conector Wikipedia y
+adquisicion desde KNOWLEDGE con cancelacion; experimento Nano sobre cuatro
+extractos tecnicos propios (sin mejora en los diez probes); y entrenamiento DPO
+experimental con pares revisados, particion por familias, CLI, formulario de
+escritorio y visor. Cancelacion activa, reanudacion exacta y cambio de perfil
+probados desde fuente y paquete instalado con Python aislado.
+La demostracion DPO utiliza exclusivamente fixtures sinteticos, no preferencias
+humanas reales. Ver [conectores](KNOWLEDGE_CONNECTORS.md),
+[ensayo documental](REPOSITORY_DOCUMENT_EXPERIMENT.md) y
+[preferencias](PREFERENCE_LEARNING.md). Estos avances no eliminan los pendientes
+de corpus representativos, calidad general, integracion operativa y auditoria.
+CI confirmada de `2724cf7`: [Tests](https://github.com/MTNRS/AI-Home/actions/runs/45857108936)
+y [Foundation](https://github.com/MTNRS/AI-Home/actions/runs/45857109828).
+Los enlaces historicos de abajo conservan evidencia anterior, no de estos cambios.
+Suite local posterior a integrar formularios, progreso y validacion de adaptadores: 476 aprobadas y
+8 PostgreSQL omitidas en 87.07 segundos. Esta verificacion no convierte el
+validacion local en CI remota aprobada. Las ocho pruebas PostgreSQL pasaron por separado en 5.15 s.
+
+Adaptadores: entrenamiento local CPU/CUDA y reanudacion exacta; ensayo HTTP con
+dos procesos CPU/CUDA, agregacion real y tres creditos sinteticos por trabajador.
+Se verificaron lanzamientos secuenciales y concurrentes en un solo equipo, sin promocion del candidato.
+Ver [implementacion, evidencia y limites](ADAPTERS.md).
+Formulario, progreso, cancelacion, reanudacion exacta, aislamiento de perfil activo,
+visor y nodo CPU tambien comprobados con wheel instalado y Python aislado.
+Padre y candidato del ensayo de contexto 64 obtienen 0/10 con preguntas completas;
+no se ha demostrado mejora general ni aprobado promocion.
+
+- Rama: `codex/foundation-validation`; PR borrador [#1](https://github.com/MTNRS/AI-Home/pull/1).
+- Revisión validada remotamente: `ae2078d` (incluye observacion reanudable de evaluacion distribuida y permiso independiente del nodo de escritorio). FP16/BF16 CUDA se verificaron localmente, no en los runners CPU.
+- [Matriz Linux/PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45854301608): ejecución concluida correctamente.
+- [Foundation CPU](https://github.com/MTNRS/AI-Home/actions/runs/45854301525): suite, paquete instalado, API, transferencia HTTP, smokes visuales/Tk, nodo de escritorio, entrenamiento con caché y dos rondas distribuidas con reinicio y restricciones de transferencia concluidos correctamente.
+- Experimento visual CUDA posterior: tres colores sólidos, 18 imágenes train y seis intensidades reservadas, 0/6 → 6/6 aciertos después de 200 pasos; control blanco 2/6. Evidencia limitada al generador sintético, no visión general. [Protocolo, resultados y límites](VISION_PREFIX.md).
+- Suite local completa en `fddfb20`: 411 correctas y 7 PostgreSQL omitidas, en 78,42 segundos. Incluye visor de informes distribuidos y planes desde datasets autorizados; los cambios posteriores a `ae2078d` aun no quedan cubiertos por la evidencia remota citada. PostgreSQL local separado anterior: 7 correctas.
+- Experimento aritmético CUDA: suma de un dígito con pares/permutaciones reservados. Semillas 42/7/123: 13/14, 6/14 y 7/14 tras 1.000 pasos, frente a 0/14 tras uno. Variación elevada; no demuestra razonamiento general ni se promueve un candidato. [Protocolo e informes](ARITHMETIC_EXPERIMENT.md).
+- Preparación opcional de secuencias en disco con equivalencia de tensores y reanudación CPU/CUDA; menor memoria observada en el benchmark sintético, sin garantía de límite estricto de RAM. [Medición](SEQUENCE_MEMORY_BENCHMARK.json). Cancelación cooperativa durante preparación/BPE y opción integrada en escritorio. El ciclo continuo tambien admite cache para replay y comparaciones, con cancelacion entre lotes de comparacion.
+- Aumento de formatos aritméticos evaluado con tres semillas: 4/0/3 regresiones por caso respecto a los controles, sin promoción incondicional. Es un experimento de desarrollo motivado por resultados ya inspeccionados, no evaluación independiente. [Comparación reproducible](ARITHMETIC_AUGMENTATION_VERIFIED.json).
+- Reproducción con wheel instalado y pruebas CPU/CUDA: [alcance y comandos](CLEAN_REPRODUCTION.md). Visor de trabajos revisado visualmente en 860×640 y 640×480: [evidencia y límites](DESKTOP_VISUAL_REVIEW.md).
+- `main` permanece en `2ddea7dd3c2a048212ca3e64b68190a26080ed76`. La copia importada tenía historia independiente; se enlazó con el historial remoto mediante un merge sin cambiar el árbol local. No se hizo force-push.
+- Evaluacion distribuida de perdida: API con permiso independiente, verificacion CPU, creditos, planes reanudables con linaje y CLI. Smoke real con dos procesos CPU/CUDA y tres ejecuciones sucesivas del coordinador; [evidencia](DISTRIBUTED_EVALUATION_SMOKE.json). Nodo de escritorio evaluado con Tk real en CPU/CUDA; [informe](DESKTOP_EVALUATION_CUDA_SMOKE.json). Un equipo; no capacidad linguistica general, evaluacion secreta ni despliegue multihost.
+- La PR es entrega revisable de trabajo experimental, no una versión estable ni finalización del objetivo.
+
+## Requisitos y límites de la evidencia
+
+| Área del objetivo | Implementación/evidencia disponible | Trabajo aún pendiente o no probado |
+| --- | --- | --- |
+| Preservación y auditoría (1–2) | `FOUNDATION_AUDIT.md`, historial upstream conservado, proveedores y GPT anterior presentes | Auditoría final requisito por requisito sobre el estado de entrega |
+| Arquitectura propia (3) | `foundation/model.py`; causalidad, RoPE, GQA, gradientes, KV cache, checkpoints CPU/CUDA; `vision.py` añade proyección de parches propia y prefijo visual | Capacidades lingüísticas/razonamiento generales no demostradas; visión limitada a experimento sintético, audio/vídeo pendientes |
+| Tokenizador (4) | `tokenizer.py`, `vocabulary.py`; BPE propio Unicode, serialización, ampliación explícita y pruebas | Entrenamiento de vocabulario sobre un corpus autorizado amplio y evaluación de eficiencia multilingüe |
+| Escalado (5) | `COMPUTE_BENCHMARKS.md`: Nano/Micro/Small medidos, `resources.py` ajuste heurístico | Medium/Large sin tamaño justificado; memoria real para más contextos/vocabularios; autoajuste basado en benchmarks |
+| Preentrenamiento (6) | `training.py`, smokes CPU/CUDA, resume exacto, optimizador/RNG, cancelación y checkpoints | Entrenamiento prolongado con corpus representativo; mejora de capacidades medida |
+| Corpus/conectores (7) | `data.py`, `knowledge_ingest.py`, extractor local Wikipedia, conector GitHub público fijado a commit, procedencia/consentimiento y permisos separados | Más conectores de red y diversidad real de fuentes; corpus grande autorizado/redistribuible |
+| Contribuciones (8) | `contributions.py`, exportación congelada/revisada, editor de correcciones consentidas con procedencia, SFT y pruebas extremo a extremo | Alternativas y preferencias; defensas contra poisoning más allá de filtros/revisión y contaminación exacta y familias declaradas; revisión visual en otros tamaños/DPI |
+| Aprendizaje continuo (9) | `continual.py`, replay, holdout fijo, candidato separado, comparación y rollback en registro | Evidencia de mejora sostenida sin olvido sobre tareas representativas |
+| Distribuido (10) | `distributed.py`, dos procesos CPU/CUDA por HTTP, gradientes recomputados, leases renovables y coordinador CLI reanudable y [asignación con restricciones medidas](MEASURED_SCHEDULING.md) | Dos equipos físicos; ancho de banda/latencia de red independientes del servicio y optimización global; reinicio automático/failover del servicio coordinador; grandes modelos/adaptadores/particiones |
+| Inferencia (11) | `inference.py`, SSE, controles, cancelación y selección de versiones en chat; inferencia visual local PNG/JPEG con CLI y ventana experimental, streaming y aislamiento de perfil | Rendimiento sostenido/multicliente; integración visual completa con conversación, registro aprobado y evaluación amplia pendientes |
+| Evaluación (12) | `evaluation.py`, suites versionadas; recuperación TF-IDF/neural; evaluación visual greedy con control blanco y experimento de colores documentado | Benchmarks amplios/independientes; métricas lingüísticas y humanas representativas; seis casos sintéticos no prueban visión general |
+| Evolución (13) | `evolution.py`, control/experimento, reglas por probe, cancelación, resultados reales rechazados | Más familias de hipótesis y experimentos de arquitectura/optimizador; mejora verificada de capacidades |
+| Conocimiento actual (14) | Índices TF-IDF/neuronales, referencias, contexto no privilegiado, versiones inmutables y UI | Actualización explícita GitHub inicial; cobertura de otras fuentes pendiente; relevancia neuronal general no demostrada |
+| Privacidad (15) | Aislamiento cuenta/memoria, consentimiento, permisos, filtros, borrado y pruebas cruzadas | Auditoría integral de todos los recursos y conectores futuros; no hay borrado garantizado de influencia en pesos ni vault cifrado |
+| Créditos (16) | Ledger, reservas, liquidación, reembolso, inferencia/trabajo y concurrencia PostgreSQL | Resistencia a fraude comunitario más allá de recomputación; políticas/operación a escala |
+| Interfaz (17) | Diez secciones nombradas y navegación Tk verificada, chat, training/evaluation/evolution, conocimiento, créditos, inspección/registro; ventana visual local con streaming | Revisión visual de diálogos recientes y DPI, integración de métricas completa; no hay evidencia visual integral |
+| Pruebas (18) | CPU/CUDA local; Linux 3.11/3.12/PostgreSQL remoto; entrenamientos y cambios reales de pesos | Ampliar al resto de funcionalidades pendientes y mantener evidencia de cada revisión |
+| Aceptación (19) | Los 22 criterios tienen componentes y demostraciones locales parciales descritos arriba | No se reduce el objetivo a sus criterios mínimos; falta auditar todos los requisitos explícitos antes de declarar aceptación |
+| Entrega (20) | Código, configuraciones, informes y PR publicados; paquete Nano smoke con pesos/corpus propios, manifiesto y verificador en Actions ([detalle](SMOKE_DISTRIBUTION.md)) | Corpus/evaluaciones representativos redistribuibles, reproducción integral de API/GUI/servicios y auditoría final |
+| Prioridad y misión (21–22) | Pesos propios desde cero; modelo externo no sustituye automáticamente Foundation | Plataforma generalista/multimodal/comunitaria sigue siendo objetivo de investigación, no capacidad obtenida |
+
+## Próximas líneas de implementación
+
+1. Conectores de conocimiento explícitos y acotados con revisión de derechos,
+   privacidad y procedencia; no habilitar entrenamiento por defecto.
+2. Medición y selección distribuida por rendimiento/red, recuperación del
+   coordinador y validación multihost cuando exista infraestructura disponible.
+3. Flujos de corrección/preferencias consentidas y evaluaciones independientes
+   capaces de demostrar o rechazar mejoras reales.
+4. Consolidación/revisión visual de la interfaz y reproducción de la entrega
+   desde un entorno limpio, incluyendo artefactos redistribuibles.
+5. Ampliar la vía visual implementada con datos autorizados representativos y
+   evaluación independiente. El aprendizaje de colores sintéticos no sustituye
+   comprensión visual general; audio/vídeo siguen pendientes.
+
+Cada línea requiere implementación y evidencia. Una limitación de hardware puede
+justificar documentación e instrucciones reproducibles para la parte no ejecutable;
+no convierte automáticamente esa parte en una capacidad verificada.

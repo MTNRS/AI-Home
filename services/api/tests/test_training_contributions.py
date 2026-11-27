@@ -310,3 +310,4 @@ def test_account_deletion_also_removes_training_contributions(client: TestClient
     assert deleted.status_code == 204
     with client.app.state.session_factory() as session:
         assert session.scalar(select(TrainingContribution)) is None
+

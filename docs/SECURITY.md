@@ -72,3 +72,4 @@ Antes de anunciar un programa público de recompensas, se habilitará un canal
 privado de reporte y un procedimiento de triage. No enviar información
 explotable de vulnerabilidades a issues públicos. Los detalles del canal se
 publicarán cuando exista una persona/equipo responsable de atenderlos.
+

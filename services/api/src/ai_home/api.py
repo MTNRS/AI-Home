@@ -1,18 +1,21 @@
 """HTTP API for initial identity and account-isolation flows."""
 
 from collections.abc import Generator
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
 import logging
 import time
+import threading
 from typing import Literal
 import uuid
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import and_, or_, case, cast, String, delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -31,6 +34,10 @@ from ai_home.auth import (
     verify_password,
 )
 from ai_home.config import Settings
+from ai_home.network_probe import TransferMeasurement
+from ai_home.credits import Account, InsufficientCredits, LedgerTransaction, Posting, IdempotencyConflict
+from ai_home.inference_credits import InferenceFunding, reserve_inference, resolve_inference, refund_expired_inference, refund_pending_inference
+from ai_home.job_credits import JobFunding, refund_job, user_account_id
 from ai_home.database import build_engine
 from ai_home.inference import chat_completion
 from ai_home.jobs import (
@@ -42,7 +49,12 @@ from ai_home.jobs import (
     NodeNotFound,
     authenticate_node,
     claim_job,
+    cancel_job,
     create_math_sum_job,
+    create_tokenize_job,
+    create_gradient_job,
+    create_evaluation_job,
+    create_adapter_job,
     find_existing_math_sum_job,
     heartbeat_node,
     is_job_idempotency_violation,
@@ -50,6 +62,8 @@ from ai_home.jobs import (
     register_node,
     revoke_node,
     submit_job_result,
+    renew_job_lease,
+    record_worker_measurement,
 )
 from ai_home.models import (
     AuthSession,
@@ -65,18 +79,28 @@ from ai_home.schemas import (
     ClaimedJobResponse,
     ChatCompletionRequest,
     ChatCompletionResponse,
+    FoundationGeneration,
     CreateMathSumJobRequest,
+    CreateTokenizeJobRequest,
+    CreateGradientJobRequest,
+    CreateEvaluationJobRequest,
     JobResponse,
+    JobSummaryResponse,
     LoginRequest,
     NodeCredentialResponse,
     NodeResponse,
+    NodeResources,
+    NodeCapabilities,
     RegisterNodeRequest,
     RegisterRequest,
     SessionResponse,
     SubmitJobResultRequest,
+    RenewJobLeaseRequest,
+    WorkerServiceMeasurement,
     TrainingContributionExportResponse,
     TrainingContributionReviewResponse,
     TrainingContributionRequest,
+    TrainingCorrectionRequest,
     TrainingContributionResponse,
     TrainingDatasetExportResponse,
     TrainingDatasetResponse,
@@ -212,6 +236,7 @@ def create_app(
     )
 
     app = FastAPI(title="AI@Home API", version="0.1.0")
+    foundation_inference_lock = threading.Lock()
     app.state.settings = application_settings
     app.state.engine = database_engine
     app.state.session_factory = session_factory
@@ -383,6 +408,7 @@ def create_app(
                 ) from None
             response.headers["Cache-Control"] = "no-store"
             return SessionResponse(
+                user_id=user.user_id,
                 access_token=issued.access_token,
                 expires_at_epoch=issued.expires_at_epoch,
             )
@@ -406,6 +432,7 @@ def create_app(
             ) from None
         response.headers["Cache-Control"] = "no-store"
         return SessionResponse(
+            user_id=user.user_id,
             access_token=issued.access_token,
             expires_at_epoch=issued.expires_at_epoch,
         )
@@ -461,6 +488,147 @@ def create_app(
             ) from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    @app.get("/api/v1/models")
+    def list_approved_models(request: Request, _user: AuthenticatedUser = Depends(get_current_user)):
+        settings = request.app.state.settings
+        if settings.chat_backend != "foundation" or settings.foundation_registry is None:
+            return {"models": []}
+        try:
+            from ai_home.foundation.registry import ModelRegistry
+            return {"models": ModelRegistry(settings.foundation_registry).catalog()}
+        except Exception:
+            raise HTTPException(status_code=503, detail="Model catalog unavailable.") from None
+
+    def generation_options(payload, settings):
+        options = (payload.generation or FoundationGeneration()).model_dump()
+        maximum = options["max_new_tokens"]
+        if maximum is not None and maximum > settings.foundation_max_new_tokens:
+            raise HTTPException(status_code=422, detail="Requested generation exceeds the server token limit.")
+        options["max_new_tokens"] = maximum if maximum is not None else settings.foundation_max_new_tokens
+        return options
+
+    @app.get("/api/v1/credits/inference-price")
+    def inference_price(request: Request, _user: AuthenticatedUser = Depends(get_current_user)):
+        price = request.app.state.settings.foundation_inference_price
+        return {"credits_per_completion": price, "paid_streaming_available": True,
+                "billing_unit": "successfully_computed_completion"}
+
+    def reserve_chat_credit(payload, request, user):
+        price = request.app.state.settings.foundation_inference_price
+        if not price:
+            return None
+        if payload.credit_request_id is None or payload.credit_limit < price:
+            raise HTTPException(status_code=402, detail="Explicit credit request ID and sufficient credit limit required.")
+        with request.app.state.session_factory() as session, session.begin():
+            refund_expired_inference(session, user.user_id)
+        digest = hashlib.sha256(payload.model_dump_json().encode()).hexdigest()
+        try:
+            with request.app.state.session_factory() as session, session.begin():
+                # A no-op write serializes reservation admission with account deletion
+                # on SQLite as well as PostgreSQL; authentication alone can race deletion.
+                admitted = session.execute(update(User).where(User.user_id == user.user_id).values(user_id=user.user_id).returning(User.user_id)).scalar_one_or_none()
+                if admitted is None:
+                    raise HTTPException(status_code=401, detail="Account no longer available.")
+                funding, created = reserve_inference(session, user.user_id, str(payload.credit_request_id), digest, price,
+                                                      lifetime_seconds=request.app.state.settings.foundation_reservation_seconds)
+                if not created:
+                    raise HTTPException(status_code=409, detail="Credit request already processed or in progress; inference was not repeated.")
+                return funding.request_id
+        except InsufficientCredits:
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for inference.") from None
+        except IdempotencyConflict:
+            raise HTTPException(status_code=409, detail="Credit request ID conflicts with an earlier request.") from None
+
+    def finish_chat_credit(request, user, reservation, *, refund=False):
+        if reservation is not None:
+            with request.app.state.session_factory() as session, session.begin():
+                resolve_inference(session, reservation, user.user_id, refund=refund)
+
+    @app.post("/api/v1/chat/stream")
+    def stream_foundation_chat(payload: ChatCompletionRequest, request: Request,
+                               _user: AuthenticatedUser = Depends(get_current_user)):
+        settings = request.app.state.settings
+        if settings.chat_backend != "foundation":
+            raise HTTPException(status_code=503, detail="Streaming requires the Foundation backend.")
+        if settings.foundation_inference_price and (
+                payload.credit_request_id is None or payload.credit_limit < settings.foundation_inference_price):
+            raise HTTPException(status_code=402, detail="Explicit credit request ID and sufficient credit limit required.")
+        if settings.foundation_checkpoint is None and settings.foundation_registry is None:
+            raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
+        if payload.model_version is not None and settings.foundation_registry is None:
+            raise HTTPException(status_code=503, detail="Model selection requires a registry.")
+        if payload.use_knowledge and settings.knowledge_index is None:
+            raise HTTPException(status_code=503, detail="Knowledge retrieval is not configured.")
+        options = generation_options(payload, settings)
+        from ai_home.foundation.streaming import InferenceStream
+
+        def work(cancel, emit):
+            from ai_home.foundation.checkpoint import load_checkpoint
+            from ai_home.foundation.inference import stream_text
+            from ai_home.foundation.training import select_device
+            checkpoint, version = settings.foundation_checkpoint, None
+            if settings.foundation_registry is not None:
+                if checkpoint is not None:
+                    raise ValueError("Ambiguous checkpoint configuration")
+                from ai_home.foundation.registry import ModelRegistry
+                version, checkpoint = ModelRegistry(settings.foundation_registry).resolve(
+                    str(payload.model_version) if payload.model_version else None)
+            model, tokenizer, _ = load_checkpoint(checkpoint, select_device(settings.foundation_device),
+                                                  max_bytes=settings.foundation_memory_budget_bytes)
+            if cancel.is_set():
+                return
+            messages = [message.model_dump() for message in payload.messages]
+            references = []
+            if payload.use_knowledge:
+                from ai_home.knowledge import prepare_knowledge_context
+                messages, references = prepare_knowledge_context(messages, model, tokenizer, settings.knowledge_index)
+            emit({"type": "metadata", "model_version": version, "references": references, "generation": options})
+            started = time.perf_counter()
+            chunks, characters, nonempty = 0, 0, False
+            for content in stream_text(model, tokenizer, messages, cancel=cancel,
+                                       **options):
+                if cancel.is_set():
+                    return
+                chunks += 1
+                characters += len(content)
+                nonempty = nonempty or bool(content.strip())
+                emit({"type": "delta", "content": content})
+            if cancel.is_set():
+                return
+            if not nonempty:
+                raise RuntimeError("No generated text")
+            emit({"type": "done", "chunks": chunks, "characters": characters,
+                  "generation_seconds": time.perf_counter() - started})
+
+        def accounted_work(cancel, emit):
+            reservation, settled = None, False
+            if cancel.is_set():
+                return
+            try:
+                reservation = reserve_chat_credit(payload, request, _user)
+                def accounted_emit(event):
+                    nonlocal settled
+                    if event["type"] == "done":
+                        if cancel.is_set():
+                            return
+                        finish_chat_credit(request, _user, reservation)
+                        settled = True
+                        event = {**event, "charged_credits": settings.foundation_inference_price,
+                                 "credit_request_id": str(payload.credit_request_id) if payload.credit_request_id else None}
+                    elif event["type"] == "metadata":
+                        event = {**event, "reserved_credits": settings.foundation_inference_price}
+                    emit(event)
+                work(cancel, accounted_emit)
+            except HTTPException as error:
+                emit({"type": "error", "code": "insufficient_credits" if error.status_code == 402 else "credit_request_conflict"})
+            finally:
+                if reservation is not None and not settled:
+                    finish_chat_credit(request, _user, reservation, refund=True)
+
+        stream = InferenceStream(accounted_work, foundation_inference_lock)
+        return StreamingResponse(stream.events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
     @app.post(
         "/api/v1/chat/completions",
         response_model=ChatCompletionResponse,
@@ -471,6 +639,71 @@ def create_app(
         current_user: AuthenticatedUser = Depends(get_current_user),
     ) -> ChatCompletionResponse:
         settings: Settings = request.app.state.settings
+        if payload.generation is not None and settings.chat_backend != "foundation":
+            raise HTTPException(status_code=422, detail="Generation controls require the Foundation backend.")
+        if payload.model_version is not None and (settings.chat_backend != "foundation" or settings.foundation_registry is None):
+            raise HTTPException(status_code=503, detail="Approved model selection requires a Foundation registry.")
+        if payload.use_knowledge and (settings.chat_backend != "foundation" or settings.knowledge_index is None):
+            raise HTTPException(status_code=503, detail="Foundation knowledge retrieval is not configured.")
+        if settings.chat_backend == "foundation":
+            if settings.foundation_checkpoint is None and settings.foundation_registry is None:
+                raise HTTPException(status_code=503, detail="Foundation checkpoint is not configured.")
+            options = generation_options(payload, settings)
+            # One active local generation per process; no prompts or KV caches are shared.
+            if not foundation_inference_lock.acquire(blocking=False):
+                raise HTTPException(status_code=503, detail="Foundation inference is busy.",
+                                    headers={"Retry-After": "1"})
+            reservation = None
+            try:
+                reservation = reserve_chat_credit(payload, request, current_user)
+                from ai_home.foundation.inference import complete
+
+                selected_version = None
+                checkpoint = settings.foundation_checkpoint
+                if settings.foundation_registry is not None:
+                    if checkpoint is not None:
+                        raise ValueError("Configure a registry or a direct checkpoint, not both")
+                    from ai_home.foundation.registry import ModelRegistry
+                    selected_version, checkpoint = ModelRegistry(settings.foundation_registry).resolve(
+                        str(payload.model_version) if payload.model_version is not None else None)
+                references = []
+                completion = complete
+                extra = {}
+                if payload.use_knowledge:
+                    from ai_home.knowledge import complete_with_knowledge
+                    completion = complete_with_knowledge
+                    extra["index_path"] = settings.knowledge_index
+                result = completion(
+                    [message.model_dump() for message in payload.messages],
+                    checkpoint,
+                    device=settings.foundation_device,
+                    max_bytes=settings.foundation_memory_budget_bytes,
+                    **options,
+                    **extra,
+                )
+                if payload.use_knowledge:
+                    answer, references = result
+                else:
+                    answer = result
+                finish_chat_credit(request, current_user, reservation)
+            except HTTPException:
+                finish_chat_credit(request, current_user, reservation, refund=True)
+                raise
+            except Exception:
+                try:
+                    finish_chat_credit(request, current_user, reservation, refund=True)
+                except Exception:
+                    logging.exception("Inference refund failed; durable reservation requires reconciliation")
+                # Do not return filesystem paths, checkpoint contents or conversation data.
+                raise HTTPException(status_code=503,
+                                    detail="Foundation inference failed; verify the checkpoint and runtime.") from None
+            finally:
+                foundation_inference_lock.release()
+            return ChatCompletionResponse(charged_credits=settings.foundation_inference_price,
+                                          credit_request_id=payload.credit_request_id, generation=options, model_version=selected_version, references=references, choices=[{
+                "index": 0, "message": {"role": "assistant", "content": answer},
+                "finish_reason": "stop",
+            }])
         if settings.chat_provider_url is None or settings.chat_provider_model is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -513,6 +746,9 @@ def create_app(
         current_user: AuthenticatedUser = Depends(get_current_user),
         session: Session = Depends(get_db),
     ) -> TrainingContribution:
+        return store_training_contribution(payload, current_user, session)
+
+    def store_training_contribution(payload, current_user, session, correction=None):
         messages = [message.model_dump() for message in payload.messages]
         if _contains_secret(messages):
             raise HTTPException(
@@ -534,6 +770,7 @@ def create_app(
             consent_scope=payload.consent_scope,
             consent_at_epoch=int(time.time()),
             status="pending_review",
+            correction=correction,
         )
         session.add(contribution)
         try:
@@ -547,6 +784,50 @@ def create_app(
                 detail="This conversation already has a training contribution.",
             ) from None
         return contribution
+
+    @app.post("/api/v1/training/conversations/{contribution_id}/corrections",
+              response_model=TrainingContributionResponse, status_code=201)
+    def correct_training_contribution(contribution_id: str, payload: TrainingCorrectionRequest,
+                                     current_user: AuthenticatedUser = Depends(get_current_user),
+                                     session: Session = Depends(get_db)):
+        source = session.scalar(select(TrainingContribution).where(
+            TrainingContribution.contribution_id == contribution_id,
+            TrainingContribution.owner_user_id == current_user.user_id))
+        if source is None:
+            raise HTTPException(status_code=404, detail="Training contribution not found.")
+        index = payload.message_index
+        if index >= len(source.messages) or source.messages[index]["role"] != "assistant":
+            raise HTTPException(status_code=422, detail="Corrections must target an assistant message.")
+        if payload.replacement == source.messages[index]["content"] or not payload.replacement.strip():
+            raise HTTPException(status_code=422, detail="Provide a distinct nonempty correction.")
+        messages = [dict(message) for message in source.messages[:index + 1]]
+        original = messages[index]["content"]
+        messages[index]["content"] = payload.replacement
+        try:
+            candidate = TrainingContributionRequest.model_validate({
+                **payload.model_dump(exclude={"message_index", "replacement"}),
+                "provider": source.provider, "source_endpoint": source.source_endpoint,
+                "model": source.model, "messages": messages})
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Correction requires renewed consent and reuse/privacy attestations.") from None
+        # Resolve legacy chains while their sources still exist; retain the root
+        # on every new correction so later exports need not expose ancestors.
+        ancestor, visited = source, set()
+        while ancestor.correction and not ancestor.correction.get("root_contribution_id"):
+            if ancestor.contribution_id in visited:
+                raise HTTPException(status_code=409, detail="Correction ancestry contains a cycle.")
+            visited.add(ancestor.contribution_id)
+            ancestor = session.scalar(select(TrainingContribution).where(
+                TrainingContribution.contribution_id == ancestor.correction["source_contribution_id"],
+                TrainingContribution.owner_user_id == current_user.user_id))
+            if ancestor is None:
+                raise HTTPException(status_code=409, detail="Correction ancestry is unavailable.")
+        root_contribution = (ancestor.correction.get("root_contribution_id")
+                             if ancestor.correction else str(ancestor.contribution_id))
+        return store_training_contribution(candidate, current_user, session, correction={
+            "kind": "human_correction_v1", "source_contribution_id": source.contribution_id,
+            "root_contribution_id": str(root_contribution),
+            "message_index": index, "original_content_sha256": hashlib.sha256(original.encode("utf-8")).hexdigest()})
 
     @app.get(
         "/api/v1/training/conversations",
@@ -752,6 +1033,7 @@ def create_app(
                 "reviewed_at_epoch": item.reviewed_at_epoch,
                 "review_checklist": item.review_checklist,
                 "messages": item.messages,
+                **({"correction": item.correction} if item.correction is not None else {}),
             }
             for item in contributions
         ]
@@ -811,6 +1093,7 @@ def create_app(
     @app.get(
         "/api/v1/admin/training/datasets/{dataset_id}",
         response_model=TrainingDatasetExportResponse,
+        response_model_exclude_none=True,
     )
     def get_training_dataset(
         dataset_id: str,
@@ -917,9 +1200,17 @@ def create_app(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Password confirmation failed.",
             )
+        admitted = session.execute(update(User).where(User.user_id == current_user.user_id).values(user_id=current_user.user_id).returning(User.user_id)).scalar_one_or_none()
+        if admitted is None:
+            raise HTTPException(status_code=401, detail="Account no longer available.")
+        refund_pending_inference(session, current_user.user_id)
         session.execute(
             delete(AuthSession).where(AuthSession.user_id == current_user.user_id)
         )
+        for owned_job in session.scalars(select(ComputeJob).where(
+                ComputeJob.owner_user_id == current_user.user_id,
+                ComputeJob.status.in_(("queued", "leased"))).with_for_update()):
+            refund_job(session, owned_job)
         session.execute(
             update(ComputeJob)
             .where(
@@ -968,6 +1259,8 @@ def create_app(
             owner_user_id=current_user.user_id,
             name=payload.name,
             hardware=payload.hardware,
+            supported_job_types=payload.supported_job_types,
+            foundation_torch_version=payload.foundation_torch_version,
         )
         session.commit()
         response.headers["Cache-Control"] = "no-store"
@@ -994,6 +1287,21 @@ def create_app(
             )
         )
 
+    @app.get("/api/v1/nodes/{node_id}", response_model=NodeResponse)
+    def get_node(
+        node_id: str,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeNode:
+        node = session.scalar(select(ComputeNode).where(
+            ComputeNode.node_id == node_id,
+            ComputeNode.owner_user_id == current_user.user_id,
+            ComputeNode.revoked_at.is_(None),
+        ))
+        if node is None:
+            raise HTTPException(status_code=404, detail="Node not found.")
+        return node
+
     @app.delete("/api/v1/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
     def delete_node(
         node_id: str,
@@ -1017,12 +1325,75 @@ def create_app(
             ) from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    from ai_home.transfer_limits import TransferProbeLimiter
+    transfer_probe_limiter = TransferProbeLimiter()
+
+    def admit_transfer_probe(node, size):
+        if not transfer_probe_limiter.admit(str(node.node_id), size):
+            raise HTTPException(status_code=429, detail="Transfer probe budget exhausted; retry later.",
+                                headers={"Retry-After": "60"})
+
+    @app.post("/api/v1/node/transfer-measurement")
+    def node_transfer_measurement(payload: TransferMeasurement,
+                                  current_node: ComputeNode = Depends(get_current_node),
+                                  session: Session = Depends(get_db)):
+        admit_transfer_probe(current_node, 0)
+        session.refresh(current_node, with_for_update=True)
+        if current_node.revoked_at is not None:
+            raise HTTPException(status_code=401, detail="Node credential revoked.")
+        stored = payload.summary(int(time.time()))
+        current_node.hardware = {**current_node.hardware, "transfer_measurement": stored}
+        session.commit()
+        return stored
+
+    @app.get("/api/v1/node/transfer-probe")
+    def node_transfer_download(size: int = Query(default=65536, ge=0, le=1048576),
+                               current_node: ComputeNode = Depends(get_current_node)):
+        # Fixed public bytes, no job data, account contents or arbitrary execution.
+        admit_transfer_probe(current_node, size)
+        return Response(content=bytes(range(256)) * (size // 256) + bytes(range(size % 256)),
+                        media_type="application/octet-stream",
+                        headers={"Cache-Control": "no-store", "Content-Encoding": "identity"})
+
+    @app.post("/api/v1/node/transfer-probe")
+    async def node_transfer_upload(request: Request, current_node: ComputeNode = Depends(get_current_node)):
+        admit_transfer_probe(current_node, 1048576)
+        total, digest = 0, hashlib.sha256()
+        if request.headers.get("content-encoding", "identity") != "identity":
+            raise HTTPException(status_code=415, detail="Encoded probe bodies are unsupported.")
+        async for chunk in request.stream():
+            total += len(chunk)
+            if total > 1048576:
+                raise HTTPException(status_code=413, detail="Probe exceeds 1 MiB.")
+            digest.update(chunk)
+        return {"bytes": total, "sha256": digest.hexdigest()}
+
+    @app.put("/api/v1/node/capabilities")
+    def node_capabilities(
+        payload: NodeCapabilities,
+        current_node: ComputeNode = Depends(get_current_node),
+        session: Session = Depends(get_db),
+    ):
+        session.refresh(current_node, with_for_update=True)
+        if current_node.revoked_at is not None:
+            raise HTTPException(status_code=401, detail="Node revoked")
+        current_node.supported_job_types = sorted(set(payload.supported_job_types))
+        hardware = dict(current_node.hardware)
+        hardware.pop("foundation_torch_version", None)
+        hardware.pop("service_measurement", None)
+        if {"foundation.gradient.v1", "foundation.evaluate.v1", "foundation.adapter-gradient.v1"}.intersection(payload.supported_job_types):
+            hardware["foundation_torch_version"] = payload.foundation_torch_version
+        current_node.hardware = hardware
+        session.commit()
+        return payload.model_dump()
+
     @app.post("/api/v1/node/heartbeat")
     def node_heartbeat(
+        payload: NodeResources | None = None,
         current_node: ComputeNode = Depends(get_current_node),
         session: Session = Depends(get_db),
     ) -> dict[str, int]:
-        last_heartbeat = heartbeat_node(session, current_node)
+        last_heartbeat = heartbeat_node(session, current_node, resources=payload)
         session.commit()
         return {"last_heartbeat_epoch": last_heartbeat}
 
@@ -1071,6 +1442,195 @@ def create_app(
                 raise
         return job
 
+    @app.post("/api/v1/jobs/foundation/tokenize", response_model=JobResponse, status_code=201)
+    def create_foundation_tokenize_job(
+        payload: CreateTokenizeJobRequest,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeJob:
+        arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing,
+                         reward_credits=payload.reward_credits)
+        try:
+            try:
+                job = create_tokenize_job(session, **arguments)
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                if not is_job_idempotency_violation(error):
+                    raise
+                job = create_tokenize_job(session, **arguments)
+                session.commit()
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
+        except InsufficientCredits:
+            session.rollback()
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
+        return job
+
+    @app.post("/api/v1/jobs/foundation/gradient", response_model=JobResponse, status_code=201)
+    def create_foundation_gradient_job(
+        payload: CreateGradientJobRequest, request: Request,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeJob:
+        if not request.app.state.settings.foundation_distributed_training_enabled:
+            raise HTTPException(status_code=503, detail="Experimental gradient jobs are disabled.")
+        arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing,
+                         reward_credits=payload.reward_credits, scheduling=payload.scheduling)
+        try:
+            try:
+                job = create_gradient_job(session, **arguments)
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                if not is_job_idempotency_violation(error):
+                    raise
+                job = create_gradient_job(session, **arguments)
+                session.commit()
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
+        except (ValueError, ImportError):
+            session.rollback()
+            raise HTTPException(status_code=422, detail="Invalid or unsupported gradient task.") from None
+        except InsufficientCredits:
+            session.rollback()
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
+        return job
+
+    @app.post("/api/v1/jobs/foundation/evaluate", response_model=JobResponse, status_code=201)
+    def create_foundation_evaluation_job(
+        payload: CreateEvaluationJobRequest, request: Request,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeJob:
+        if not request.app.state.settings.foundation_distributed_evaluation_enabled:
+            raise HTTPException(status_code=503, detail="Experimental evaluation jobs are disabled.")
+        arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing,
+                         reward_credits=payload.reward_credits)
+        try:
+            try:
+                job = create_evaluation_job(session, **arguments)
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                if not is_job_idempotency_violation(error):
+                    raise
+                job = create_evaluation_job(session, **arguments)
+                session.commit()
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
+        except (ValueError, ImportError):
+            session.rollback()
+            raise HTTPException(status_code=422, detail="Invalid or unsupported evaluation task.") from None
+        except InsufficientCredits:
+            session.rollback()
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
+        return job
+
+    @app.post("/api/v1/jobs/foundation/adapter-gradient", response_model=JobResponse, status_code=201)
+    def create_foundation_adapter_job(
+        payload: CreateEvaluationJobRequest, request: Request,
+        current_user: AuthenticatedUser = Depends(get_current_user),
+        session: Session = Depends(get_db),
+    ) -> ComputeJob:
+        if not request.app.state.settings.foundation_distributed_adapters_enabled:
+            raise HTTPException(status_code=503, detail="Experimental adapter jobs are disabled.")
+        arguments = dict(owner_user_id=current_user.user_id, idempotency_key=payload.idempotency_key,
+                         payload=payload.payload, allow_public_node_processing=payload.allow_public_node_processing,
+                         reward_credits=payload.reward_credits)
+        try:
+            try:
+                job = create_adapter_job(session, **arguments)
+                session.commit()
+            except IntegrityError as error:
+                session.rollback()
+                if not is_job_idempotency_violation(error):
+                    raise
+                job = create_adapter_job(session, **arguments)
+                session.commit()
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Idempotency key already used for a different job.") from None
+        except (ValueError, ImportError):
+            session.rollback()
+            raise HTTPException(status_code=422, detail="Invalid or unsupported adapter task.") from None
+        except InsufficientCredits:
+            session.rollback()
+            raise HTTPException(status_code=402, detail="Insufficient compute credits for this reward.") from None
+        return job
+
+    @app.get("/api/v1/jobs/summary", response_model=list[JobSummaryResponse])
+    def get_own_job_summaries(limit: int = Query(default=100, ge=1, le=100),
+                              before_created_at: datetime | None = None, before_job_id: uuid.UUID | None = None,
+                              current_user: AuthenticatedUser = Depends(get_current_user),
+                              session: Session = Depends(get_db)):
+        if (before_created_at is None) != (before_job_id is None):
+            raise HTTPException(status_code=422, detail="Both cursor fields are required together.")
+        fields = [getattr(ComputeJob, name) for name in JobSummaryResponse.model_fields]
+        query = select(*fields).where(ComputeJob.owner_user_id == current_user.user_id)
+        created = ComputeJob.created_at
+        sqlite = session.get_bind().dialect.name == "sqlite"
+        if sqlite:
+            # CURRENT_TIMESTAMP has no fraction; SQLAlchemy datetime binds have
+            # six digits. Normalize text without discarding microsecond precision.
+            raw_date = cast(created, String)
+            created = func.substr(case((func.instr(raw_date, ".") > 0, raw_date),
+                                      else_=raw_date + ".") + "000000", 1, 26)
+        if before_created_at is not None:
+            if before_created_at.tzinfo is None:
+                before_created_at = before_created_at.replace(tzinfo=timezone.utc)
+            cursor_date = (before_created_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+                           if sqlite else before_created_at)
+            query = query.where(or_(created < cursor_date,
+                and_(created == cursor_date, ComputeJob.job_id < str(before_job_id))))
+        return list(session.execute(query.order_by(created.desc(), ComputeJob.job_id.desc())
+                                    .limit(limit)).mappings())
+
+    @app.get("/api/v1/credits")
+    def get_own_credits(current_user: AuthenticatedUser = Depends(get_current_user),
+                        session: Session = Depends(get_db)) -> dict[str, int]:
+        refund_expired_inference(session, current_user.user_id)
+        session.commit()
+        account_id = user_account_id(current_user.user_id)
+        account = session.get(Account, account_id)
+        reserved = session.scalar(select(func.sum(JobFunding.amount)).where(
+            JobFunding.owner_account == account_id, JobFunding.status == "reserved")) or 0
+        reserved += session.scalar(select(func.sum(InferenceFunding.amount)).where(
+            InferenceFunding.owner_account == account_id, InferenceFunding.status == "reserved")) or 0
+        earned = session.scalar(select(func.sum(JobFunding.amount)).where(
+            JobFunding.worker_account == account_id, JobFunding.owner_account != account_id,
+            JobFunding.status == "settled")) or 0
+        return {"available": account.balance if account else 0, "reserved": reserved, "earned": earned}
+
+    @app.get("/api/v1/credits/transactions")
+    def get_own_credit_transactions(current_user: AuthenticatedUser = Depends(get_current_user),
+                                    session: Session = Depends(get_db)) -> list[dict]:
+        rows = session.execute(select(LedgerTransaction, Posting.amount).join(Posting).where(
+            Posting.account_id == user_account_id(current_user.user_id)).order_by(
+                LedgerTransaction.transaction_id.desc()).limit(100))
+        return [{"transaction_id": entry.transaction_id, "operation": entry.operation,
+                 "amount": amount, "created_at": entry.created_at} for entry, amount in rows]
+
+    @app.post("/api/v1/jobs/{job_id}/cancel", response_model=JobResponse)
+    def cancel_owned_job(job_id: str, current_user: AuthenticatedUser = Depends(get_current_user),
+                         session: Session = Depends(get_db)):
+        try:
+            job = cancel_job(session, job_id, current_user.user_id)
+            session.commit()
+            return job
+        except JobNotFound:
+            session.rollback()
+            raise HTTPException(status_code=404, detail="Job not found.") from None
+        except ValueError:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Only pending jobs can be cancelled.") from None
+
     @app.get("/api/v1/jobs", response_model=list[JobResponse])
     def get_jobs(
         current_user: AuthenticatedUser = Depends(get_current_user),
@@ -1083,12 +1643,16 @@ def create_app(
         response_model=ClaimedJobResponse,
     )
     def get_node_job(
+        request: Request,
         current_node: ComputeNode = Depends(get_current_node),
         session: Session = Depends(get_db),
     ) -> ClaimedJobResponse | Response:
         heartbeat_node(session, current_node)
         try:
-            claim = claim_job(session, current_node)
+            claim = claim_job(session, current_node,
+                              allow_foundation_training=request.app.state.settings.foundation_distributed_training_enabled,
+                              allow_foundation_evaluation=request.app.state.settings.foundation_distributed_evaluation_enabled,
+                              allow_foundation_adapters=request.app.state.settings.foundation_distributed_adapters_enabled)
         except NodeNotFound:
             session.rollback()
             raise HTTPException(
@@ -1104,6 +1668,19 @@ def create_app(
             )
         session.commit()
         return _claimed_job_response(claim)
+
+    @app.post("/api/v1/node/jobs/{job_id}/renew")
+    def renew_node_job(job_id: str, payload: RenewJobLeaseRequest,
+                       current_node: ComputeNode = Depends(get_current_node),
+                       session: Session = Depends(get_db)):
+        try:
+            expiry = renew_job_lease(session, node=current_node, job_id=job_id,
+                                     lease_token=payload.lease_token.get_secret_value())
+            session.commit()
+            return {"lease_expires_epoch": expiry}
+        except (JobNotFound, NodeNotFound):
+            session.rollback()
+            raise HTTPException(status_code=404, detail="Active job lease not found.") from None
 
     @app.post(
         "/api/v1/node/jobs/{job_id}/result",
@@ -1144,6 +1721,24 @@ def create_app(
             ) from None
         return job
 
+    @app.post("/api/v1/node/jobs/{job_id}/measurement")
+    def submit_node_measurement(job_id: str, payload: WorkerServiceMeasurement,
+                                current_node: ComputeNode = Depends(get_current_node),
+                                session: Session = Depends(get_db)):
+        try:
+            stored = record_worker_measurement(session, node=current_node, job_id=job_id, measurement=payload)
+            session.commit()
+            return {"accepted": True, "completed_epoch": stored["completed_epoch"]}
+        except JobNotFound:
+            session.rollback()
+            raise HTTPException(status_code=404, detail="Recent verified completion not found.") from None
+        except JobIdempotencyConflict:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Completion already has a different measurement.") from None
+        except ValueError:
+            session.rollback()
+            raise HTTPException(status_code=422, detail="Measurement does not match completed work.") from None
+
     return app
 
 
@@ -1160,10 +1755,11 @@ def _is_email_unique_violation(error: IntegrityError) -> bool:
 def _claimed_job_response(claim: ClaimedJob) -> ClaimedJobResponse:
     return ClaimedJobResponse(
         job_id=claim.job.job_id,
-        job_type="math.sum.v1",
+        job_type=claim.job.job_type,
         payload=claim.job.payload,
         lease_token=claim.lease_token,
         lease_expires_epoch=claim.job.lease_expires_epoch or 0,
+        reward_credits=claim.reward_credits,
     )
 
 
@@ -1196,3 +1792,4 @@ def _is_dataset_version_violation(error: IntegrityError) -> bool:
         "UNIQUE constraint failed: training_datasets.dataset_version"
         in str(error.orig)
     )
+

@@ -1,0 +1,52 @@
+{
+  "format": "ai-home-tokenizer-efficiency-v1",
+  "checkpoint_sha256": "ce63c713a46a6e482eaec60e16b879a3475999a1be5b6245786c57ca581224ed",
+  "tokenizer_sha256": "10a24308d9c0e0992e900aa75ecab9a958d4ac01aa2290ecea5aade25dadc6c6",
+  "vocab_size": 512,
+  "baseline_vocab_size": 262,
+  "partitions": {
+    "training": {
+      "dataset_sha256": "99bc9f160b4bf860e92dc3a5a6402a3e52ddf673364887058669dea49b0aa35d",
+      "documents": [
+        {
+          "sha256": "0453977a516cc3aa8c2e9e9df422471cee31031cdb74e4b087bdf3b6fbc6dd28",
+          "utf8_bytes": 6911,
+          "tokens": 3242,
+          "language": "es-en"
+        },
+        {
+          "sha256": "9659c02c2459169eaf63eaac8595cd3c2566be67fdc44ef3e65bd4d3363bc30a",
+          "utf8_bytes": 3478,
+          "tokens": 1605,
+          "language": "es-en"
+        }
+      ],
+      "utf8_bytes": 10389,
+      "tokens": 4847,
+      "bytes_per_token": 2.143387662471632,
+      "token_reduction_fraction": 0.533448840119357
+    },
+    "validation": {
+      "dataset_sha256": "86a231a07cef861f2947b2e165431c31a027aad20f6b7cf1d4682d28b6246d74",
+      "documents": [
+        {
+          "sha256": "acfe5472eaedbe826026b45eece49845849417e1c6cb512c87908119a4eafbba",
+          "utf8_bytes": 5483,
+          "tokens": 2892,
+          "language": "es-en"
+        },
+        {
+          "sha256": "c80a81b233c0be94cb55dac2c098f85b0c78f1e72e43d272affc4c8194637400",
+          "utf8_bytes": 4919,
+          "tokens": 2455,
+          "language": "es-en"
+        }
+      ],
+      "utf8_bytes": 10402,
+      "tokens": 5347,
+      "bytes_per_token": 1.9453899382831494,
+      "token_reduction_fraction": 0.48596423764660646
+    }
+  },
+  "scope": "Raw normalized text only; no BOS/EOS/PAD or conversation wrappers. No throughput or language-quality claim."
+}

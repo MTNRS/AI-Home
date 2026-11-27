@@ -1,0 +1,192 @@
+{
+  "format": "ai-home-distributed-smoke-v1",
+  "torch_version": "2.14.1+cu130",
+  "transport": "loopback HTTP",
+  "device": "cpu",
+  "workers": [
+    {
+      "round": 1,
+      "node_id": "1458bc71-03d2-4c10-8981-324c69fb403e",
+      "device": "cpu",
+      "pid": 42292,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.009335099995951168,
+        "claim_service_seconds": 0.010008299999753945,
+        "execution_seconds": 2.1444924999959767,
+        "submit_service_seconds": 0.07525559999339748,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 15287111.697667085,
+        "submit_service_bytes_per_second": 2023357.730366368,
+        "gradient_tokens_per_second": 14.921945402028701
+      }
+    },
+    {
+      "round": 1,
+      "node_id": "959f74ce-3e37-4412-8719-9f5c6e18493a",
+      "device": "cuda",
+      "pid": 43188,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.007181500011938624,
+        "claim_service_seconds": 0.007734299986623228,
+        "execution_seconds": 1.16281650000019,
+        "submit_service_seconds": 0.06089269999938551,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152268,
+        "claim_service_bytes_per_second": 19781751.453216966,
+        "submit_service_bytes_per_second": 2500595.309479405,
+        "gradient_tokens_per_second": 27.519389344745942
+      }
+    },
+    {
+      "round": 2,
+      "node_id": "1458bc71-03d2-4c10-8981-324c69fb403e",
+      "device": "cpu",
+      "pid": 47556,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.0078104999993229285,
+        "claim_service_seconds": 0.007676199995330535,
+        "execution_seconds": 2.2016812000074424,
+        "submit_service_seconds": 0.05256840000220109,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 19931476.523940146,
+        "submit_service_bytes_per_second": 2896588.064191118,
+        "gradient_tokens_per_second": 14.534347661183567
+      }
+    },
+    {
+      "round": 2,
+      "node_id": "959f74ce-3e37-4412-8719-9f5c6e18493a",
+      "device": "cuda",
+      "pid": 43420,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.0072650999936740845,
+        "claim_service_seconds": 0.007594199996674433,
+        "execution_seconds": 1.17522380000446,
+        "submit_service_seconds": 0.059344099994632415,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 20146690.90450596,
+        "submit_service_bytes_per_second": 2565865.857158041,
+        "gradient_tokens_per_second": 27.228856324964283
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "round": 1,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.7676215171813965,
+      "validation": {
+        "loss": 5.679264545440674,
+        "tokens": 32,
+        "perplexity": 292.73405813645076
+      }
+    },
+    {
+      "round": 2,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.677713632583618,
+      "validation": {
+        "loss": 5.602051734924316,
+        "tokens": 32,
+        "perplexity": 270.98182031589835
+      }
+    }
+  ],
+  "baseline_validation": {
+    "loss": 5.765335559844971,
+    "tokens": 32,
+    "perplexity": 319.04608513076136
+  },
+  "embedding_delta_l2": 0.1838996857404709,
+  "generated_text": "\ufffd\u065f\u0666\ufffd\ufffdZ\ufffd96D%J\ufffd\ufffd",
+  "checkpoint_sha256": "9536615366e75a2c8d6ae45fa8d9efc7ec38f9c9c23009c0d9d18631c59e2a99",
+  "elapsed_seconds": 29.068041999998968,
+  "parameter_count": 28192,
+  "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim",
+  "coordinator_process_runs": [
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "700ac6af-5a50-429f-a589-ed659a90d15f",
+          "status": "queued"
+        },
+        {
+          "id": "77a633a1-5bbe-4479-a64a-5aa373f2ce9d",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "700ac6af-5a50-429f-a589-ed659a90d15f",
+          "status": "queued"
+        },
+        {
+          "id": "77a633a1-5bbe-4479-a64a-5aa373f2ce9d",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "d0a53bc36507ad9e87c22a8b344243791aded0a6a9037eba81f8a1b2e873f9c9"
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "d0a53bc36507ad9e87c22a8b344243791aded0a6a9037eba81f8a1b2e873f9c9"
+    }
+  ],
+  "isolated_python": false,
+  "database_setup": "packaged Alembic upgrade and schema check",
+  "credits": {
+    "reward_per_job": 3,
+    "requester": {
+      "available": 0,
+      "reserved": 0,
+      "earned": 0
+    },
+    "workers": [
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      },
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      }
+    ],
+    "issuance": "Synthetic initial balance in disposable demo database; no money or cryptocurrency"
+  }
+}

@@ -1,0 +1,189 @@
+{
+  "format": "ai-home-adapter-smoke-v1",
+  "device": "cuda",
+  "torch_version": "2.14.1+cu130",
+  "parent_sha256": "80d2a364ab1ae9ccaf659a52fdaadf1b85e359c3d21b7c13a8104c4a6c181f00",
+  "adapter_sha256": "1ad91ee1844150164b10c9676333118e5cd24deef3dbb3bfde94639a186a5b08",
+  "adapter_file_bytes": 4381,
+  "base_parameters": 18528,
+  "trainable_parameters": 448,
+  "training_sha256": "3f68d1b5ea3fda99c1eeee62d2f991ca2975b800e6a8a4f88dba9e787f86e685",
+  "validation_sha256": "8e687936689abb99693db6069fc66f9c058b760cb6014e44bf13503af3d75b47",
+  "baseline": {
+    "loss": 5.634473790977207,
+    "tokens": 788,
+    "perplexity": 279.911586547986
+  },
+  "candidate": {
+    "loss": 5.585937732367346,
+    "tokens": 788,
+    "perplexity": 266.6502120723582
+  },
+  "steps": 40,
+  "metrics": [
+    {
+      "step": 1,
+      "loss": 5.649831295013428
+    },
+    {
+      "step": 2,
+      "loss": 5.646839141845703
+    },
+    {
+      "step": 3,
+      "loss": 5.638065814971924
+    },
+    {
+      "step": 4,
+      "loss": 5.66300630569458
+    },
+    {
+      "step": 5,
+      "loss": 5.648761749267578
+    },
+    {
+      "step": 6,
+      "loss": 5.645249366760254
+    },
+    {
+      "step": 7,
+      "loss": 5.630519866943359
+    },
+    {
+      "step": 8,
+      "loss": 5.656564235687256
+    },
+    {
+      "step": 9,
+      "loss": 5.636674880981445
+    },
+    {
+      "step": 10,
+      "loss": 5.6327128410339355
+    },
+    {
+      "step": 11,
+      "loss": 5.622455596923828
+    },
+    {
+      "step": 12,
+      "loss": 5.605658531188965
+    },
+    {
+      "step": 13,
+      "loss": 5.623156547546387
+    },
+    {
+      "step": 14,
+      "loss": 5.617550373077393
+    },
+    {
+      "step": 15,
+      "loss": 5.605167865753174
+    },
+    {
+      "step": 16,
+      "loss": 5.582495212554932
+    },
+    {
+      "step": 17,
+      "loss": 5.59152889251709
+    },
+    {
+      "step": 18,
+      "loss": 5.592010498046875
+    },
+    {
+      "step": 19,
+      "loss": 5.6046857833862305
+    },
+    {
+      "step": 20,
+      "loss": 5.5911149978637695
+    },
+    {
+      "step": 21,
+      "loss": 5.5842437744140625
+    },
+    {
+      "step": 22,
+      "loss": 5.577476501464844
+    },
+    {
+      "step": 23,
+      "loss": 5.592874526977539
+    },
+    {
+      "step": 24,
+      "loss": 5.573925971984863
+    },
+    {
+      "step": 25,
+      "loss": 5.580413818359375
+    },
+    {
+      "step": 26,
+      "loss": 5.597212791442871
+    },
+    {
+      "step": 27,
+      "loss": 5.6113176345825195
+    },
+    {
+      "step": 28,
+      "loss": 5.578005313873291
+    },
+    {
+      "step": 29,
+      "loss": 5.576531887054443
+    },
+    {
+      "step": 30,
+      "loss": 5.571006774902344
+    },
+    {
+      "step": 31,
+      "loss": 5.595221519470215
+    },
+    {
+      "step": 32,
+      "loss": 5.593238353729248
+    },
+    {
+      "step": 33,
+      "loss": 5.5765886306762695
+    },
+    {
+      "step": 34,
+      "loss": 5.585165977478027
+    },
+    {
+      "step": 35,
+      "loss": 5.570403575897217
+    },
+    {
+      "step": 36,
+      "loss": 5.566201210021973
+    },
+    {
+      "step": 37,
+      "loss": 5.564197540283203
+    },
+    {
+      "step": 38,
+      "loss": 5.568486213684082
+    },
+    {
+      "step": 39,
+      "loss": 5.56843376159668
+    },
+    {
+      "step": 40,
+      "loss": 5.551980972290039
+    }
+  ],
+  "generated_text_unscored": "entententententententententententententententent",
+  "data_visibility": "reviewed-training-only",
+  "promoted": false,
+  "scope": "Authored repeated sentences; no language-quality or distributed-efficiency claim"
+}

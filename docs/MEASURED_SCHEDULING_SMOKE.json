@@ -1,0 +1,197 @@
+{
+  "format": "ai-home-distributed-smoke-v1",
+  "torch_version": "2.14.1+cu130",
+  "transport": "loopback HTTP",
+  "device": "cpu",
+  "workers": [
+    {
+      "round": 1,
+      "node_id": "15c4e7a7-51fc-472f-9d2c-b729641eb21a",
+      "device": "cpu",
+      "pid": 44232,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.02184309999574907,
+        "claim_service_seconds": 0.011227499999222346,
+        "execution_seconds": 2.3923701999883633,
+        "submit_service_seconds": 0.08131839999987278,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 13627076.375916023,
+        "submit_service_bytes_per_second": 1872503.640015522,
+        "gradient_tokens_per_second": 13.37585629521537
+      },
+      "measurement_uploaded": true
+    },
+    {
+      "round": 1,
+      "node_id": "8c8fd127-af60-46f5-a363-2529b5e3e670",
+      "device": "cuda",
+      "pid": 1456,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.00809540000045672,
+        "claim_service_seconds": 0.007791199997882359,
+        "execution_seconds": 1.2814974000066286,
+        "submit_service_seconds": 0.07939230000192765,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 19637283.09395019,
+        "submit_service_bytes_per_second": 1917931.5877774407,
+        "gradient_tokens_per_second": 24.970788079503304
+      },
+      "measurement_uploaded": true
+    },
+    {
+      "round": 2,
+      "node_id": "15c4e7a7-51fc-472f-9d2c-b729641eb21a",
+      "device": "cpu",
+      "pid": 20748,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.008462300000246614,
+        "claim_service_seconds": 0.010619599997880869,
+        "execution_seconds": 2.586676899998565,
+        "submit_service_seconds": 0.18936720000056084,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 14407133.98155586,
+        "submit_service_bytes_per_second": 804093.8451830572,
+        "gradient_tokens_per_second": 12.371085078317183
+      },
+      "measurement_uploaded": true
+    },
+    {
+      "round": 2,
+      "node_id": "8c8fd127-af60-46f5-a363-2529b5e3e670",
+      "device": "cuda",
+      "pid": 39732,
+      "completed": true,
+      "measurement": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.007941200005006976,
+        "claim_service_seconds": 0.009781599990674295,
+        "execution_seconds": 1.3220538000023225,
+        "submit_service_seconds": 0.06035279999196064,
+        "claim_response_bytes": 152998,
+        "submit_request_bytes": 152269,
+        "claim_service_bytes_per_second": 15641408.373463152,
+        "submit_service_bytes_per_second": 2522981.535575535,
+        "gradient_tokens_per_second": 24.20476383029479
+      },
+      "measurement_uploaded": true
+    }
+  ],
+  "metrics": [
+    {
+      "round": 1,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.7676215171813965,
+      "validation": {
+        "loss": 5.679264545440674,
+        "tokens": 32,
+        "perplexity": 292.73405813645076
+      }
+    },
+    {
+      "round": 2,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.677714109420776,
+      "validation": {
+        "loss": 5.602051734924316,
+        "tokens": 32,
+        "perplexity": 270.98182031589835
+      }
+    }
+  ],
+  "baseline_validation": {
+    "loss": 5.765335559844971,
+    "tokens": 32,
+    "perplexity": 319.04608513076136
+  },
+  "embedding_delta_l2": 0.1838996857404709,
+  "generated_text": "\ufffd\u065f\u0666\ufffd\ufffdZ\ufffd96D%J\ufffd\ufffd",
+  "checkpoint_sha256": "1c0bd7d9aab0c40ccbaa5cda4c562814c2f9e525499be02103f4dbefa978bfc7",
+  "elapsed_seconds": 31.29066069998953,
+  "parameter_count": 28192,
+  "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim",
+  "coordinator_process_runs": [
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "b3d61575-503d-4c82-8b35-c8d983c063df",
+          "status": "queued"
+        },
+        {
+          "id": "5e104b3a-847c-44a6-b860-8b28a5288bb0",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "waiting",
+      "jobs": [
+        {
+          "id": "b3d61575-503d-4c82-8b35-c8d983c063df",
+          "status": "queued"
+        },
+        {
+          "id": "5e104b3a-847c-44a6-b860-8b28a5288bb0",
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "f9558bfad82be6108790f577b4cfee220dbb9bb1899c600e36af34f19e52f5e4"
+    },
+    {
+      "round": 2,
+      "state": "committed",
+      "step": 2,
+      "round_request_sha256": "f9558bfad82be6108790f577b4cfee220dbb9bb1899c600e36af34f19e52f5e4"
+    }
+  ],
+  "isolated_python": false,
+  "database_setup": "packaged Alembic upgrade and schema check",
+  "measured_scheduling": true,
+  "credits": {
+    "reward_per_job": 3,
+    "requester": {
+      "available": 0,
+      "reserved": 0,
+      "earned": 0
+    },
+    "workers": [
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      },
+      {
+        "available": 6,
+        "reserved": 0,
+        "earned": 6
+      }
+    ],
+    "issuance": "Synthetic initial balance in disposable demo database; no money or cryptocurrency"
+  }
+}

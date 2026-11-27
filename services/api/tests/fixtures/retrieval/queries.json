@@ -1,0 +1,58 @@
+[
+  {
+    "id": "paraphrase-1",
+    "query": "¿Qué instalación observa el cielo nocturno?",
+    "relevant": [
+      "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077"
+    ]
+  },
+  {
+    "id": "paraphrase-2",
+    "query": "¿Dónde se pueden llevar libros prestados?",
+    "relevant": [
+      "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2"
+    ]
+  },
+  {
+    "id": "paraphrase-3",
+    "query": "¿Quién arregla una bici con problemas de frenado?",
+    "relevant": [
+      "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e"
+    ]
+  },
+  {
+    "id": "paraphrase-4",
+    "query": "¿Qué negocio prepara hogazas por la mañana?",
+    "relevant": [
+      "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd"
+    ]
+  },
+  {
+    "id": "paraphrase-5",
+    "query": "Where can someone examine old cartographic documents?",
+    "relevant": [
+      "00caf0f8a53d82dc9df53c73acfc69ef16579598e629559ac87a968cb285f8eb"
+    ]
+  },
+  {
+    "id": "paraphrase-6",
+    "query": "Which place waters crops using collected rainfall?",
+    "relevant": [
+      "278d96e4b8b9a7ae74230f5bce27d2dddf81147589f6cff88da7f575222a3369"
+    ]
+  },
+  {
+    "id": "paraphrase-7",
+    "query": "Who can fix a damaged string instrument?",
+    "relevant": [
+      "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c"
+    ]
+  },
+  {
+    "id": "paraphrase-8",
+    "query": "Where can travelers borrow charging equipment?",
+    "relevant": [
+      "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb"
+    ]
+  }
+]

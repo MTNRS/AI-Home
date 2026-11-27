@@ -1,0 +1,35 @@
+{
+  "format": "ai-home-repository-document-experiment-v1",
+  "source_revision": "2724cf7d96d90a11d9665bd9dcb64c920d629af1",
+  "device": "cuda",
+  "torch_version": "2.14.1+cu130",
+  "parameter_count": 803968,
+  "step": 200,
+  "one_step_validation": {
+    "loss": 6.256052350614601,
+    "tokens": 5349,
+    "perplexity": 521.1575267263659
+  },
+  "candidate_validation": {
+    "loss": 5.208435115646616,
+    "tokens": 5349,
+    "perplexity": 182.8077612360932
+  },
+  "embedding_delta_l2_since_step_one": 3.3768553733825684,
+  "dataset_sha256": "15928e94554cad6ba8099d260ba75206f6e0d7e53809d1b488ebac650916d2ea",
+  "tokenizer_sha256": "10a24308d9c0e0992e900aa75ecab9a958d4ac01aa2290ecea5aade25dadc6c6",
+  "checkpoint_sha256": "ce63c713a46a6e482eaec60e16b879a3475999a1be5b6245786c57ca581224ed",
+  "generated_text": "a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a ccccccccceeeeeeeeeeeeeeeeeeeeee",
+  "promoted": false,
+  "scope": "Four technical files; related topics across files; no independent language capability benchmark",
+  "recorded_steps": 200,
+  "last_metric": {
+    "step": 200,
+    "train_loss": 4.5444159507751465,
+    "learning_rate": 2.9999999999999997e-05,
+    "elapsed_seconds": 18.700229900001432,
+    "tokens_per_second": 5448.489165365406,
+    "gpu_peak_bytes": 57141760,
+    "validation_loss": 5.208435115646616
+  }
+}

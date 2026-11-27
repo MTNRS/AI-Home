@@ -284,3 +284,4 @@ def test_supabase_user_projection_does_not_store_a_password():
             assert user.password_hash is None
     finally:
         engine.dispose()
+

@@ -1,0 +1,66 @@
+{
+  "format": "ai-home-evaluation-smoke-v1",
+  "transport": "real loopback HTTP",
+  "workers": [
+    {
+      "format": "ai-home-worker-service-measurement-v1",
+      "job_type": "foundation.evaluate.v1",
+      "device": "cpu",
+      "heartbeat_service_seconds": 0.0061523000040324405,
+      "claim_service_seconds": 0.01562660001218319,
+      "execution_seconds": 1.0982974000071408,
+      "submit_service_seconds": 0.039494500000728294,
+      "claim_response_bytes": 38603,
+      "submit_request_bytes": 651,
+      "claim_service_bytes_per_second": 2470339.0353565966,
+      "submit_service_bytes_per_second": 16483.307802048268
+    },
+    {
+      "format": "ai-home-worker-service-measurement-v1",
+      "job_type": "foundation.evaluate.v1",
+      "device": "cuda",
+      "heartbeat_service_seconds": 0.0066500999964773655,
+      "claim_service_seconds": 0.008492000008118339,
+      "execution_seconds": 1.968774900000426,
+      "submit_service_seconds": 0.03708120000374038,
+      "claim_response_bytes": 38603,
+      "submit_request_bytes": 651,
+      "claim_service_bytes_per_second": 4545807.814778096,
+      "submit_service_bytes_per_second": 17556.066144955763
+    }
+  ],
+  "worker_balances": [
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    },
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    }
+  ],
+  "owner_balance": {
+    "available": 0,
+    "reserved": 0,
+    "earned": 0
+  },
+  "coordinator_processes": 3,
+  "observation": {
+    "attempts": 9,
+    "transport_errors": 0
+  },
+  "completed_jobs": 2,
+  "checkpoint_sha256": "5d0a174817755477e3e371189fa3ac7e4e5a6b852da7df2f475acfb2905dea62",
+  "training_embedding_delta_l2": 0.012670348398387432,
+  "reference": {
+    "loss": 5.634302383814102,
+    "tokens": 468,
+    "perplexity": 279.86361180874,
+    "checkpoint_sha256": "5d0a174817755477e3e371189fa3ac7e4e5a6b852da7df2f475acfb2905dea62"
+  },
+  "distributed_loss": 5.634302514231103,
+  "tokens": 468,
+  "scope": "One machine, two worker processes; no multi-host or general capability claim"
+}

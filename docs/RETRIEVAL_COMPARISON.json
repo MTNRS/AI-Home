@@ -1,0 +1,428 @@
+{
+  "tfidf": {
+    "format": "ai-home-retrieval-evaluation-v1",
+    "index_version": "4f198b81c41de6d6a80eac1d3ec7b3d42279ead23ff94e56b8899fa935c43bf7",
+    "embedding": "sparse-tfidf",
+    "suite_sha256": "6a9c1b11e3f7dedb4a9a105161ab6f0b2a3536122320b7ca3a1267733690cb30",
+    "limit": 3,
+    "queries": 8,
+    "mean_recall": 0.625,
+    "mean_reciprocal_rank": 0.5,
+    "hit_rate": 0.625,
+    "results": [
+      {
+        "id": "paraphrase-1",
+        "query": "¿Qué instalación observa el cielo nocturno?",
+        "relevant": [
+          "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e:0",
+            "document_sha256": "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e",
+            "score": 0.20683438636494153
+          },
+          {
+            "chunk_id": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077:0",
+            "document_sha256": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077",
+            "score": 0.2025472257841979
+          },
+          {
+            "chunk_id": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd:0",
+            "document_sha256": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd",
+            "score": 0.18658864164973554
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 0.5,
+        "hit": true,
+        "seconds": 2.3899992811493576e-05
+      },
+      {
+        "id": "paraphrase-2",
+        "query": "¿Dónde se pueden llevar libros prestados?",
+        "relevant": [
+          "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2:0",
+            "document_sha256": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2",
+            "score": 0.2588229122591517
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 1.0,
+        "hit": true,
+        "seconds": 1.5999990864656866e-05
+      },
+      {
+        "id": "paraphrase-3",
+        "query": "¿Quién arregla una bici con problemas de frenado?",
+        "relevant": [
+          "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2:0",
+            "document_sha256": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2",
+            "score": 0.18301543638489698
+          },
+          {
+            "chunk_id": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd:0",
+            "document_sha256": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd",
+            "score": 0.18243839299115197
+          }
+        ],
+        "recall": 0.0,
+        "reciprocal_rank": 0,
+        "hit": false,
+        "seconds": 2.269999822601676e-05
+      },
+      {
+        "id": "paraphrase-4",
+        "query": "¿Qué negocio prepara hogazas por la mañana?",
+        "relevant": [
+          "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd:0",
+            "document_sha256": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd",
+            "score": 0.3159220325337597
+          },
+          {
+            "chunk_id": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077:0",
+            "document_sha256": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077",
+            "score": 0.2025472257841979
+          },
+          {
+            "chunk_id": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2:0",
+            "document_sha256": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2",
+            "score": 0.18717881206971426
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 1.0,
+        "hit": true,
+        "seconds": 1.4299992471933365e-05
+      },
+      {
+        "id": "paraphrase-5",
+        "query": "Where can someone examine old cartographic documents?",
+        "relevant": [
+          "00caf0f8a53d82dc9df53c73acfc69ef16579598e629559ac87a968cb285f8eb"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c:0",
+            "document_sha256": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c",
+            "score": 0.271589276753203
+          }
+        ],
+        "recall": 0.0,
+        "reciprocal_rank": 0,
+        "hit": false,
+        "seconds": 5.1700000767596066e-05
+      },
+      {
+        "id": "paraphrase-6",
+        "query": "Which place waters crops using collected rainfall?",
+        "relevant": [
+          "278d96e4b8b9a7ae74230f5bce27d2dddf81147589f6cff88da7f575222a3369"
+        ],
+        "retrieved": [],
+        "recall": 0.0,
+        "reciprocal_rank": 0,
+        "hit": false,
+        "seconds": 1.4700010069645941e-05
+      },
+      {
+        "id": "paraphrase-7",
+        "query": "Who can fix a damaged string instrument?",
+        "relevant": [
+          "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c:0",
+            "document_sha256": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c",
+            "score": 0.271589276753203
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 1.0,
+        "hit": true,
+        "seconds": 1.3900003978051245e-05
+      },
+      {
+        "id": "paraphrase-8",
+        "query": "Where can travelers borrow charging equipment?",
+        "relevant": [
+          "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c:0",
+            "document_sha256": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c",
+            "score": 0.19204261928973979
+          },
+          {
+            "chunk_id": "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb:0",
+            "document_sha256": "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb",
+            "score": 0.1858677726682335
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 0.5,
+        "hit": true,
+        "seconds": 1.4599994756281376e-05
+      }
+    ],
+    "limitations": "Authored relevance labels; not proof of broad semantic or generation quality."
+  },
+  "foundation": {
+    "format": "ai-home-retrieval-evaluation-v1",
+    "index_version": "069dac1eba2bc87144ec493aed6e559b88bb4f3c013f846d0e1ac69f3254cf1a",
+    "embedding": {
+      "checkpoint_sha256": "5a4307c7965afb972699b96d9cc5f74fa01305dce21432cce63c422521ee2c2b",
+      "dimensions": 32,
+      "method": "foundation-windowed-mean-v1",
+      "tokenizer_sha256": "4593ce79dbeb4a7cce792c97e641f62f23d11abf5accfcb70410489f090c0f46",
+      "window_tokens": 16
+    },
+    "suite_sha256": "6a9c1b11e3f7dedb4a9a105161ab6f0b2a3536122320b7ca3a1267733690cb30",
+    "limit": 3,
+    "queries": 8,
+    "mean_recall": 0.625,
+    "mean_reciprocal_rank": 0.5416666666666667,
+    "hit_rate": 0.625,
+    "results": [
+      {
+        "id": "paraphrase-1",
+        "query": "¿Qué instalación observa el cielo nocturno?",
+        "relevant": [
+          "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077:0",
+            "document_sha256": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077",
+            "score": 0.6525579096321183
+          },
+          {
+            "chunk_id": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c:0",
+            "document_sha256": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c",
+            "score": 0.6276775517235387
+          },
+          {
+            "chunk_id": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2:0",
+            "document_sha256": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2",
+            "score": 0.5703534055655488
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 1.0,
+        "hit": true,
+        "seconds": 0.0030205000075511634
+      },
+      {
+        "id": "paraphrase-2",
+        "query": "¿Dónde se pueden llevar libros prestados?",
+        "relevant": [
+          "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "278d96e4b8b9a7ae74230f5bce27d2dddf81147589f6cff88da7f575222a3369:0",
+            "document_sha256": "278d96e4b8b9a7ae74230f5bce27d2dddf81147589f6cff88da7f575222a3369",
+            "score": 0.803480695288319
+          },
+          {
+            "chunk_id": "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb:0",
+            "document_sha256": "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb",
+            "score": 0.7400380082197544
+          },
+          {
+            "chunk_id": "00caf0f8a53d82dc9df53c73acfc69ef16579598e629559ac87a968cb285f8eb:0",
+            "document_sha256": "00caf0f8a53d82dc9df53c73acfc69ef16579598e629559ac87a968cb285f8eb",
+            "score": 0.7208893720252898
+          }
+        ],
+        "recall": 0.0,
+        "reciprocal_rank": 0,
+        "hit": false,
+        "seconds": 0.003928499994799495
+      },
+      {
+        "id": "paraphrase-3",
+        "query": "¿Quién arregla una bici con problemas de frenado?",
+        "relevant": [
+          "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077:0",
+            "document_sha256": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077",
+            "score": 0.83929706981195
+          },
+          {
+            "chunk_id": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2:0",
+            "document_sha256": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2",
+            "score": 0.8212351326714392
+          },
+          {
+            "chunk_id": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c:0",
+            "document_sha256": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c",
+            "score": 0.7681599770788565
+          }
+        ],
+        "recall": 0.0,
+        "reciprocal_rank": 0,
+        "hit": false,
+        "seconds": 0.003949799996917136
+      },
+      {
+        "id": "paraphrase-4",
+        "query": "¿Qué negocio prepara hogazas por la mañana?",
+        "relevant": [
+          "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd:0",
+            "document_sha256": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd",
+            "score": 0.8695987421404993
+          },
+          {
+            "chunk_id": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077:0",
+            "document_sha256": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077",
+            "score": 0.8456543216943744
+          },
+          {
+            "chunk_id": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c:0",
+            "document_sha256": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c",
+            "score": 0.8209749473539674
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 1.0,
+        "hit": true,
+        "seconds": 0.003649499994935468
+      },
+      {
+        "id": "paraphrase-5",
+        "query": "Where can someone examine old cartographic documents?",
+        "relevant": [
+          "00caf0f8a53d82dc9df53c73acfc69ef16579598e629559ac87a968cb285f8eb"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "00caf0f8a53d82dc9df53c73acfc69ef16579598e629559ac87a968cb285f8eb:0",
+            "document_sha256": "00caf0f8a53d82dc9df53c73acfc69ef16579598e629559ac87a968cb285f8eb",
+            "score": 0.8689716055590238
+          },
+          {
+            "chunk_id": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2:0",
+            "document_sha256": "3bc23b2e86c3d0c8ddadacdaf9f1b1b881a173daf6f031b5cbfb354ed5cfaaa2",
+            "score": 0.8483912040325261
+          },
+          {
+            "chunk_id": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077:0",
+            "document_sha256": "a5e490757d5db1a7cb50fd62cb25779f755a5d4c38a50ad735c5ae474ef7e077",
+            "score": 0.845223872936781
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 1.0,
+        "hit": true,
+        "seconds": 0.002849299999070354
+      },
+      {
+        "id": "paraphrase-6",
+        "query": "Which place waters crops using collected rainfall?",
+        "relevant": [
+          "278d96e4b8b9a7ae74230f5bce27d2dddf81147589f6cff88da7f575222a3369"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd:0",
+            "document_sha256": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd",
+            "score": 0.8982125821645686
+          },
+          {
+            "chunk_id": "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e:0",
+            "document_sha256": "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e",
+            "score": 0.8913857936011851
+          },
+          {
+            "chunk_id": "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb:0",
+            "document_sha256": "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb",
+            "score": 0.8717273676012806
+          }
+        ],
+        "recall": 0.0,
+        "reciprocal_rank": 0,
+        "hit": false,
+        "seconds": 0.003809200003161095
+      },
+      {
+        "id": "paraphrase-7",
+        "query": "Who can fix a damaged string instrument?",
+        "relevant": [
+          "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e:0",
+            "document_sha256": "cd4b03138f2d70f146574b7cc3d2f5403c6e434a56e8238bdba7e73d4c5e7b3e",
+            "score": 0.9445203955596846
+          },
+          {
+            "chunk_id": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd:0",
+            "document_sha256": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd",
+            "score": 0.9322893270074109
+          },
+          {
+            "chunk_id": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c:0",
+            "document_sha256": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c",
+            "score": 0.9046504676965429
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 0.3333333333333333,
+        "hit": true,
+        "seconds": 0.0040250000020023435
+      },
+      {
+        "id": "paraphrase-8",
+        "query": "Where can travelers borrow charging equipment?",
+        "relevant": [
+          "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb"
+        ],
+        "retrieved": [
+          {
+            "chunk_id": "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb:0",
+            "document_sha256": "1f649492df69e738f8c788f4e63420b800a0e672dd928eccdfe28a0b1c4daddb",
+            "score": 0.913582132852112
+          },
+          {
+            "chunk_id": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c:0",
+            "document_sha256": "a400c852dcf02a47aa2c6b0020998111af478ee452e6cf1ccfbfd85b100c8b7c",
+            "score": 0.8708303456467741
+          },
+          {
+            "chunk_id": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd:0",
+            "document_sha256": "b02f5793db2eda0054c5bd1697dc0648f99cc3ef0e0fb7ab6e4fc6474f8c32cd",
+            "score": 0.8648203113646874
+          }
+        ],
+        "recall": 1.0,
+        "reciprocal_rank": 1.0,
+        "hit": true,
+        "seconds": 0.003068400008487515
+      }
+    ],
+    "limitations": "Authored relevance labels; not proof of broad semantic or generation quality."
+  }
+}

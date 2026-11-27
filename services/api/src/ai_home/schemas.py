@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import (
+    model_serializer,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -52,6 +53,7 @@ class UserResponse(BaseModel):
 
 
 class SessionResponse(BaseModel):
+    user_id: UUID | None = None
     access_token: str
     token_type: Annotated[str, Field(pattern="^bearer$")] = "bearer"
     expires_at_epoch: int
@@ -64,8 +66,24 @@ class ChatMessage(BaseModel):
     content: StrictStr = Field(min_length=1, max_length=8192)
 
 
+class FoundationGeneration(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    max_new_tokens: int | None = Field(default=None, ge=1, le=4096)
+    temperature: float = Field(default=0.8, ge=0, le=5, allow_inf_nan=False)
+    top_k: int = Field(default=40, ge=0, le=100_000)
+    top_p: float = Field(default=0.95, gt=0, le=1, allow_inf_nan=False)
+    repetition_penalty: float = Field(default=1.0, ge=1, le=10, allow_inf_nan=False)
+    seed: int = Field(default=42, ge=0, le=2**63 - 1)
+
+
 class ChatCompletionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    credit_request_id: UUID | None = None
+    credit_limit: int = Field(default=0, ge=0, le=1_000_000, strict=True)
+    generation: FoundationGeneration | None = None
+    use_knowledge: StrictBool = False
+    model_version: UUID | None = None
+    model_config = ConfigDict(extra="forbid", protected_namespaces=("model_validate", "model_dump"))
 
     messages: list[ChatMessage] = Field(min_length=1, max_length=50)
 
@@ -90,6 +108,7 @@ class TrainingContributionRequest(BaseModel):
 
     conversation_id: UUID
     provider: Literal[
+        "ai-home-foundation",
         "openai",
         "anthropic",
         "gemini",
@@ -126,6 +145,12 @@ class TrainingContributionRequest(BaseModel):
             raise ValueError("A conversation must contain an assistant message.")
         if sum(len(message.content) for message in self.messages) > 32_000:
             raise ValueError("The conversation is too large to submit.")
+        if self.provider == "ai-home-foundation":
+            if not re.fullmatch(r"[0-9a-f]{64}", self.model):
+                raise ValueError("Foundation contributions require an exact checkpoint SHA-256")
+            if self.source_endpoint != f"ai-home-foundation://sha256/{self.model}":
+                raise ValueError("Foundation provenance must match the checkpoint digest")
+            return self
         normalized_endpoint = normalize_base_url(self.source_endpoint)
         if contains_common_secret(normalized_endpoint):
             raise ValueError("The provider endpoint must not contain credentials.")
@@ -138,7 +163,37 @@ class TrainingContributionRequest(BaseModel):
         return self
 
 
+class TrainingCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    conversation_id: UUID
+    message_index: StrictInt = Field(ge=0, le=49)
+    replacement: StrictStr = Field(min_length=1, max_length=8192)
+    consent: StrictBool
+    consent_version: Literal["training_consent_v1"]
+    consent_scope: Literal["conversation_for_aihome_training_candidates"]
+    provider_terms_allow_reuse: StrictBool
+    content_reviewed_for_sensitive_data: StrictBool
+
+
+class CorrectionProvenance(BaseModel):
+    root_contribution_id: UUID | None = None
+    model_config = ConfigDict(extra="forbid")
+    source_contribution_id: str = Field(min_length=36, max_length=36)
+    message_index: StrictInt = Field(ge=0, le=49)
+    original_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    kind: Literal["human_correction_v1"]
+
+    @model_serializer(mode="wrap")
+    def serialize_provenance(self, handler):
+        result = handler(self)
+        if self.root_contribution_id is None:
+            result.pop("root_contribution_id", None)
+        return result
+
+
+
 class TrainingContributionResponse(BaseModel):
+    correction: CorrectionProvenance | None = None
     contribution_id: str
     conversation_id: UUID
     provider: str
@@ -223,6 +278,7 @@ class TrainingDatasetResponse(BaseModel):
 
 
 class FrozenTrainingRecord(BaseModel):
+    correction: CorrectionProvenance | None = None
     contribution_id: str
     provider: str
     source_endpoint: str
@@ -251,7 +307,27 @@ class ChatCompletionChoiceResponse(BaseModel):
     finish_reason: Literal["stop"]
 
 
+class KnowledgeReference(BaseModel):
+    id: str
+    source: str
+    url: str
+    license: str
+    date: str
+    language: str
+    document_sha256: str
+    offset: int
+    text: str
+    score: float
+    index_version: str
+
+
 class ChatCompletionResponse(BaseModel):
+    charged_credits: int = 0
+    credit_request_id: UUID | None = None
+    generation: FoundationGeneration | None = None
+    model_config = ConfigDict(protected_namespaces=("model_validate", "model_dump"))
+    model_version: UUID | None = None
+    references: list[KnowledgeReference] = Field(default_factory=list)
     choices: list[ChatCompletionChoiceResponse]
 
 
@@ -263,7 +339,24 @@ class GPUDevice(BaseModel):
     memory_total_bytes: int = Field(gt=0, le=2**63 - 1)
 
 
+class NodeResources(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    ram_available_bytes: int = Field(ge=0, le=2**63 - 1)
+    foundation_device: Literal["cpu", "cuda"] = "cpu"
+    cuda_free_bytes: int | None = Field(default=None, ge=0, le=2**63 - 1)
+
+    @model_validator(mode="after")
+    def cuda_memory_required(self):
+        if self.foundation_device == "cuda" and self.cuda_free_bytes is None:
+            raise ValueError("CUDA workers must report available device memory")
+        if self.foundation_device == "cpu" and self.cuda_free_bytes is not None:
+            raise ValueError("CPU workers must not report CUDA memory")
+        return self
+
+
 class HardwareReport(BaseModel):
+    resources: NodeResources | None = None
+    resources_epoch: int | None = None
     model_config = ConfigDict(extra="forbid")
 
     platform: str = Field(min_length=1, max_length=80)
@@ -271,6 +364,7 @@ class HardwareReport(BaseModel):
     logical_cores: int = Field(ge=1, le=4096)
     ram_total_bytes: int = Field(gt=0, le=2**63 - 1)
     gpus: list[GPUDevice] = Field(default_factory=list, max_length=32)
+    foundation_torch_version: StrictStr | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
     def require_unique_gpu_indices(self) -> "HardwareReport":
@@ -280,9 +374,20 @@ class HardwareReport(BaseModel):
         return self
 
 
-class RegisterNodeRequest(BaseModel):
+class NodeCapabilities(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    supported_job_types: list[Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1", "foundation.evaluate.v1", "foundation.adapter-gradient.v1"]] = Field(
+        default_factory=lambda: ["math.sum.v1"], min_length=1, max_length=5)
+    foundation_torch_version: StrictStr | None = Field(default=None, max_length=80)
 
+    @model_validator(mode="after")
+    def require_gradient_runtime(self):
+        if {"foundation.gradient.v1", "foundation.evaluate.v1", "foundation.adapter-gradient.v1"}.intersection(self.supported_job_types) and not self.foundation_torch_version:
+            raise ValueError("Gradient workers must declare their PyTorch runtime")
+        return self
+
+
+class RegisterNodeRequest(NodeCapabilities):
     name: str = Field(min_length=1, max_length=120)
     hardware: HardwareReport
 
@@ -341,26 +446,120 @@ class MathSumJobPayload(BaseModel):
         return self
 
 
-class JobResponse(BaseModel):
+class JobSummaryResponse(BaseModel):
     job_id: str
     job_type: str
+    scheduling: dict | None = None
     status: str
-    result: dict | None
     failure_code: str | None
     attempt_count: int
     created_at: datetime
 
 
+class JobResponse(JobSummaryResponse):
+    result: dict | None
+
+
 class ClaimedJobResponse(BaseModel):
     job_id: str
-    job_type: Literal["math.sum.v1"]
-    payload: dict[str, list[int]]
+    job_type: Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1", "foundation.evaluate.v1", "foundation.adapter-gradient.v1"]
+    payload: dict
     lease_token: str
     lease_expires_epoch: int
+    reward_credits: int = 0
+
+
+class RenewJobLeaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lease_token: SecretStr = Field(min_length=32, max_length=128)
+
+
+class WorkerServiceMeasurement(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    format: Literal["ai-home-worker-service-measurement-v1"]
+    job_type: Literal["math.sum.v1", "foundation.tokenize.v1", "foundation.gradient.v1", "foundation.evaluate.v1", "foundation.adapter-gradient.v1"]
+    device: Literal["cpu", "cuda"]
+    heartbeat_service_seconds: float = Field(gt=0, le=600, allow_inf_nan=False)
+    claim_service_seconds: float = Field(gt=0, le=600, allow_inf_nan=False)
+    execution_seconds: float = Field(gt=0, le=3600, allow_inf_nan=False)
+    submit_service_seconds: float = Field(gt=0, le=600, allow_inf_nan=False)
+    claim_response_bytes: StrictInt = Field(gt=0, le=2_000_000)
+    submit_request_bytes: StrictInt = Field(gt=0, le=2_000_000)
 
 
 class SubmitJobResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     lease_token: SecretStr = Field(min_length=32, max_length=128)
-    result: dict[str, StrictInt]
+    result: dict[str, StrictInt | StrictStr] = Field(max_length=3)
+
+    @model_validator(mode="after")
+    def bounded_result(self):
+        if any(isinstance(v, str) and len(v) > 600_000 for v in self.result.values()):
+            raise ValueError("Result exceeds artifact budget")
+        if "sum" in self.result and type(self.result["sum"]) is not int:
+            raise ValueError("Sum must be an integer")
+        return self
+
+
+class CreateTokenizeJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    payload: dict
+    allow_public_node_processing: StrictBool
+    idempotency_key: str = Field(min_length=1, max_length=160)
+    reward_credits: StrictInt = Field(default=0, ge=0, le=1_000_000)
+
+    @model_validator(mode="after")
+    def validate_public_payload(self):
+        from ai_home.foundation.tasks import TokenizePayload
+        if not self.allow_public_node_processing:
+            raise ValueError("Public node processing requires explicit consent")
+        self.payload = TokenizePayload.model_validate(self.payload).model_dump()
+        return self
+
+
+class GradientSchedulingRequirements(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    min_gradient_tokens_per_second: float | None = Field(default=None, gt=0, le=1e9, allow_inf_nan=False)
+    min_claim_service_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
+    min_submit_service_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
+    max_heartbeat_service_seconds: float | None = Field(default=None, gt=0, le=600, allow_inf_nan=False)
+    min_transfer_download_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
+    min_transfer_upload_bytes_per_second: float | None = Field(default=None, gt=0, le=1e12, allow_inf_nan=False)
+    max_transfer_http_round_trip_seconds: float | None = Field(default=None, gt=0, le=60, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def nonempty(self):
+        if all(value is None for value in self.model_dump().values()):
+            raise ValueError("At least one scheduling constraint is required")
+        return self
+
+
+class CreateGradientJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    payload: dict
+    allow_public_node_processing: StrictBool
+    idempotency_key: str = Field(min_length=1, max_length=160)
+    reward_credits: StrictInt = Field(default=0, ge=0, le=1_000_000)
+    scheduling: GradientSchedulingRequirements | None = None
+
+    @model_validator(mode="after")
+    def require_consent(self):
+        if not self.allow_public_node_processing:
+            raise ValueError("Public node processing requires explicit consent")
+        return self
+
+
+
+class CreateEvaluationJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    payload: dict
+    allow_public_node_processing: StrictBool
+    idempotency_key: str = Field(min_length=1, max_length=160)
+    reward_credits: StrictInt = Field(default=0, ge=0, le=1_000_000)
+
+    @model_validator(mode="after")
+    def require_consent(self):
+        if not self.allow_public_node_processing:
+            raise ValueError("Public node processing requires explicit consent")
+        return self

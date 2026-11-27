@@ -1,0 +1,67 @@
+{
+  "format": "ai-home-distributed-smoke-v1",
+  "torch_version": "2.15.0+cpu",
+  "transport": "loopback HTTP",
+  "device": "cpu",
+  "workers": [
+    {
+      "round": 1,
+      "node_id": "f30957dd-8da6-40c9-8c7b-a1e8e6d45885",
+      "pid": 36300,
+      "completed": true
+    },
+    {
+      "round": 1,
+      "node_id": "42acd3b0-eec3-4860-b473-bf721258a06e",
+      "pid": 8112,
+      "completed": true
+    },
+    {
+      "round": 2,
+      "node_id": "f30957dd-8da6-40c9-8c7b-a1e8e6d45885",
+      "pid": 39068,
+      "completed": true
+    },
+    {
+      "round": 2,
+      "node_id": "42acd3b0-eec3-4860-b473-bf721258a06e",
+      "pid": 41024,
+      "completed": true
+    }
+  ],
+  "metrics": [
+    {
+      "round": 1,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.767621278762817,
+      "validation": {
+        "loss": 5.679264545440674,
+        "tokens": 32,
+        "perplexity": 292.73405813645076
+      }
+    },
+    {
+      "round": 2,
+      "tokens": 64,
+      "shards": 2,
+      "mean_loss": 5.677713632583618,
+      "validation": {
+        "loss": 5.602051734924316,
+        "tokens": 32,
+        "perplexity": 270.98182031589835
+      }
+    }
+  ],
+  "baseline_validation": {
+    "loss": 5.765335559844971,
+    "tokens": 32,
+    "perplexity": 319.04608513076136
+  },
+  "embedding_delta_l2": 0.1838996708393097,
+  "generated_text": "\ufffd\u065f\u0666\ufffd\ufffdZ\ufffd96D%J\ufffd\ufffd",
+  "checkpoint_sha256": "6bd5b2f0aff0a1f8268bc16389edc0489df1c00e5001efb4c988446455c400cf",
+  "elapsed_seconds": 16.209029499994358,
+  "parameter_count": 28192,
+  "claim": "Real gradient workers and aggregation on one host; no cross-machine performance claim"
+}

@@ -1,0 +1,101 @@
+{
+  "format_version": 1,
+  "records": [
+    {
+      "source": "AI@Home authored fictional retrieval fixture",
+      "url": "https://github.com/MTNRS/AI-Home",
+      "license": "Apache-2.0",
+      "date": "2026-11-26",
+      "language": "es",
+      "text": "El observatorio Nara registra estrellas durante la noche. Su telescopio permanece cerrado cuando llueve.",
+      "training_allowed": false,
+      "retrieval_allowed": true,
+      "privacy_reviewed": true,
+      "visibility": "public"
+    },
+    {
+      "source": "AI@Home authored fictional retrieval fixture",
+      "url": "https://github.com/MTNRS/AI-Home",
+      "license": "Apache-2.0",
+      "date": "2026-11-26",
+      "language": "es",
+      "text": "La biblioteca Olmo presta novelas durante tres semanas. Los lectores pueden renovar cada préstamo una vez.",
+      "training_allowed": false,
+      "retrieval_allowed": true,
+      "privacy_reviewed": true,
+      "visibility": "public"
+    },
+    {
+      "source": "AI@Home authored fictional retrieval fixture",
+      "url": "https://github.com/MTNRS/AI-Home",
+      "license": "Apache-2.0",
+      "date": "2026-11-26",
+      "language": "es",
+      "text": "El taller Brisa repara bicicletas. Sus mecánicos ajustan los frenos y cambian ruedas dañadas.",
+      "training_allowed": false,
+      "retrieval_allowed": true,
+      "privacy_reviewed": true,
+      "visibility": "public"
+    },
+    {
+      "source": "AI@Home authored fictional retrieval fixture",
+      "url": "https://github.com/MTNRS/AI-Home",
+      "license": "Apache-2.0",
+      "date": "2026-11-26",
+      "language": "es",
+      "text": "La panadería Lirio hornea pan al amanecer. La masa fermenta antes de entrar en el horno.",
+      "training_allowed": false,
+      "retrieval_allowed": true,
+      "privacy_reviewed": true,
+      "visibility": "public"
+    },
+    {
+      "source": "AI@Home authored fictional retrieval fixture",
+      "url": "https://github.com/MTNRS/AI-Home",
+      "license": "Apache-2.0",
+      "date": "2026-11-26",
+      "language": "en",
+      "text": "The Cedar archive stores historical maps. Visitors request a viewing appointment before inspecting fragile originals.",
+      "training_allowed": false,
+      "retrieval_allowed": true,
+      "privacy_reviewed": true,
+      "visibility": "public"
+    },
+    {
+      "source": "AI@Home authored fictional retrieval fixture",
+      "url": "https://github.com/MTNRS/AI-Home",
+      "license": "Apache-2.0",
+      "date": "2026-11-26",
+      "language": "en",
+      "text": "The Amber garden collects rainwater in tanks. This stored water irrigates vegetables during dry weather.",
+      "training_allowed": false,
+      "retrieval_allowed": true,
+      "privacy_reviewed": true,
+      "visibility": "public"
+    },
+    {
+      "source": "AI@Home authored fictional retrieval fixture",
+      "url": "https://github.com/MTNRS/AI-Home",
+      "license": "Apache-2.0",
+      "date": "2026-11-26",
+      "language": "en",
+      "text": "The Finch workshop repairs violins. A musician can request new strings and adjustment of the bridge.",
+      "training_allowed": false,
+      "retrieval_allowed": true,
+      "privacy_reviewed": true,
+      "visibility": "public"
+    },
+    {
+      "source": "AI@Home authored fictional retrieval fixture",
+      "url": "https://github.com/MTNRS/AI-Home",
+      "license": "Apache-2.0",
+      "date": "2026-11-26",
+      "language": "en",
+      "text": "The Silver station lends portable batteries. Travelers return the chargers at the end of their journey.",
+      "training_allowed": false,
+      "retrieval_allowed": true,
+      "privacy_reviewed": true,
+      "visibility": "public"
+    }
+  ]
+}

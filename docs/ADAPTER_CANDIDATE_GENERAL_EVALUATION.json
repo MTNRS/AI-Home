@@ -1,0 +1,179 @@
+{
+  "format": "ai-home-evaluation-v1",
+  "checkpoint_sha256": "446d7a7d7c4b49c256ee4e89a7197481e94829db914940b81994c41abe67d78d",
+  "group_lineage_available": true,
+  "grouped_probe_count": 0,
+  "suite_sha256": "d4470b4bda92e5ff75b571680d9594f55e403c44786a9424c66849f6ebaeaa23",
+  "suite_version": "authored-probes-v1",
+  "tokenizer_sha256": "e73a09e4e3cd6d2a21fed25cc32c9f96e5a6ea1369e83ddea238f2889c4c5e12",
+  "device": "cuda",
+  "torch_version": "2.14.1+cu130",
+  "generation": {
+    "temperature": 0,
+    "max_new_tokens": 64
+  },
+  "categories": {
+    "consistency": {
+      "passed": 0,
+      "total": 2,
+      "accuracy": 0.0
+    },
+    "english": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "instructions": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "knowledge": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "mathematics": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "programming": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "reasoning": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "robustness": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "spanish": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    }
+  },
+  "results": [
+    {
+      "id": "es-plural",
+      "category": "spanish",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 33,
+      "generated_tokens": 64,
+      "generation_seconds": 0.8575285999977496,
+      "tokens_per_second": 74.63307929341127
+    },
+    {
+      "id": "en-plural",
+      "category": "english",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 31,
+      "generated_tokens": 64,
+      "generation_seconds": 0.5441694000037387,
+      "tokens_per_second": 117.61043527908826
+    },
+    {
+      "id": "instruction",
+      "category": "instructions",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 28,
+      "generated_tokens": 64,
+      "generation_seconds": 0.48383080000348855,
+      "tokens_per_second": 132.27764747415532
+    },
+    {
+      "id": "python",
+      "category": "programming",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 40,
+      "generated_tokens": 64,
+      "generation_seconds": 0.49315150000620633,
+      "tokens_per_second": 129.77756328267188
+    },
+    {
+      "id": "sum",
+      "category": "mathematics",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 25,
+      "generated_tokens": 64,
+      "generation_seconds": 0.49061699998856056,
+      "tokens_per_second": 130.4479869256309
+    },
+    {
+      "id": "water",
+      "category": "knowledge",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 32,
+      "generated_tokens": 64,
+      "generation_seconds": 0.5135523000062676,
+      "tokens_per_second": 124.62216603687476
+    },
+    {
+      "id": "order",
+      "category": "reasoning",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 51,
+      "generated_tokens": 64,
+      "generation_seconds": 0.457547700003488,
+      "tokens_per_second": 139.8761265754633
+    },
+    {
+      "id": "consistent-a",
+      "category": "consistency",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 24,
+      "generated_tokens": 64,
+      "generation_seconds": 0.49839589999464806,
+      "tokens_per_second": 128.41197128765958
+    },
+    {
+      "id": "consistent-b",
+      "category": "consistency",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 25,
+      "generated_tokens": 64,
+      "generation_seconds": 0.4771970000001602,
+      "tokens_per_second": 134.11651791603575
+    },
+    {
+      "id": "robust-space",
+      "category": "robustness",
+      "generated": "\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+      "passed": false,
+      "prompt_truncated": true,
+      "prompt_tokens": 32,
+      "generated_tokens": 64,
+      "generation_seconds": 0.4876323000062257,
+      "tokens_per_second": 131.2464330176301
+    }
+  ],
+  "all_prompts_fit": false,
+  "training_lineage_available": true,
+  "cuda_peak_allocated_bytes": 8588800,
+  "process_rss_bytes_after": 1186193408,
+  "claim": "Authored exact-answer probes only; not a general capability certification"
+}

@@ -165,3 +165,4 @@ def revoke_session(session: Session, access_token: str) -> None:
 
 def _token_hash(access_token: str) -> str:
     return hashlib.sha256(access_token.encode("utf-8")).hexdigest()
+

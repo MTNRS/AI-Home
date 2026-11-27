@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -55,6 +56,19 @@ def memory_vault_path() -> Path:
     else:
         root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     return root / "ai-home" / "memory"
+
+
+def profile_memory_vault(server_url: str | None = None, user_id: str | None = None) -> Path:
+    """Keep guest and authenticated notes separate; never import the legacy vault."""
+    from ai_home.urls import normalize_base_url
+
+    root = memory_vault_path().parent / "memory-profiles"
+    if server_url is None and user_id is None:
+        return root / "guest"
+    if not server_url or not user_id:
+        raise ValueError("A memory profile requires both server and account identity.")
+    identity = json.dumps([normalize_base_url(server_url), str(UUID(user_id))])
+    return root / hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 
 def _note_path(note_id: str, vault_path: Path) -> Path:
@@ -302,4 +316,9 @@ def messages_with_memory_context(
     context = memory_context(memories)
     if not context:
         return list(messages)
-    return [{"role": "system", "content": context}, *messages]
+    result = [dict(message) for message in messages]
+    position = next((i for i in range(len(result) - 1, -1, -1)
+                     if result[i]["role"] == "user"), len(result))
+    result.insert(position, {"role": "user", "content": context})
+    return result
+

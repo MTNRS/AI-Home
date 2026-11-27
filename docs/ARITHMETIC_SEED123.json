@@ -1,0 +1,417 @@
+{
+  "format": "ai-home-arithmetic-experiment-v1",
+  "protocol": {
+    "format": "ai-home-arithmetic-protocol-v1",
+    "model": {
+      "vocab_size": 262,
+      "width": 64,
+      "layers": 2,
+      "heads": 4,
+      "kv_heads": 2,
+      "hidden": 128,
+      "context": 16,
+      "rope_theta": 10000.0,
+      "tied_embeddings": true,
+      "gradient_checkpointing": false
+    },
+    "training": {
+      "steps": 1000,
+      "batch_size": 16,
+      "accumulation": 1,
+      "learning_rate": 0.002,
+      "warmup": 30,
+      "clip": 1.0,
+      "seed": 123,
+      "checkpoint_every": 1000,
+      "precision": "fp32",
+      "memory_budget_bytes": 2000000000,
+      "objective": "sft"
+    },
+    "device": "cuda",
+    "max_new_tokens": 4,
+    "partition_sha256": "4c0ee1865ea7524dc4bd506f7ca4543089df83a97e79f8c3c2497780996a7cde",
+    "suite_sha256": "2a446648c38e4d967cd2f1c7ada62c1d27baa57079db28cadf7a3fe8a33f70b1",
+    "comparison": "one-update checkpoint versus fixed 1000-update checkpoint",
+    "selection": "No tuning or early stopping using test results; no promotion",
+    "claim_limit": "Single seed, procedural single-digit addition; not broad mathematical reasoning"
+  },
+  "partition_counts": {
+    "train": 70,
+    "validation": 16,
+    "test": 14
+  },
+  "before": {
+    "format": "ai-home-evaluation-v1",
+    "checkpoint_sha256": "f9fbfaa8dc0cf77021db5ebc565509e45b299b42f2afdaedcda860d93bdda8f9",
+    "suite_sha256": "2a446648c38e4d967cd2f1c7ada62c1d27baa57079db28cadf7a3fe8a33f70b1",
+    "suite_version": "single-digit-addition-unordered-holdout-v1",
+    "tokenizer_sha256": "ba41d2024a1e477e9dce6fe40b4918e982d88c53601ac20dca2499d3822b070e",
+    "device": "cuda",
+    "torch_version": "2.14.1+cu130",
+    "generation": {
+      "temperature": 0,
+      "max_new_tokens": 4
+    },
+    "categories": {
+      "mathematics": {
+        "passed": 0,
+        "total": 14,
+        "accuracy": 0.0
+      }
+    },
+    "results": [
+      {
+        "id": "addition-0",
+        "category": "mathematics",
+        "generated": "\u0011\u0011\u0011\u0011",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.08525240000744816,
+        "tokens_per_second": 46.91950020938456
+      },
+      {
+        "id": "addition-1",
+        "category": "mathematics",
+        "generated": "\ufffd\ufffd\ufffd\ufffd",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.017421799988369457,
+        "tokens_per_second": 229.59740111069706
+      },
+      {
+        "id": "addition-2",
+        "category": "mathematics",
+        "generated": "\u0011\u0011\u0011\u0011",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.016087200012407266,
+        "tokens_per_second": 248.64488518294027
+      },
+      {
+        "id": "addition-3",
+        "category": "mathematics",
+        "generated": "\u001c\u001c\u001c\u001c",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.019114800001261756,
+        "tokens_per_second": 209.2619331479253
+      },
+      {
+        "id": "addition-4",
+        "category": "mathematics",
+        "generated": "3333",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.01722199999494478,
+        "tokens_per_second": 232.26106150122695
+      },
+      {
+        "id": "addition-5",
+        "category": "mathematics",
+        "generated": "\u0011\u0011\u0011\u0011",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.013360899989493191,
+        "tokens_per_second": 299.3810299564804
+      },
+      {
+        "id": "addition-6",
+        "category": "mathematics",
+        "generated": "\ufffd\ufffd\ufffd\ufffd",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.01289800000085961,
+        "tokens_per_second": 310.1256008476828
+      },
+      {
+        "id": "addition-7",
+        "category": "mathematics",
+        "generated": "\u001c\u001c\u001c\u001c",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.015051899987156503,
+        "tokens_per_second": 265.747181645714
+      },
+      {
+        "id": "addition-8",
+        "category": "mathematics",
+        "generated": "\u001c\u001c\u001c\u001c",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.013990699997521006,
+        "tokens_per_second": 285.9042078458372
+      },
+      {
+        "id": "addition-9",
+        "category": "mathematics",
+        "generated": "\u001c\u001c\u001c\u001c",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.0160533000016585,
+        "tokens_per_second": 249.16995256967425
+      },
+      {
+        "id": "addition-10",
+        "category": "mathematics",
+        "generated": "\ufffd\ufffd\ufffd\ufffd",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.016141300002345815,
+        "tokens_per_second": 247.8115145260097
+      },
+      {
+        "id": "addition-11",
+        "category": "mathematics",
+        "generated": "\ufffd\ufffd\ufffd\ufffd",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.0122787000000244,
+        "tokens_per_second": 325.76738579752345
+      },
+      {
+        "id": "addition-12",
+        "category": "mathematics",
+        "generated": "\u001c\u001c\u001c\u001c",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.014144000000669621,
+        "tokens_per_second": 282.8054298508645
+      },
+      {
+        "id": "addition-13",
+        "category": "mathematics",
+        "generated": "\u0011\u0011\u0011\u0011",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 4,
+        "generation_seconds": 0.01268690000870265,
+        "tokens_per_second": 315.285845813885
+      }
+    ],
+    "all_prompts_fit": true,
+    "training_lineage_available": true,
+    "cuda_peak_allocated_bytes": 17434624,
+    "process_rss_bytes_after": 1604894720,
+    "claim": "Authored exact-answer probes only; not a general capability certification"
+  },
+  "after": {
+    "format": "ai-home-evaluation-v1",
+    "checkpoint_sha256": "5253c718350e51a54d28636ce895e6d8c774dc22daf41131734b1b88309041cd",
+    "suite_sha256": "2a446648c38e4d967cd2f1c7ada62c1d27baa57079db28cadf7a3fe8a33f70b1",
+    "suite_version": "single-digit-addition-unordered-holdout-v1",
+    "tokenizer_sha256": "ba41d2024a1e477e9dce6fe40b4918e982d88c53601ac20dca2499d3822b070e",
+    "device": "cuda",
+    "torch_version": "2.14.1+cu130",
+    "generation": {
+      "temperature": 0,
+      "max_new_tokens": 4
+    },
+    "categories": {
+      "mathematics": {
+        "passed": 7,
+        "total": 14,
+        "accuracy": 0.5
+      }
+    },
+    "results": [
+      {
+        "id": "addition-0",
+        "category": "mathematics",
+        "generated": "2",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 1,
+        "generation_seconds": 0.00566350000735838,
+        "tokens_per_second": 176.56925906254725
+      },
+      {
+        "id": "addition-1",
+        "category": "mathematics",
+        "generated": "8",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 1,
+        "generation_seconds": 0.006233400010387413,
+        "tokens_per_second": 160.42609143221804
+      },
+      {
+        "id": "addition-2",
+        "category": "mathematics",
+        "generated": "5",
+        "passed": true,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 1,
+        "generation_seconds": 0.005308099993271753,
+        "tokens_per_second": 188.3913267021238
+      },
+      {
+        "id": "addition-3",
+        "category": "mathematics",
+        "generated": "10",
+        "passed": true,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 2,
+        "generation_seconds": 0.009351500004413538,
+        "tokens_per_second": 213.86943261039184
+      },
+      {
+        "id": "addition-4",
+        "category": "mathematics",
+        "generated": "8",
+        "passed": true,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 1,
+        "generation_seconds": 0.004979100005584769,
+        "tokens_per_second": 200.83950892296957
+      },
+      {
+        "id": "addition-5",
+        "category": "mathematics",
+        "generated": "5",
+        "passed": true,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 1,
+        "generation_seconds": 0.005933400010690093,
+        "tokens_per_second": 168.53743186003288
+      },
+      {
+        "id": "addition-6",
+        "category": "mathematics",
+        "generated": "12",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 2,
+        "generation_seconds": 0.008055199999944307,
+        "tokens_per_second": 248.28682093726138
+      },
+      {
+        "id": "addition-7",
+        "category": "mathematics",
+        "generated": "8",
+        "passed": true,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 1,
+        "generation_seconds": 0.0070324999978765845,
+        "tokens_per_second": 142.19694280866594
+      },
+      {
+        "id": "addition-8",
+        "category": "mathematics",
+        "generated": "10",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 2,
+        "generation_seconds": 0.008288099998026155,
+        "tokens_per_second": 241.30982981338403
+      },
+      {
+        "id": "addition-9",
+        "category": "mathematics",
+        "generated": "10",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 2,
+        "generation_seconds": 0.007697499997448176,
+        "tokens_per_second": 259.82461846872707
+      },
+      {
+        "id": "addition-10",
+        "category": "mathematics",
+        "generated": "8",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 1,
+        "generation_seconds": 0.005760899992310442,
+        "tokens_per_second": 173.5839888445875
+      },
+      {
+        "id": "addition-11",
+        "category": "mathematics",
+        "generated": "14",
+        "passed": true,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 2,
+        "generation_seconds": 0.008285299991257489,
+        "tokens_per_second": 241.39138016853545
+      },
+      {
+        "id": "addition-12",
+        "category": "mathematics",
+        "generated": "10",
+        "passed": true,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 2,
+        "generation_seconds": 0.008461300007184036,
+        "tokens_per_second": 236.37029750770063
+      },
+      {
+        "id": "addition-13",
+        "category": "mathematics",
+        "generated": "12",
+        "passed": false,
+        "prompt_truncated": false,
+        "prompt_tokens": 8,
+        "generated_tokens": 2,
+        "generation_seconds": 0.00771770000574179,
+        "tokens_per_second": 259.14456360211545
+      }
+    ],
+    "all_prompts_fit": true,
+    "training_lineage_available": true,
+    "cuda_peak_allocated_bytes": 18528256,
+    "process_rss_bytes_after": 1604435968,
+    "claim": "Authored exact-answer probes only; not a general capability certification"
+  },
+  "parameter_count": 90816,
+  "embedding_delta_l2_after_resume": 13.84705924987793,
+  "final_training_metric": {
+    "step": 1000,
+    "train_loss": 0.0022835279814898968,
+    "learning_rate": 0.0002,
+    "elapsed_seconds": 11.038082200000645,
+    "tokens_per_second": 23169.24220767128,
+    "gpu_peak_bytes": 21795328,
+    "validation_loss": 1.2565033368957348
+  },
+  "promoted": false
+}

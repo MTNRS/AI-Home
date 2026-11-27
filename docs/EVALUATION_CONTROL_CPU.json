@@ -1,0 +1,177 @@
+{
+  "format": "ai-home-evaluation-v1",
+  "checkpoint_sha256": "d416814ccff84ed69a0ad0f1c2e55b5894fe11318f1e1bf25103c9e1cf35970a",
+  "suite_sha256": "d4470b4bda92e5ff75b571680d9594f55e403c44786a9424c66849f6ebaeaa23",
+  "suite_version": "authored-probes-v1",
+  "tokenizer_sha256": "9d003b0df9325e5de793ca31260c7026fd276a29e2458dfe2b0fc6930f98dcc1",
+  "device": "cpu",
+  "torch_version": "2.15.0+cpu",
+  "generation": {
+    "temperature": 0,
+    "max_new_tokens": 32
+  },
+  "categories": {
+    "consistency": {
+      "passed": 0,
+      "total": 2,
+      "accuracy": 0.0
+    },
+    "english": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "instructions": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "knowledge": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "mathematics": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "programming": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "reasoning": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "robustness": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    },
+    "spanish": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    }
+  },
+  "results": [
+    {
+      "id": "es-plural",
+      "category": "spanish",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 34,
+      "generated_tokens": 32,
+      "generation_seconds": 0.030397399998037145,
+      "tokens_per_second": 1052.7216144165732
+    },
+    {
+      "id": "en-plural",
+      "category": "english",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 30,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03656180000689346,
+      "tokens_per_second": 875.230431597094
+    },
+    {
+      "id": "instruction",
+      "category": "instructions",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 28,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03771059999417048,
+      "tokens_per_second": 848.567776830566
+    },
+    {
+      "id": "python",
+      "category": "programming",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 40,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03609680000226945,
+      "tokens_per_second": 886.5051749182234
+    },
+    {
+      "id": "sum",
+      "category": "mathematics",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 25,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03920220000145491,
+      "tokens_per_second": 816.2807189089485
+    },
+    {
+      "id": "water",
+      "category": "knowledge",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 31,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03429290000349283,
+      "tokens_per_second": 933.1377631154177
+    },
+    {
+      "id": "order",
+      "category": "reasoning",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 50,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03739950001181569,
+      "tokens_per_second": 855.6264118474895
+    },
+    {
+      "id": "consistent-a",
+      "category": "consistency",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 24,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03544500000134576,
+      "tokens_per_second": 902.807165997603
+    },
+    {
+      "id": "consistent-b",
+      "category": "consistency",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 25,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03280780000204686,
+      "tokens_per_second": 975.3778064363821
+    },
+    {
+      "id": "robust-space",
+      "category": "robustness",
+      "generated": "********************************",
+      "passed": false,
+      "prompt_truncated": false,
+      "prompt_tokens": 32,
+      "generated_tokens": 32,
+      "generation_seconds": 0.03364179999334738,
+      "tokens_per_second": 951.1976174380669
+    }
+  ],
+  "all_prompts_fit": true,
+  "training_lineage_available": true,
+  "cuda_peak_allocated_bytes": null,
+  "process_rss_bytes_after": 313802752,
+  "claim": "Authored exact-answer probes only; not a general capability certification"
+}

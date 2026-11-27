@@ -1,6 +1,7 @@
 """Environment-backed application settings."""
 
 from typing import Literal
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, SecretStr, model_validator
@@ -21,6 +22,18 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite+pysqlite:///./ai_home.db"
     session_lifetime_seconds: int = 86_400
+    chat_backend: Literal["foundation", "openai-compatible"] = "foundation"
+    knowledge_index: Path | None = None
+    foundation_reservation_seconds: int = Field(default=600, ge=30, le=3600)
+    foundation_inference_price: int = Field(default=0, ge=0, le=1_000_000)
+    foundation_registry: Path | None = None
+    foundation_checkpoint: Path | None = None
+    foundation_device: Literal["auto", "cpu", "cuda"] = "auto"
+    foundation_max_new_tokens: int = Field(default=128, ge=1, le=4096)
+    foundation_memory_budget_bytes: int = Field(default=2_000_000_000, ge=1)
+    foundation_distributed_training_enabled: bool = False
+    foundation_distributed_evaluation_enabled: bool = False
+    foundation_distributed_adapters_enabled: bool = False
     chat_provider_url: str | None = None
     chat_provider_model: str | None = None
     chat_provider_api_key: SecretStr = SecretStr("")
@@ -120,3 +133,4 @@ class Settings(BaseSettings):
             if not self.chat_provider_model or not self.chat_provider_model.strip():
                 raise ValueError("A chat provider model is required when the provider is set.")
         return self
+

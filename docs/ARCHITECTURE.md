@@ -1,6 +1,22 @@
 # Arquitectura inicial
 
+Implementación actual y límites: [FOUNDATION_STATUS.md](FOUNDATION_STATUS.md). La dirección inicial y los incrementos históricos siguientes deben leerse junto a ese inventario; no representan una plataforma multimodal o comunitaria completa.
+
 ## Objetivo y límites
+
+El flujo local de preferencias conecta `foundation.contributions` (exportación
+consentida validada), `preference_data` (revisión explícita y partición por
+familias), `preference_objective` (DPO) y `preference_training` (AdamW, referencia
+congelada y checkpoints). CLI y `preference_training_desktop` llaman al mismo
+motor. El formulario captura valores Tk antes del trabajo en segundo plano y
+descarta callbacks cuando se destruye la ventana o cambia la sesión. Cerrar la
+ventana solicita cancelación cooperativa; los archivos ya guardados permanecen.
+
+El candidato conserva `reviewed-training-only`; este flujo no publica pesos ni
+envía pares a nodos. `foundation.reports` valida la coherencia del informe para
+mostrarlo, sin autenticar su ejecución. La comparación de preferencias reservadas
+no sustituye evaluación lingüística independiente. Contratos, comandos y evidencia:
+[PREFERENCE_LEARNING.md](PREFERENCE_LEARNING.md).
 
 AI@Home busca crecer hacia una plataforma de IA colaborativa, multimodal y
 distribuida. La arquitectura descrita aquí es una dirección incremental, no la
@@ -193,3 +209,86 @@ Separar un módulo del backend solo cuando exista una razón verificable, como
 aislamiento de fallos, perfil de escalado distinto, frontera de confianza o
 necesidad de desplegarlo de forma independiente. La extracción debe preservar
 autorización, trazabilidad, idempotencia y pruebas de privacidad.
+
+## Foundation Model — implementación inicial (2026-11-26)
+
+Se añade un subsistema propio en `ai_home.foundation` con BPE desde cero, Transformer RoPE/GQA, entrenamiento, checkpoints e inferencia. El modelo byte-level y las funcionalidades anteriores se conservan. La integración de escritorio añade un proveedor independiente para checkpoints propios.
+
+**Estado: parcial y bloqueado para validación neuronal.** Cuatro pruebas sin PyTorch pasan; no se ha completado entrenamiento, generado un checkpoint ni ejecutado inferencia nueva. PyTorch/pytest no están disponibles y su instalación falla. La escritura de ramas en GitHub devuelve 403 y Git local no puede crear `.git/index.lock`; no se han creado commits.
+
+Consultar [auditoría y matriz completa](FOUNDATION_AUDIT.md), [modelo](FOUNDATION_MODEL.md), [entrenamiento](TRAINING.md) y [pruebas](TESTING.md). Aprendizaje continuo, distribución, créditos de entrenamiento, RAG público, evolución y paneles completos siguen pendientes; no se reduce el objetivo ni se declaran demostrados.
+
+
+
+## Chat HTTP con Foundation (2026-11-26)
+
+Configurar `AI_HOME_CHAT_BACKEND=foundation` (valor predeterminado),
+`AI_HOME_FOUNDATION_CHECKPOINT` con la ruta al checkpoint propio y
+`AI_HOME_FOUNDATION_DEVICE=cpu`, `cuda` o `auto`. El límite de salida se configura
+con `AI_HOME_FOUNDATION_MAX_NEW_TOKENS` (1–4096); el presupuesto de carga con
+`AI_HOME_FOUNDATION_MEMORY_BUDGET_BYTES`. El checkpoint lo elige el operador,
+no una ruta arbitraria enviada por el cliente.
+
+La ruta autenticada `/api/v1/chat/completions` usa inferencia neuronal local.
+Un checkpoint ausente, corrupto o una dependencia no disponible devuelve 503;
+no hay fallback externo. Cada petición crea su propio modelo/cache y no guarda
+mensajes ni los incorpora al entrenamiento. Una generación simultánea por
+proceso; se devuelve 503 y Retry-After cuando está ocupado. Desplegar un único
+worker por dispositivo para respetar este límite. La carga por petición es
+conservadora y puede añadir latencia; caché de pesos compartida pendiente.
+
+Para conservar el proxy externo, configurar explícitamente
+`AI_HOME_CHAT_BACKEND=openai-compatible` además de sus variables anteriores.
+Esta selección explícita es necesaria al actualizar instalaciones del proxy.
+El endpoint HTTP devuelve una respuesta completa; streaming/cancelación HTTP
+siguen pendientes (el generador neuronal ya soporta ambos localmente).
+
+## Motores de evaluación y evolución
+
+`foundation.evaluation` carga un checkpoint propio y ejecuta probes declarativos sin ejecutar código generado ni llamar a jueces externos. `foundation.evolution` conserva una propuesta previa, crea dos candidatos mediante continual y compara evidencia del mismo protocolo. Solo emite propuesta; no tiene rutas de escritura al modelo activo, permisos, créditos o infraestructura.
+
+## Trabajo Foundation tipado
+
+foundation.tasks define el contrato acotado de tokenización pública. API, jobs y NodeAgent reutilizan autenticación, idempotencia y leases. El servidor reejecuta para verificar; no se añade un intérprete remoto ni se distribuyen exportaciones restringidas. La asignación exige capacidad declarada y un mínimo conservador de RAM.
+
+## Entrenamiento por shards experimental
+
+foundation.distributed define tensores FP32 acotados y gradientes causales por shard. API/jobs asignan solo a nodos compatibles con opt-in; el servidor recalcula antes de aceptar. El coordinador aplica promedio ponderado por tokens, clipping y AdamW. Los checkpoints candidatos preservan trazabilidad y artefactos de ronda. El protocolo de referencia es CPU, no una solución eficiente para GPUs heterogéneas o redes domésticas.
+
+## Contabilidad de trabajos
+
+CreditLedger.post_in_session reutiliza validación/idempotencia/asientos balanceados dentro de la transacción SQL del scheduler. JobFunding persiste reserva y destino de la liquidación. La financiación no se incorpora al payload del worker ni la decide el resultado remoto. La finalización verificada transfiere escrow al dueño del nodo autenticado. Se conserva auditoría al eliminar objetos operativos.
+
+
+### Public knowledge retrieval increment (2026-11-26)
+
+Added a versioned reviewed-public TF-IDF index with provenance, bounded context
+packing, and opt-in retrieval in authenticated Foundation chat. Retrieved text
+and personal memories use user-level context, not system instructions. This is
+retrieval, not weight training or a demonstrated improvement in model quality.
+See [Knowledge retrieval](KNOWLEDGE.md) for commands,
+permissions, tests and limitations. Network connectors and desktop references
+remain outstanding.
+
+
+### Model lifecycle registry (2026-11-26)
+
+Added local content-addressed candidate storage with real retained-checkpoint
+evaluation, explicit approval gates, transactional activation history and rollback.
+Foundation API serving can select the active approved registry version. Direct
+checkpoint mode remains available and is not an approval claim. See
+[Model registry](MODEL_REGISTRY.md) for commands, reproducibility evidence and limitations.
+
+### Adapter training and worker integration
+
+`foundation.adapters` attaches trainable low-rank factors to the own model's q/v
+projections while freezing base weights. Artifacts bind the parent, tokenizer and
+data lineage; explicit export produces an ordinary restricted candidate.
+`adapter_training` supports local FP32 optimization and optimizer/RNG resume;
+`adapter_training_desktop` runs it in the existing private-window/background
+mechanism with bounded live metrics and cooperative cancellation.
+`adapter_tasks` defines public typed gradient payloads, CPU result recomputation
+and token-weighted aggregation. API, scheduler, NodeAgent and transactional
+credits use separate default-disabled server/worker adapter permissions.
+See [adapter implementation and evidence](ADAPTERS.md). Current network evidence
+is loopback on one host; it does not demonstrate multihost scaling.

@@ -1,0 +1,8 @@
+{
+  "weights_equal_uninterrupted": true,
+  "retry_preserved_bytes": true,
+  "checkpoint_sha256": "709b50ceb828375cb32cf63fa0b43f124c7b8848b907a9cb4b1455e6fca6afab",
+  "round_request_sha256": "f9558bfad82be6108790f577b4cfee220dbb9bb1899c600e36af34f19e52f5e4",
+  "step": 2,
+  "transport": "HTTP loopback, CPU and CUDA workers on one host"
+}

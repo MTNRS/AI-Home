@@ -55,3 +55,4 @@ def extract_chat_content(body: object) -> str:
     if not isinstance(content, str):
         raise ValueError("El proveedor de chat devolvió contenido que no es texto.")
     return content
+

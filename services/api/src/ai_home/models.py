@@ -96,6 +96,7 @@ class ComputeJob(Base):
     )
     job_type: Mapped[str] = mapped_column(String(80), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    scheduling: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -143,6 +144,7 @@ class TrainingContribution(Base):
         index=True,
     )
     conversation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    correction: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     source_endpoint: Mapped[str] = mapped_column(String(500), nullable=False)
     model: Mapped[str] = mapped_column(String(160), nullable=False)
@@ -182,3 +184,4 @@ class TrainingDataset(Base):
         nullable=False,
         server_default=func.now(),
     )
+

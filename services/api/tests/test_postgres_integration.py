@@ -21,16 +21,84 @@ from ai_home.models import ComputeNode, ComputeJob, User
 DATABASE_URL = os.getenv("AI_HOME_TEST_POSTGRES_URL")
 
 
+def test_postgres_adapter_duplicate_result_settles_once(postgres_engine):
+    import torch
+    from ai_home.credit_admin import grant_credits
+    from ai_home.jobs import register_node, create_adapter_job, submit_job_result, JobNotFound
+    from ai_home.foundation.adapters import attach_adapters
+    from ai_home.foundation.distributed import encode_tensors
+    from ai_home.foundation.adapter_tasks import execute_adapter_gradient
+    from ai_home.job_credits import JobFunding, user_account_id
+    from test_foundation_distributed import setup_shards
+    from test_nodes_and_jobs import hardware_report
+    base, _, _, bases = setup_shards()
+    model = attach_adapters(base, rank=2, alpha=2.)
+    payload = dict(base=bases[0], rank=2, alpha=2.,
+        factors=encode_tensors({k: v for k, v in model.named_parameters() if v.requires_grad}),
+        factors_public_and_redistributable=True)
+    owner, worker = str(uuid4()), str(uuid4())
+    with Session(postgres_engine) as session, session.begin():
+        session.add_all([User(user_id=value, email=f'{value}@example.com', password_hash='test-only')
+                         for value in (owner, worker)])
+        session.flush()
+        grant_credits(session, user_id=owner, amount=9, idempotency_key=str(uuid4()), reason='adapter test')
+        from ai_home.schemas import HardwareReport
+        node = register_node(session, owner_user_id=worker, name='adapter postgres',
+            hardware=HardwareReport.model_validate(hardware_report()), supported_job_types=['foundation.adapter-gradient.v1'],
+            foundation_torch_version=str(torch.__version__)).node
+        node.hardware = {**node.hardware, 'resources_epoch': 4_000_000_000,
+                        'resources': {'ram_available_bytes': 2**30, 'foundation_device': 'cpu'}}
+        node.last_heartbeat_epoch = 4_000_000_000
+        node_id = node.node_id
+        job = create_adapter_job(session, owner_user_id=owner, idempotency_key=str(uuid4()),
+            payload=payload, allow_public_node_processing=True, reward_credits=9)
+        job_id = job.job_id
+    try:
+        with Session(postgres_engine) as session, session.begin():
+            claimed = claim_job(session, session.get(ComputeNode, node_id), allow_foundation_adapters=True)
+            assert claimed is not None and claimed.job.job_id == job_id
+            lease = claimed.lease_token
+        result = execute_adapter_gradient(payload)
+        barrier = Barrier(2)
+        def submit(_):
+            with Session(postgres_engine) as session, session.begin():
+                node = session.get(ComputeNode, node_id)
+                barrier.wait(timeout=10)
+                try:
+                    submit_job_result(session, node=node, job_id=job_id, lease_token=lease, result=result)
+                    return 'settled'
+                except JobNotFound:
+                    return 'already-completed'
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            assert sorted(executor.map(submit, range(2))) == ['already-completed', 'settled']
+        assert CreditLedger(postgres_engine).balance(user_account_id(worker)) == 9
+        assert CreditLedger(postgres_engine).balance(user_account_id(owner)) == 0
+        with Session(postgres_engine) as session:
+            assert session.get(JobFunding, job_id).status == 'settled'
+            assert session.get(ComputeJob, job_id).status == 'completed'
+    finally:
+        with Session(postgres_engine) as session, session.begin():
+            session.execute(delete(ComputeJob).where(ComputeJob.owner_user_id == owner))
+            session.execute(delete(ComputeNode).where(ComputeNode.owner_user_id == worker))
+            session.execute(delete(User).where(User.user_id.in_([owner, worker])))
+
+
 @pytest.fixture(scope="module")
 def postgres_engine():
     if not DATABASE_URL:
         pytest.skip("Set AI_HOME_TEST_POSTGRES_URL to run PostgreSQL integration tests.")
 
-    config = Config("alembic.ini")
-    command.upgrade(config, "head")
-    engine = create_engine(DATABASE_URL, pool_size=5, max_overflow=5)
-    yield engine
-    engine.dispose()
+    with pytest.MonkeyPatch.context() as patch:
+        # Alembic reads AI_HOME_DATABASE_URL, not the test URL. Bind both explicitly.
+        patch.setenv("AI_HOME_DATABASE_URL", DATABASE_URL)
+        patch.setenv("AI_HOME_ENVIRONMENT", "test")
+        config = Config("alembic.ini")
+        command.upgrade(config, "head")
+        engine = create_engine(DATABASE_URL, pool_size=5, max_overflow=5)
+        try:
+            yield engine
+        finally:
+            engine.dispose()
 
 
 def test_postgres_migrations_match_orm(postgres_engine):
@@ -184,3 +252,116 @@ def test_postgres_ledger_prevents_concurrent_overdraft(postgres_engine):
     assert sorted(results) == ["accepted", "insufficient"]
     assert ledger.balance(user_account) == 20
     assert ledger.balance(reserve_account) == 80
+
+
+
+def test_postgres_inference_duplicate_settlement_and_expiry(postgres_engine):
+    from datetime import datetime, timezone, timedelta
+    from ai_home.inference_credits import reserve_inference, resolve_inference, refund_expired_inference
+    from ai_home.credits import InvalidPosting
+    from ai_home.job_credits import user_account_id
+    owner = str(uuid4())
+    issuer = "pg:issuer:" + owner
+    ledger = CreditLedger(postgres_engine)
+    ledger.create_account(issuer, "test", allow_negative=True)
+    ledger.create_account(user_account_id(owner), "user")
+    ledger.post(idempotency_key="pg:fund:"+owner, operation="test",
+                postings={issuer:-20, user_account_id(owner):20})
+    barrier = Barrier(2)
+    def reserve(_):
+        barrier.wait(timeout=10)
+        with Session(postgres_engine) as session, session.begin():
+            row, created = reserve_inference(session, owner, "same", "a"*64, 7)
+            return row.request_id, created
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        rows = list(executor.map(reserve, range(2)))
+    assert sum(created for _, created in rows) == 1
+    key = rows[0][0]
+    def settle(_):
+        barrier.wait(timeout=10)
+        with Session(postgres_engine) as session, session.begin():
+            resolve_inference(session, key, owner)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(settle, range(2)))
+    assert ledger.balance(user_account_id(owner)) == 13
+    with Session(postgres_engine) as session, session.begin():
+        stale, _ = reserve_inference(session, owner, "expired", "b"*64, 5)
+        stale.expires_at = datetime.now(timezone.utc)-timedelta(seconds=1)
+        stale_key = stale.request_id
+    with pytest.raises(InvalidPosting):
+        with Session(postgres_engine) as session, session.begin():
+            resolve_inference(session, stale_key, owner)
+    with Session(postgres_engine) as session, session.begin():
+        assert refund_expired_inference(session, owner) == 1
+    assert ledger.balance(user_account_id(owner)) == 13
+
+def test_postgres_scheduler_measurement_json_predicate(postgres_engine):
+    import time
+    from ai_home.jobs import create_gradient_job, _measurement_eligibility
+    from test_foundation_distributed import setup_shards
+    _, _, _, payloads = setup_shards()
+    owner = str(uuid4())
+    now = int(time.time())
+    with Session(postgres_engine) as session:
+        try:
+            session.add(User(user_id=owner, email=f'{owner}@example.com', password_hash='test-only'))
+            session.flush()
+            jobs = [create_gradient_job(session, owner_user_id=owner, idempotency_key=str(uuid4()),
+                payload=payloads[0], allow_public_node_processing=True, scheduling=constraint)
+                for constraint in (None, {'min_gradient_tokens_per_second':1.0},
+                                   {'min_gradient_tokens_per_second':100.0},
+                                   {'min_transfer_download_bytes_per_second':1.0,
+                                    'min_transfer_upload_bytes_per_second':1.0,
+                                    'max_transfer_http_round_trip_seconds':1.0})]
+            sample = {'format':'ai-home-worker-service-measurement-v1', 'job_type':'foundation.gradient.v1',
+                      'device':'cpu', 'heartbeat_service_seconds':0.01, 'claim_service_seconds':0.02,
+                      'execution_seconds':1.0, 'submit_service_seconds':0.03,
+                      'claim_response_bytes':1000, 'submit_request_bytes':1000}
+            node = ComputeNode(hardware={'resources_epoch':now,'resources':{'foundation_device':'cpu'},
+                'service_measurement':{'completed_epoch':now,'sample':sample,
+                'profile_sha256':jobs[1].scheduling['profile_sha256'], 'gradient_tokens_per_second':10.0,
+                'claim_service_bytes_per_second':50000.0,'submit_service_bytes_per_second':30000.0}})
+            query=select(ComputeJob.job_id).where(ComputeJob.owner_user_id==owner)
+            assert set(session.scalars(query.where(_measurement_eligibility(node, now)))) == {jobs[0].job_id,jobs[1].job_id}
+            from ai_home.network_probe import TransferMeasurement
+            node.hardware['transfer_measurement'] = TransferMeasurement(
+                format='ai-home-http-transfer-probe-v1', payload_bytes=65536,
+                empty_round_trip_seconds=[.01,.02,.03], download_seconds=.1, upload_seconds=.2).summary(now)
+            assert set(session.scalars(query.where(_measurement_eligibility(node, now)))) == {jobs[0].job_id,jobs[1].job_id,jobs[3].job_id}
+            assert set(session.scalars(query.where(_measurement_eligibility(node, now+121)))) == {jobs[0].job_id}
+        finally:
+            session.rollback()
+
+def test_postgres_job_summary_keyset_pagination(postgres_engine):
+    from datetime import datetime, timezone
+    from sqlalchemy import update
+    email = f'{uuid4()}@example.com'
+    owner = None
+    app = create_app(Settings(environment='test', database_url=DATABASE_URL), engine=postgres_engine)
+    try:
+        with TestClient(app) as client:
+            credentials = {'email':email,'password':'a-strong-password-123'}
+            registration=client.post('/api/v1/auth/register',json=credentials)
+            registration.raise_for_status()
+            owner=registration.json()['user_id']
+            login=client.post('/api/v1/auth/login',json=credentials)
+            login.raise_for_status()
+            headers={'Authorization':'Bearer '+login.json()['access_token']}
+            ids=[]
+            for i in range(5):
+                job=client.post('/api/v1/jobs',headers=headers,json={'values':[1,2],
+                    'idempotency_key':str(i),'allow_public_node_processing':True})
+                job.raise_for_status(); ids.append(job.json()['job_id'])
+            with Session(postgres_engine) as session, session.begin():
+                session.execute(update(ComputeJob).where(ComputeJob.owner_user_id==owner).values(
+                    created_at=datetime(2026,11,26,12,tzinfo=timezone.utc)))
+            first=client.get('/api/v1/jobs/summary',headers=headers,params={'limit':2}).json()
+            last=first[-1]
+            second=client.get('/api/v1/jobs/summary',headers=headers,params={'limit':3,
+                'before_created_at':last['created_at'],'before_job_id':last['job_id']}).json()
+            observed=[row['job_id'] for row in first+second]
+            assert observed == sorted(ids,reverse=True)
+    finally:
+        if owner:
+            with Session(postgres_engine) as session, session.begin():
+                session.execute(delete(User).where(User.user_id==owner))

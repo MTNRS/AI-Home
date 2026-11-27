@@ -1,0 +1,12 @@
+{
+  "vocab_size": 512,
+  "width": 256,
+  "layers": 6,
+  "heads": 8,
+  "kv_heads": 2,
+  "hidden": 704,
+  "context": 256,
+  "rope_theta": 10000.0,
+  "tied_embeddings": true,
+  "gradient_checkpointing": false
+}

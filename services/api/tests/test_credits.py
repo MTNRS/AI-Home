@@ -165,3 +165,4 @@ def test_unknown_account_rolls_back_transaction(ledger: CreditLedger):
             },
         )
     assert ledger.balance("user:alice:available") == 100
+

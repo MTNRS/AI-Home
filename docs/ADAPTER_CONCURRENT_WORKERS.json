@@ -1,0 +1,68 @@
+{
+  "format": "ai-home-adapter-distributed-smoke-v1",
+  "transport": "real loopback HTTP",
+  "context": 64,
+  "worker_launch": "concurrent",
+  "workers": [
+    {
+      "pid": 28708,
+      "device": "cpu",
+      "metrics": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.adapter-gradient.v1",
+        "device": "cpu",
+        "heartbeat_service_seconds": 0.005216300007305108,
+        "claim_service_seconds": 0.009773799989488907,
+        "execution_seconds": 1.2386974999972153,
+        "submit_service_seconds": 0.049535099999047816,
+        "claim_response_bytes": 39258,
+        "submit_request_bytes": 1497,
+        "claim_service_bytes_per_second": 4016656.780599097,
+        "submit_service_bytes_per_second": 30220.994810321892
+      }
+    },
+    {
+      "pid": 39228,
+      "device": "cuda",
+      "metrics": {
+        "format": "ai-home-worker-service-measurement-v1",
+        "job_type": "foundation.adapter-gradient.v1",
+        "device": "cuda",
+        "heartbeat_service_seconds": 0.00623910001013428,
+        "claim_service_seconds": 0.008070000010775402,
+        "execution_seconds": 1.391417899998487,
+        "submit_service_seconds": 0.1731354000075953,
+        "claim_response_bytes": 39258,
+        "submit_request_bytes": 1497,
+        "claim_service_bytes_per_second": 4864684.0083743585,
+        "submit_service_bytes_per_second": 8646.411998553316
+      }
+    }
+  ],
+  "worker_balances": [
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    },
+    {
+      "available": 3,
+      "reserved": 0,
+      "earned": 3
+    }
+  ],
+  "owner_balance": {
+    "available": 0,
+    "reserved": 0,
+    "earned": 0
+  },
+  "completed_jobs": 2,
+  "aggregation": {
+    "shards": 2,
+    "tokens": 144,
+    "mean_loss": 5.651263766818577
+  },
+  "factor_delta_l2": 0.006812654773524994,
+  "promoted": false,
+  "scope": "One machine, two worker processes; no multihost or efficiency claim"
+}

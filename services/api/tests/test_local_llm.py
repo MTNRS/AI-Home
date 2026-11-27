@@ -185,3 +185,4 @@ def test_training_refuses_corpus_without_provenance(tmp_path):
                 heads=1,
             ),
         )
+

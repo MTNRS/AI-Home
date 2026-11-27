@@ -8,14 +8,21 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ai_home.models import ComputeJob, ComputeNode
+from ai_home.job_credits import JobFunding, refund_job, reserve_job, settle_job
 from ai_home.schemas import HardwareReport
 
 SUPPORTED_JOB_TYPES = ("math.sum.v1",)
+FOUNDATION_JOB_TYPE = "foundation.tokenize.v1"
+GRADIENT_JOB_TYPE = "foundation.gradient.v1"
+EVALUATION_JOB_TYPE = "foundation.evaluate.v1"
+ADAPTER_JOB_TYPE = "foundation.adapter-gradient.v1"
+NEURAL_JOB_TYPES = (GRADIENT_JOB_TYPE, EVALUATION_JOB_TYPE, ADAPTER_JOB_TYPE)
+TOKENIZE_MIN_RAM_BYTES = 256 * 1024**2
 MAX_JOB_ATTEMPTS = 3
 NODE_HEARTBEAT_TIMEOUT_SECONDS = 120
 JOB_LEASE_SECONDS = 120
@@ -56,6 +63,7 @@ class RegisteredNode:
 class ClaimedJob:
     job: ComputeJob
     lease_token: str
+    reward_credits: int = 0
 
 
 def register_node(
@@ -64,17 +72,24 @@ def register_node(
     owner_user_id: str,
     name: str,
     hardware: HardwareReport,
+    supported_job_types: list[str] | None = None,
+    foundation_torch_version: str | None = None,
 ) -> RegisteredNode:
     if not name.strip():
         raise ValueError("Node name cannot be empty.")
     node_token = secrets.token_urlsafe(32)
+    supported_job_types = supported_job_types if supported_job_types is not None else list(SUPPORTED_JOB_TYPES)
+    if not supported_job_types or set(supported_job_types) - {*SUPPORTED_JOB_TYPES, FOUNDATION_JOB_TYPE, *NEURAL_JOB_TYPES}:
+        raise ValueError("Unsupported node capabilities")
+    if set(NEURAL_JOB_TYPES).intersection(supported_job_types) and not foundation_torch_version:
+        raise ValueError("Gradient workers must declare their PyTorch runtime")
     node = ComputeNode(
         node_id=str(uuid4()),
         owner_user_id=owner_user_id,
         name=name.strip(),
         credential_hash=_token_hash(node_token),
-        hardware=hardware.model_dump(mode="json"),
-        supported_job_types=list(SUPPORTED_JOB_TYPES),
+        hardware={**hardware.model_dump(mode="json"), "foundation_torch_version": foundation_torch_version, "resources": None, "resources_epoch": None},
+        supported_job_types=sorted(set(supported_job_types)),
         last_heartbeat_epoch=int(time.time()),
     )
     session.add(node)
@@ -94,9 +109,11 @@ def authenticate_node(session: Session, node_token: str) -> ComputeNode:
     return node
 
 
-def heartbeat_node(session: Session, node: ComputeNode) -> int:
+def heartbeat_node(session: Session, node: ComputeNode, *, resources=None) -> int:
     now = int(time.time())
     node.last_heartbeat_epoch = now
+    if resources is not None:
+        node.hardware = {**node.hardware, "resources": resources.model_dump(), "resources_epoch": now}
     session.flush()
     return now
 
@@ -215,28 +232,28 @@ def list_owner_jobs(session: Session, owner_user_id: str) -> list[ComputeJob]:
     )
 
 
-def claim_job(session: Session, node: ComputeNode) -> ClaimedJob | None:
+def claim_job(session: Session, node: ComputeNode, *, allow_foundation_training=False, allow_foundation_evaluation=False, allow_foundation_adapters=False) -> ClaimedJob | None:
     now = int(time.time())
     if node.revoked_at is not None or (
         node.last_heartbeat_epoch < now - NODE_HEARTBEAT_TIMEOUT_SECONDS
     ):
         raise NodeNotFound
 
-    session.execute(
-        update(ComputeJob)
-        .where(
+    exhausted = session.scalars(
+        select(ComputeJob).where(
             ComputeJob.status == "leased",
             ComputeJob.lease_expires_epoch <= now,
             ComputeJob.attempt_count >= MAX_JOB_ATTEMPTS,
-        )
-        .values(
-            status="failed",
-            assigned_node_id=None,
-            lease_token_hash=None,
-            lease_expires_epoch=None,
-            failure_code="lease_expired",
-        )
+        ).with_for_update(skip_locked=True)
     )
+    for expired in exhausted:
+        refund_job(session, expired)
+        expired.status = "failed"
+        expired.assigned_node_id = None
+        expired.lease_token_hash = None
+        expired.lease_expires_epoch = None
+        expired.failure_code = "lease_expired"
+    session.flush()
     session.execute(
         update(ComputeJob)
         .where(
@@ -252,11 +269,34 @@ def claim_job(session: Session, node: ComputeNode) -> ClaimedJob | None:
         )
     )
 
+    compatible = list(node.supported_job_types)
+    available_ram = node.hardware.get("ram_total_bytes", 0)
+    snapshot = node.hardware.get("resources")
+    if snapshot is not None:
+        available_ram = min(available_ram, snapshot["ram_available_bytes"])
+        if (node.hardware.get("resources_epoch") or 0) < now - NODE_HEARTBEAT_TIMEOUT_SECONDS:
+            available_ram = 0
+        if snapshot["foundation_device"] == "cuda" and snapshot["cuda_free_bytes"] < 256 * 1024**2:
+            compatible = [name for name in compatible if name not in NEURAL_JOB_TYPES]
+    if available_ram < TOKENIZE_MIN_RAM_BYTES:
+        compatible = [name for name in compatible if name != FOUNDATION_JOB_TYPE]
+    if not allow_foundation_training or available_ram < 1024**3:
+        compatible = [name for name in compatible if name != GRADIENT_JOB_TYPE]
+    if not allow_foundation_evaluation or available_ram < 1024**3:
+        compatible = [name for name in compatible if name != EVALUATION_JOB_TYPE]
+    if not allow_foundation_adapters or available_ram < 1024**3:
+        compatible = [name for name in compatible if name != ADAPTER_JOB_TYPE]
     job = session.scalar(
         select(ComputeJob)
         .where(
             ComputeJob.status == "queued",
-            ComputeJob.job_type.in_(node.supported_job_types),
+            ComputeJob.job_type.in_(compatible),
+            _measurement_eligibility(node, now),
+            or_(ComputeJob.job_type.notin_(NEURAL_JOB_TYPES),
+                and_(ComputeJob.job_type != ADAPTER_JOB_TYPE,
+                     ComputeJob.payload["torch_version"].as_string() == node.hardware.get("foundation_torch_version")),
+                and_(ComputeJob.job_type == ADAPTER_JOB_TYPE,
+                     ComputeJob.payload["base"]["torch_version"].as_string() == node.hardware.get("foundation_torch_version"))),
         )
         .order_by(ComputeJob.created_at, ComputeJob.job_id)
         .with_for_update(skip_locked=True)
@@ -273,7 +313,26 @@ def claim_job(session: Session, node: ComputeNode) -> ClaimedJob | None:
     job.attempt_count += 1
     job.failure_code = None
     session.flush()
-    return ClaimedJob(job=job, lease_token=lease_token)
+    funding = session.get(JobFunding, job.job_id)
+    return ClaimedJob(job=job, lease_token=lease_token, reward_credits=funding.amount if funding else 0)
+
+
+def renew_job_lease(session: Session, *, node: ComputeNode, job_id: str, lease_token: str) -> int:
+    now = int(time.time())
+    if node.revoked_at is not None:
+        raise NodeNotFound
+    expiry = session.execute(update(ComputeJob).where(
+        ComputeJob.job_id == job_id,
+        ComputeJob.assigned_node_id == node.node_id,
+        ComputeJob.status == "leased",
+        ComputeJob.lease_token_hash == _token_hash(lease_token),
+        ComputeJob.lease_expires_epoch > now,
+    ).values(lease_expires_epoch=now + JOB_LEASE_SECONDS).returning(
+        ComputeJob.lease_expires_epoch).execution_options(synchronize_session=False)).scalar_one_or_none()
+    if expiry is None:
+        raise JobNotFound
+    heartbeat_node(session, node)
+    return expiry
 
 
 def submit_job_result(
@@ -282,27 +341,168 @@ def submit_job_result(
     node: ComputeNode,
     job_id: str,
     lease_token: str,
-    result: dict[str, int],
+    result: dict[str, int | str],
 ) -> ComputeJob:
     job = session.scalar(
         select(ComputeJob).where(
             ComputeJob.job_id == job_id,
             ComputeJob.assigned_node_id == node.node_id,
             ComputeJob.status == "leased",
-        )
+        ).with_for_update()
     )
     if job is None or job.lease_token_hash != _token_hash(lease_token):
         raise JobNotFound
     if job.lease_expires_epoch is None or job.lease_expires_epoch <= int(time.time()):
         raise LeaseExpired
-    if job.job_type != "math.sum.v1" or set(result) != {"sum"}:
+    if job.job_type == "math.sum.v1":
+        expected = {"sum": sum(job.payload["values"])}
+    elif job.job_type == FOUNDATION_JOB_TYPE:
+        from ai_home.foundation.tasks import execute_tokenize
+        expected = execute_tokenize(job.payload)
+    elif job.job_type == EVALUATION_JOB_TYPE:
+        from ai_home.foundation.distributed_evaluation import verified_evaluation_result
+        if not verified_evaluation_result(job.payload, result):
+            raise InvalidJobResult
+        expected = result
+    elif job.job_type == GRADIENT_JOB_TYPE:
+        from ai_home.foundation.distributed import verified_gradient_result
+        if not verified_gradient_result(job.payload, result):
+            raise InvalidJobResult
+        expected = result
+    elif job.job_type == ADAPTER_JOB_TYPE:
+        from ai_home.foundation.adapter_tasks import verified_adapter_gradient
+        if not verified_adapter_gradient(job.payload, result):
+            raise InvalidJobResult
+        expected = result
+    else:
         raise InvalidJobResult
-    expected = sum(job.payload["values"])
-    if result["sum"] != expected:
+    if result != expected:
         raise InvalidJobResult
 
+    settle_job(session, job, node.owner_user_id)
+    # Bind later optional telemetry to this authenticated, verified completion.
+    session.refresh(node, with_for_update=True)
+    node.hardware = {**node.hardware, "measurement_receipt": {
+        "job_id": job.job_id, "job_type": job.job_type,
+        "completed_epoch": int(time.time()),
+        "payload_sha256": _request_hash(job.job_type, job.payload),
+        "profile_sha256": _gradient_profile(job.payload) if job.job_type == GRADIENT_JOB_TYPE else None,
+        "token_count": result.get("token_count"),
+        "device": (node.hardware.get("resources") or {}).get("foundation_device", "cpu"),
+    }}
     job.status = "completed"
     job.result = result
+    job.assigned_node_id = None
+    job.lease_token_hash = None
+    job.lease_expires_epoch = None
+    session.flush()
+    return job
+
+
+def record_worker_measurement(session, *, node, job_id, measurement):
+    session.refresh(node, with_for_update=True)
+    receipt = node.hardware.get("measurement_receipt") or {}
+    now = int(time.time())
+    if (receipt.get("job_id") != job_id or node.revoked_at is not None
+            or not 0 <= now - receipt.get("completed_epoch", 0) <= 120):
+        raise JobNotFound
+    data = measurement.model_dump()
+    if data["job_type"] != receipt["job_type"] or data["device"] != receipt["device"]:
+        raise ValueError("Measurement differs from completed job")
+    previous = node.hardware.get("service_measurement")
+    if previous and previous["job_id"] == job_id:
+        if previous["sample"] != data:
+            raise IdempotencyConflict
+        return previous
+    stored = {"job_id": job_id, "completed_epoch": receipt["completed_epoch"],
+              "received_epoch": now, "payload_sha256": receipt["payload_sha256"],
+              "profile_sha256": receipt.get("profile_sha256"),
+              "sample": data, "trust": "worker-reported-service-observation",
+              "claim_service_bytes_per_second": data["claim_response_bytes"] / max(data["claim_service_seconds"], 1e-9),
+              "submit_service_bytes_per_second": data["submit_request_bytes"] / max(data["submit_service_seconds"], 1e-9)}
+    if receipt["job_type"] == GRADIENT_JOB_TYPE:
+        stored["gradient_tokens_per_second"] = receipt["token_count"] / max(data["execution_seconds"], 1e-9)
+    node.hardware = {**node.hardware, "service_measurement": stored}
+    session.flush()
+    return stored
+
+
+def create_tokenize_job(session: Session, *, owner_user_id: str, idempotency_key: str,
+                        payload: dict, allow_public_node_processing: bool, reward_credits=0) -> ComputeJob:
+    from ai_home.foundation.tasks import TokenizePayload
+    if allow_public_node_processing is not True:
+        raise ValueError("Public node processing requires explicit consent")
+    payload = TokenizePayload.model_validate(payload).model_dump()
+    return _create_foundation_job(session, owner_user_id, idempotency_key, payload, FOUNDATION_JOB_TYPE, reward_credits)
+
+
+def create_gradient_job(session: Session, *, owner_user_id: str, idempotency_key: str,
+                        payload: dict, allow_public_node_processing: bool, reward_credits=0, scheduling=None) -> ComputeJob:
+    from ai_home.foundation.distributed import GradientPayload
+    if allow_public_node_processing is not True:
+        raise ValueError("Public node processing requires explicit consent")
+    payload = GradientPayload.model_validate(payload).model_dump()
+    if scheduling is not None:
+        from ai_home.schemas import GradientSchedulingRequirements
+        scheduling = {**GradientSchedulingRequirements.model_validate(scheduling).model_dump(exclude_none=True),
+                      "profile_sha256": _gradient_profile(payload)}
+    return _create_foundation_job(session, owner_user_id, idempotency_key, payload, GRADIENT_JOB_TYPE, reward_credits, scheduling)
+
+
+def create_evaluation_job(session: Session, *, owner_user_id: str, idempotency_key: str,
+                          payload: dict, allow_public_node_processing: bool, reward_credits=0):
+    from ai_home.foundation.distributed import GradientPayload
+    if allow_public_node_processing is not True:
+        raise ValueError("Public node processing requires explicit consent")
+    payload = GradientPayload.model_validate(payload).model_dump()
+    return _create_foundation_job(session, owner_user_id, idempotency_key, payload,
+                                  EVALUATION_JOB_TYPE, reward_credits)
+
+
+def create_adapter_job(session: Session, *, owner_user_id: str, idempotency_key: str,
+                       payload: dict, allow_public_node_processing: bool, reward_credits=0):
+    from ai_home.foundation.adapter_tasks import validate_payload
+    if allow_public_node_processing is not True:
+        raise ValueError("Public node processing requires explicit consent")
+    checked, _ = validate_payload(payload)
+    return _create_foundation_job(session, owner_user_id, idempotency_key, checked.model_dump(),
+                                  ADAPTER_JOB_TYPE, reward_credits)
+
+
+def _create_foundation_job(session, owner_user_id, idempotency_key, payload, job_type, reward_credits, scheduling=None):
+    if type(reward_credits) is not int or not 0 <= reward_credits <= 1_000_000:
+        raise ValueError("Invalid job reward")
+    request_hash = _request_hash(job_type, {"payload": payload, "reward_credits": reward_credits} if reward_credits else payload)
+    if scheduling is not None:
+        request_hash = _request_hash(job_type, {"payload": payload, "reward_credits": reward_credits, "scheduling": scheduling})
+    existing = session.scalar(select(ComputeJob).where(ComputeJob.owner_user_id == owner_user_id,
+                                                       ComputeJob.idempotency_key == idempotency_key))
+    if existing is not None:
+        if existing.request_hash != request_hash:
+            raise IdempotencyConflict
+        return existing
+    job = ComputeJob(job_id=str(uuid4()), owner_user_id=owner_user_id,
+                     job_type=job_type, payload=payload, scheduling=scheduling, status="queued",
+                     idempotency_key=idempotency_key, request_hash=request_hash,
+                     public_node_consent_at_epoch=int(time.time()),
+                     public_node_consent_version=PUBLIC_NODE_CONSENT_VERSION)
+    session.add(job)
+    session.flush()
+    reserve_job(session, job, reward_credits)
+    return job
+
+
+def cancel_job(session, job_id, owner_user_id):
+    job = session.scalar(select(ComputeJob).where(ComputeJob.job_id == job_id,
+        ComputeJob.owner_user_id == owner_user_id).with_for_update())
+    if job is None:
+        raise JobNotFound
+    if job.status == "cancelled":
+        return job
+    if job.status not in ("queued", "leased"):
+        raise ValueError("Only pending jobs can be cancelled")
+    refund_job(session, job)
+    job.status = "cancelled"
     job.assigned_node_id = None
     job.lease_token_hash = None
     job.lease_expires_epoch = None
@@ -321,3 +521,66 @@ def _request_hash(job_type: str, payload: dict) -> str:
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+
+def _gradient_profile(payload):
+    # Weight values/documents may change between rounds; architecture, tokenizer
+    # and runtime must match before reusing a normalized throughput observation.
+    return _request_hash('gradient-service-profile-v1', {
+        'config': payload['config'], 'torch_version': payload['torch_version'],
+        'tokenizer': payload['shard']['tokenizer']})
+
+
+def _measurement_eligibility(node, now):
+    from ai_home.schemas import WorkerServiceMeasurement
+    unconstrained = ComputeJob.scheduling.is_(None)
+    observed = node.hardware.get('service_measurement') or {}
+    resources = node.hardware.get('resources') or {}
+    try:
+        sample = WorkerServiceMeasurement.model_validate(observed['sample'])
+        if (not 0 <= now - observed['completed_epoch'] <= 120
+                or not 0 <= now - node.hardware.get('resources_epoch', 0) <= 120
+                or sample.job_type != GRADIENT_JOB_TYPE
+                or resources.get('foundation_device') != sample.device
+                or not observed.get('profile_sha256')):
+            return unconstrained
+        # Rate values were derived by the server on receipt; defend against old
+        # or invalid stored samples rather than silently broadening eligibility.
+        import math
+        metrics = [('min_gradient_tokens_per_second', observed['gradient_tokens_per_second'], False),
+                   ('min_claim_service_bytes_per_second', observed['claim_service_bytes_per_second'], False),
+                   ('min_submit_service_bytes_per_second', observed['submit_service_bytes_per_second'], False),
+                   ('max_heartbeat_service_seconds', sample.heartbeat_service_seconds, True)]
+        if any(not isinstance(value, (float, int)) or isinstance(value, bool)
+               or not math.isfinite(value) or value <= 0 for _, value, _ in metrics):
+            return unconstrained
+    except (KeyError, TypeError, ValueError):
+        return unconstrained
+    terms = [ComputeJob.scheduling['profile_sha256'].as_string() == observed['profile_sha256']]
+    for name, value, maximum in metrics:
+        threshold = ComputeJob.scheduling[name].as_float()
+        terms.append(or_(threshold.is_(None), threshold >= value if maximum else threshold <= value))
+    transfer_names = ("min_transfer_download_bytes_per_second", "min_transfer_upload_bytes_per_second",
+                      "max_transfer_http_round_trip_seconds")
+    transfer_values = None
+    try:
+        from ai_home.network_probe import TransferMeasurement
+        transfer = node.hardware.get("transfer_measurement") or {}
+        if (0 <= now - transfer["received_epoch"] <= 120
+                and transfer["expires_epoch"] == transfer["received_epoch"] + 120):
+            fields = ("format", "payload_bytes", "empty_round_trip_seconds", "download_seconds", "upload_seconds")
+            validated = TransferMeasurement.model_validate({key: transfer[key] for key in fields})
+            derived = validated.summary(transfer["received_epoch"])
+            transfer_values = (derived["download_bytes_per_second"], derived["upload_bytes_per_second"],
+                               derived["minimum_http_round_trip_seconds"])
+    except (KeyError, TypeError, ValueError):
+        pass
+    for index, name in enumerate(transfer_names):
+        threshold = ComputeJob.scheduling[name].as_float()
+        if transfer_values is None:
+            terms.append(threshold.is_(None))
+        else:
+            value = transfer_values[index]
+            terms.append(or_(threshold.is_(None), threshold >= value if index == 2 else threshold <= value))
+    return or_(unconstrained, and_(*terms))

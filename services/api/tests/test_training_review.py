@@ -14,6 +14,93 @@ from ai_home.models import TrainingContribution, TrainingDataset
 REVIEW_TOKEN = "test-training-review-token-0123456789"
 
 
+def test_frozen_contributions_reach_real_sft_without_public_release(client, tmp_path, monkeypatch):
+    torch = pytest.importorskip("torch")
+    from ai_home.foundation.contributions import load_reviewed_export
+    from ai_home.foundation.data import canonical_hash, prepare_records
+    from ai_home.foundation.model import FoundationConfig
+    from ai_home.foundation.training import TrainingConfig, train
+    from ai_home.foundation.checkpoint import load_checkpoint
+
+    torch.set_num_threads(1)
+    token = register_and_login(client)
+    ids = [create_candidate(client, token, str(i)) for i in range(1, 5)]
+    for contribution_id in ids:
+        approve_candidate(client, contribution_id)
+    headers = {"Authorization": f"Bearer {REVIEW_TOKEN}"}
+    frozen = client.post("/api/v1/admin/training/datasets", headers=headers,
+                         json={"dataset_version": "sft-test-v1", "contribution_ids": ids})
+    assert frozen.status_code == 201
+    route = "/api/v1/admin/training/datasets/" + frozen.json()["dataset_id"]
+    assert client.get(route, headers={"Authorization": f"Bearer {token}"}).status_code == 401
+    exported = client.get(route, headers=headers).json()
+    path = tmp_path / "reviewed.json"
+    path.write_text(json.dumps(exported), encoding="utf-8")
+    records = load_reviewed_export(path)
+    assert all(r["visibility"] == "reviewed-training-only" for r in records)
+    with pytest.raises(ValueError, match="public"):
+        prepare_records(records)
+    output = tmp_path / "sft.pt"
+    settings = TrainingConfig(steps=2, warmup=1, objective="sft")
+    result = train(None, output, FoundationConfig(vocab_size=280, width=32, layers=2,
+                   heads=4, kv_heads=2, hidden=64, context=16), settings, "cpu", reviewed_export=path)
+    assert result["embedding_delta_l2"] > 0
+    assert result["validation"]["tokens"] > 0
+    assert load_checkpoint(output)[2]["data_visibility"] == "reviewed-training-only"
+    assert result["status"] == "candidate"
+    from dataclasses import asdict
+    from ai_home.foundation.training_job import run_training
+    model_path, training_path = tmp_path / "model.json", tmp_path / "training.json"
+    model_path.write_text(json.dumps(result["config"]))
+    training_path.write_text(json.dumps(asdict(settings)))
+    job = run_training(path, model_path, training_path, tmp_path / "private-job", reviewed_export=True)
+    assert load_checkpoint(job["checkpoint"])[2]["data_visibility"] == "reviewed-training-only"
+    child = run_training(path, None, training_path, tmp_path / "private-child", reviewed_export=True,
+                         initial_checkpoint=job["checkpoint"])
+    assert child["embedding_delta_l2"] > 0
+    assert load_checkpoint(child["checkpoint"])[2]["data_visibility"] == "reviewed-training-only"
+    manifest = json.loads((tmp_path / "private-child" / "configuration.json").read_text())
+    assert manifest["source_type"] == "reviewed-training-only"
+    training_path.write_text(json.dumps(asdict(TrainingConfig(steps=2, warmup=1))))
+    with pytest.raises(ValueError, match="sft"):
+        run_training(path, model_path, training_path, tmp_path / "bad-objective", reviewed_export=True)
+    assert not (tmp_path / "bad-objective").exists()
+    # Replace the source with another internally valid export between both reads.
+    # A manifest-valid replacement must not train under the first dataset hash.
+    import copy
+    from ai_home.foundation import training_job
+    replacement = copy.deepcopy(exported)
+    replacement["records"][0]["messages"][1]["content"] = "A different reviewed answer"
+    replacement["manifest_sha256"] = canonical_hash({"dataset_version": replacement["dataset_version"],
+                                                     "records": replacement["records"]})
+    original_train = training_job.train
+    def replace_before_training(*args, **kwargs):
+        path.write_text(json.dumps(replacement), encoding="utf-8")
+        return original_train(*args, **kwargs)
+    training_path.write_text(json.dumps(asdict(settings)), encoding="utf-8")
+    with monkeypatch.context() as patch:
+        patch.setattr(training_job, "train", replace_before_training)
+        with pytest.raises(ValueError, match="changed after job configuration"):
+            run_training(path, model_path, training_path, tmp_path / "changed-export", reviewed_export=True)
+    assert not (tmp_path / "changed-export" / "model.pt").exists()
+    assert not (tmp_path / "changed-export" / "result.json").exists()
+    path.write_text(json.dumps(exported), encoding="utf-8")
+    with pytest.raises(ValueError, match="exceeds input budget"):
+        load_reviewed_export(path, max_bytes=32)
+    with pytest.raises(ValueError, match="Invalid reviewed export read budget"):
+        load_reviewed_export(path, max_bytes=True)
+    exported["records"][0]["messages"][1]["content"] = "tampered"
+    path.write_text(json.dumps(exported), encoding="utf-8")
+    with pytest.raises(ValueError, match="manifest"):
+        load_reviewed_export(path)
+    exported["records"][0]["review_checklist"] = {}
+    exported["manifest_sha256"] = canonical_hash({"dataset_version": exported["dataset_version"],
+                                                 "records": exported["records"]})
+    path.write_text(json.dumps(exported), encoding="utf-8")
+    with pytest.raises(ValueError, match="review"):
+        load_reviewed_export(path)
+
+
 @pytest.fixture
 def client():
     engine = create_engine(
@@ -51,25 +138,29 @@ def register_and_login(client: TestClient) -> str:
 
 
 def create_candidate(client: TestClient, token: str, suffix: str) -> str:
-    response = client.post(
-        "/api/v1/training/conversations",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "conversation_id": f"d24b0b20-5ebc-48af-a3c8-{suffix:0>12}",
-            "provider": "openai",
-            "source_endpoint": "https://api.openai.com/v1",
-            "model": "gpt-test",
-            "messages": [
-                {"role": "user", "content": f"Question {suffix}"},
-                {"role": "assistant", "content": f"Answer {suffix}"},
-            ],
-            "consent": True,
-            "consent_version": "training_consent_v1",
-            "consent_scope": "conversation_for_aihome_training_candidates",
-            "provider_terms_allow_reuse": True,
-            "content_reviewed_for_sensitive_data": True,
-        },
-    )
+    # Fixed contribution identities make hash-based family partitions reproducible.
+    from unittest.mock import patch
+    from uuid import UUID
+    with patch("ai_home.api.uuid.uuid4", return_value=UUID(int=int(suffix))):
+        response = client.post(
+            "/api/v1/training/conversations",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "conversation_id": f"d24b0b20-5ebc-48af-a3c8-{suffix:0>12}",
+                "provider": "openai",
+                "source_endpoint": "https://api.openai.com/v1",
+                "model": "gpt-test",
+                "messages": [
+                    {"role": "user", "content": f"Question {suffix}"},
+                    {"role": "assistant", "content": f"Answer {suffix}"},
+                ],
+                "consent": True,
+                "consent_version": "training_consent_v1",
+                "consent_scope": "conversation_for_aihome_training_candidates",
+                "provider_terms_allow_reuse": True,
+                "content_reviewed_for_sensitive_data": True,
+            },
+        )
     assert response.status_code == 201
     return response.json()["contribution_id"]
 
@@ -257,7 +348,7 @@ def test_training_reviewer_token_requires_minimum_length():
 
 def test_training_reviewer_token_must_be_ascii():
     with pytest.raises(ValueError, match="32 ASCII characters"):
-        Settings(environment="test", training_review_token="é" * 32)
+        Settings(environment="test", training_review_token="Ã©" * 32)
 
 
 def test_account_deletion_does_not_rewrite_frozen_dataset_snapshot(
@@ -293,3 +384,4 @@ def test_account_deletion_does_not_rewrite_frozen_dataset_snapshot(
     assert dataset.json()["records"][0]["messages"][0]["content"] == "Question 1"
     with client.app.state.session_factory() as session:
         assert session.get(TrainingContribution, contribution_id) is None
+

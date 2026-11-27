@@ -1,0 +1,20 @@
+{
+  "format": "ai-home-wikipedia-connector-smoke-v1",
+  "transport": "live HTTPS MediaWiki API",
+  "connector": "wikipedia-revision-v1",
+  "language": "en",
+  "page_id": "18831",
+  "revision_id": "1385774090",
+  "revision_timestamp": "2026-11-15T04:05:22Z",
+  "url": "https://en.wikipedia.org/w/index.php?oldid=1385774090",
+  "text_bytes": 58951,
+  "pending_jsonl_bytes": 60206,
+  "text_sha256": "30b62e6f231995eecbf06b6d18b3a78d0946bb5c9ff2e2c99dc81528a45b16b1",
+  "source_sha256": "e7996b7ab49b8f4bc8eb612cb96d2c76a4e4e8ff637ef7387a04bb378c05d211",
+  "split_group_sha256": "c0abf0e03b3aad0c3fd40be579581552cd0b3f7a19d85414aa5128ec032a0691",
+  "training_allowed": false,
+  "retrieval_allowed": false,
+  "privacy_reviewed": false,
+  "visibility": "pending-review",
+  "scope": "One acquired source and unapproved review template; no corpus approval or training"
+}

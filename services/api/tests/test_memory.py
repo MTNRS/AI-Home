@@ -122,7 +122,7 @@ def test_memory_context_is_added_only_to_request_copy(tmp_path):
     with_memory = messages_with_memory_context(conversation, [note])
     without_memory = messages_with_memory_context(conversation, [])
 
-    assert with_memory[0]["role"] == "system"
+    assert with_memory[0]["role"] == "user"
     assert note.content in with_memory[0]["content"]
     assert with_memory[1:] == conversation
     assert without_memory == conversation
@@ -143,3 +143,33 @@ def test_deleting_memory_removes_links_without_changing_other_note_id(tmp_path):
     assert load_memories(tmp_path) == [
         type(second)(second.id, second.title, second.content, ())
     ]
+
+
+
+def test_account_memory_profiles_isolate_servers_users_guest_and_legacy(tmp_path, monkeypatch):
+    from uuid import uuid4
+    import ai_home.memory as memory
+
+    monkeypatch.setattr(memory, "memory_vault_path", lambda: tmp_path / "memory")
+    alice, bob = str(uuid4()), str(uuid4())
+    vaults = [
+        memory.memory_vault_path(),
+        memory.profile_memory_vault(),
+        memory.profile_memory_vault("https://one.example", alice),
+        memory.profile_memory_vault("https://one.example", bob),
+        memory.profile_memory_vault("https://two.example", alice),
+    ]
+    assert len(set(vaults)) == 5
+    for index, vault in enumerate(vaults):
+        note = save_memory(f"Profile {index}", f"Private {index}", vault_path=vault)
+        assert load_memories(vault) == [note]
+        for other in vaults[:index]:
+            assert note not in load_memories(other)
+            with pytest.raises(ValueError):
+                save_memory("Cross link", "Forbidden", links=[note.id], vault_path=other)
+    assert memory.profile_memory_vault("https://one.example/", alice) == vaults[2]
+    assert alice not in str(vaults[2])
+    with pytest.raises(ValueError):
+        memory.profile_memory_vault("https://one.example", "../../escape")
+    with pytest.raises(ValueError):
+        memory.profile_memory_vault("https://one.example")

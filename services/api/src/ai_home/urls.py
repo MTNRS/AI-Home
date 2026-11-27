@@ -39,3 +39,4 @@ def normalize_provider_url(value: str) -> str:
     return urlunsplit(
         (parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", "")
     )
+

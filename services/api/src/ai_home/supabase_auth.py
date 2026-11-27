@@ -253,3 +253,4 @@ class SupabaseAuth:
                 "Supabase returned an invalid user ID."
             ) from error
         return SupabaseIdentity(user_id=user_id, email=email)
+
