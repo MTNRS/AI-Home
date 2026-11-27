@@ -6,6 +6,19 @@ las ejecuciones indicadas; no demuestra capacidades generales, seguridad absolut
 calidad conversacional ni escalabilidad comunitaria. Los apartados históricos de
 otros documentos describen el estado en que se escribieron, no el estado actual.
 
+## Validación remota más reciente
+
+El commit `e8f41848a33c7aa3e17ac3adba45317e05b162d5` pasó la
+[matriz Python 3.11/3.12 y PostgreSQL](https://github.com/MTNRS/AI-Home/actions/runs/45878428592)
+y [Foundation CPU en Linux](https://github.com/MTNRS/AI-Home/actions/runs/45878428583).
+Se comprobaron los pasos individuales: paquete instalado, preferencias, adaptadores,
+reanudación, trabajadores concurrentes, formularios Tk causal/SFT, aislamiento de
+perfil, visor, adquisición con HTTP controlado, inferencia API y distribución con
+reinicio del coordinador. La creación y subida de artefactos también concluyeron.
+Esto sustituye las notas históricas de CI pendiente para ese commit. No demuestra
+calidad general, revisión visual de las ventanas ni operación multihost. Los
+resultados CUDA corresponden a la validación local, no a los runners CPU.
+
 ## Evidencia vigente de ejecución y entrega
 
 Trabajo incorporado en esta rama posterior a `2724cf7`: conector Wikipedia y
